@@ -47,6 +47,8 @@ export async function updateSession(request: NextRequest) {
         !request.nextUrl.pathname.startsWith('/precos') &&
         !request.nextUrl.pathname.startsWith('/api/webhooks/') &&
         !request.nextUrl.pathname.startsWith('/api/feeds/') &&
+        request.nextUrl.pathname !== '/robots.txt' &&
+        request.nextUrl.pathname !== '/sitemap.xml' &&
         request.nextUrl.pathname !== '/'
     ) {
         // no user, potentially respond by redirecting the user to the login page

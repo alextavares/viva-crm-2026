@@ -13,6 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { toast } from "sonner"
 import { CheckCircle2, Circle } from "lucide-react"
+import {
+  createMediaUploadPath,
+  extractStoragePathForBucket,
+  resolveMediaPathUrl,
+  resolveMediaUrl,
+  uploadPublicMedia,
+} from "@/lib/media"
 
 type OrgInfo = { id: string; name: string; slug: string }
 
@@ -21,6 +28,7 @@ type SiteSettingsRow = {
   theme: "search_first" | "premium"
   brand_name: string | null
   logo_url: string | null
+  logo_path: string | null
   primary_color: string | null
   secondary_color: string | null
   whatsapp: string | null
@@ -39,18 +47,84 @@ type SitePageRow = {
 }
 
 type BannerPlacement = "topbar" | "popup" | "hero" | "footer"
+type BannerVariant = "compact" | "destaque"
 
 type SiteBannerRow = {
   id: string
   placement: BannerPlacement
+  variant: BannerVariant
   title: string | null
   body: string | null
   image_url: string | null
+  image_path: string | null
   link_url: string | null
   starts_at: string | null
   ends_at: string | null
   is_active: boolean
   priority: number
+}
+
+function getPlacementHint(placement: BannerPlacement) {
+  switch (placement) {
+    case "hero":
+      return "Hero: use imagem horizontal (recomendado 1600x700)."
+    case "topbar":
+      return "Topbar: use ícone ou imagem quadrada (recomendado 256x256)."
+    case "popup":
+      return "Popup: use imagem horizontal (recomendado 1200x800)."
+    case "footer":
+      return "Footer: use imagem horizontal curta (recomendado 1200x300)."
+    default:
+      return ""
+  }
+}
+
+function HeroVariantPreview({
+  title,
+  body,
+  imageSrc,
+  variant,
+}: {
+  title: string | null
+  body: string | null
+  imageSrc: string | null
+  variant: BannerVariant
+}) {
+  const isHighlight = variant === "destaque"
+  return (
+    <div className="rounded-xl border bg-muted/10 p-3">
+      <div className="mb-2 text-xs font-medium text-muted-foreground">
+        Prévia do hero ({isHighlight ? "destaque" : "compacto"})
+      </div>
+      <div className={`grid overflow-hidden rounded-lg border bg-white ${isHighlight ? "md:grid-cols-2" : "md:grid-cols-[0.95fr_1.05fr]"}`}>
+        <div className={`${isHighlight ? "p-4 md:p-5" : "p-3 md:p-4"}`}>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Destaque</div>
+          <div className={`${isHighlight ? "mt-2 text-lg md:text-xl" : "mt-2 text-base md:text-lg"} font-semibold leading-tight`}>
+            {title?.trim() || "Título do banner hero"}
+          </div>
+          <div className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+            {body?.trim() || "Texto do banner hero para destacar uma oferta, lançamento ou campanha."}
+          </div>
+        </div>
+        {imageSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageSrc}
+            alt="Prévia hero"
+            className={`w-full object-cover ${isHighlight ? "h-32 md:h-40" : "h-24 md:h-28"}`}
+          />
+        ) : (
+          <div
+            className={isHighlight ? "h-32 md:h-40" : "h-24 md:h-28"}
+            style={{
+              background:
+                "linear-gradient(135deg, color-mix(in oklch, var(--site-primary) 20%, transparent), color-mix(in oklch, var(--site-secondary) 20%, transparent))",
+            }}
+          />
+        )}
+      </div>
+    </div>
+  )
 }
 
 type CustomDomainStatus = "pending" | "verified" | "error"
@@ -165,9 +239,11 @@ function asBannerRow(v: Record<string, unknown>): SiteBannerRow | null {
   return {
     id,
     placement,
+    variant: v.variant === "destaque" ? "destaque" : "compact",
     title: typeof v.title === "string" ? v.title : v.title == null ? null : String(v.title),
     body: typeof v.body === "string" ? v.body : v.body == null ? null : String(v.body),
     image_url: typeof v.image_url === "string" ? v.image_url : v.image_url == null ? null : String(v.image_url),
+    image_path: typeof v.image_path === "string" ? v.image_path : v.image_path == null ? null : String(v.image_path),
     link_url: typeof v.link_url === "string" ? v.link_url : v.link_url == null ? null : String(v.link_url),
     starts_at: typeof v.starts_at === "string" ? v.starts_at : v.starts_at == null ? null : String(v.starts_at),
     ends_at: typeof v.ends_at === "string" ? v.ends_at : v.ends_at == null ? null : String(v.ends_at),
@@ -217,21 +293,23 @@ function nowIso() {
 async function uploadSiteAsset(
   supabase: SupabaseClient,
   opts: { orgId: string; file: File; kind: "logo" | "banner" }
-): Promise<string> {
+): Promise<{ publicUrl: string; path: string }> {
   const ext = opts.file.name.split(".").pop() || "png"
-  const safeExt = ext.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "png"
-  const fileName = `${opts.kind}-${crypto.randomUUID()}.${safeExt}`
-  const path = `org/${opts.orgId}/site/${fileName}`
-
-  const { error } = await supabase.storage.from("site-assets").upload(path, opts.file, {
+  const path = createMediaUploadPath({
+    organizationId: opts.orgId,
+    scope: "site",
+    kind: opts.kind,
+    extension: ext,
+  })
+  const { publicUrl } = await uploadPublicMedia({
+    supabase,
+    bucket: "site-assets",
+    path,
+    file: opts.file,
     upsert: true,
     cacheControl: "3600",
   })
-  if (error) throw error
-
-  const { data } = supabase.storage.from("site-assets").getPublicUrl(path)
-  if (!data?.publicUrl) throw new Error("Não foi possível obter URL pública do arquivo.")
-  return data.publicUrl
+  return { publicUrl, path }
 }
 
 export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
@@ -325,6 +403,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
       theme: (s?.theme as SiteSettingsRow["theme"]) ?? "search_first",
       brand_name: s?.brand_name ?? org.name,
       logo_url: s?.logo_url ?? null,
+      logo_path: s?.logo_path ?? null,
       primary_color: s?.primary_color ?? "#0b1220",
       secondary_color: s?.secondary_color ?? "#22c55e",
       whatsapp: s?.whatsapp ?? "",
@@ -348,9 +427,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const [newBannerOpen, setNewBannerOpen] = useState(false)
   const [newBanner, setNewBanner] = useState<Omit<SiteBannerRow, "id">>({
     placement: "topbar",
+    variant: "compact",
     title: "",
     body: "",
     image_url: "",
+    image_path: "",
     link_url: "",
     starts_at: "",
     ends_at: "",
@@ -384,6 +465,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
         ...settings,
         brand_name: settings.brand_name?.trim() || null,
         logo_url: settings.logo_url?.trim() || null,
+        logo_path: settings.logo_path?.trim() || extractStoragePathForBucket(settings.logo_url, "site-assets"),
         primary_color: settings.primary_color?.trim() || null,
         secondary_color: settings.secondary_color?.trim() || null,
         whatsapp: settings.whatsapp?.trim() || null,
@@ -467,8 +549,8 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
 
   const uploadLogo = async (file: File) => {
     await runPlain(async () => {
-      const url = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "logo" })
-      setSettings((s) => ({ ...s, logo_url: url }))
+      const { publicUrl, path } = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "logo" })
+      setSettings((s) => ({ ...s, logo_url: publicUrl, logo_path: path }))
       toast.success("Logo enviado. Clique em Salvar para aplicar.")
     }, "Logo upload failed:", { busy: "Enviando logo...", timeoutMs: 180000 })
   }
@@ -496,12 +578,16 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
 
   const createBanner = () => {
     void run(async (signal) => {
+      const normalizedVariant: BannerVariant =
+        newBanner.placement === "hero" && newBanner.variant === "destaque" ? "destaque" : "compact"
       const payload = {
         organization_id: org.id,
         placement: newBanner.placement,
+        variant: normalizedVariant,
         title: newBanner.title?.trim() || null,
         body: newBanner.body?.trim() || null,
         image_url: newBanner.image_url?.trim() || null,
+        image_path: newBanner.image_path?.trim() || extractStoragePathForBucket(newBanner.image_url, "site-assets"),
         link_url: newBanner.link_url?.trim() || null,
         starts_at: newBanner.starts_at?.trim() || null,
         ends_at: newBanner.ends_at?.trim() || null,
@@ -524,9 +610,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
       setNewBannerOpen(false)
       setNewBanner({
         placement: "topbar",
+        variant: "compact",
         title: "",
         body: "",
         image_url: "",
+        image_path: "",
         link_url: "",
         starts_at: "",
         ends_at: "",
@@ -550,9 +638,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
     setEditBannerId(b.id)
     setEditBanner({
       placement: b.placement,
+      variant: b.variant,
       title: b.title ?? "",
       body: b.body ?? "",
       image_url: b.image_url ?? "",
+      image_path: b.image_path ?? "",
       link_url: b.link_url ?? "",
       starts_at: b.starts_at ?? "",
       ends_at: b.ends_at ?? "",
@@ -566,11 +656,15 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
     if (!editBannerId || !editBanner) return
 
     void run(async (signal) => {
+      const normalizedVariant: BannerVariant =
+        editBanner.placement === "hero" && editBanner.variant === "destaque" ? "destaque" : "compact"
       const payload = {
         placement: editBanner.placement,
+        variant: normalizedVariant,
         title: editBanner.title?.trim() || null,
         body: editBanner.body?.trim() || null,
         image_url: editBanner.image_url?.trim() || null,
+        image_path: editBanner.image_path?.trim() || extractStoragePathForBucket(editBanner.image_url, "site-assets"),
         link_url: editBanner.link_url?.trim() || null,
         starts_at: editBanner.starts_at?.trim() || null,
         ends_at: editBanner.ends_at?.trim() || null,
@@ -600,16 +694,16 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
 
   const uploadEditBannerImage = async (file: File) => {
     await runPlain(async () => {
-      const url = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "banner" })
-      setEditBanner((b) => (b ? { ...b, image_url: url } : b))
+      const { publicUrl, path } = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "banner" })
+      setEditBanner((b) => (b ? { ...b, image_url: publicUrl, image_path: path } : b))
       toast.success("Imagem enviada. Salve o banner para aplicar.")
     }, "Edit banner upload failed:", { busy: "Enviando imagem...", timeoutMs: 180000 })
   }
 
   const uploadBannerImage = async (file: File) => {
     await runPlain(async () => {
-      const url = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "banner" })
-      setNewBanner((b) => ({ ...b, image_url: url }))
+      const { publicUrl, path } = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "banner" })
+      setNewBanner((b) => ({ ...b, image_url: publicUrl, image_path: path }))
       toast.success("Imagem enviada. Salve o banner para aplicar.")
     }, "Banner upload failed:", { busy: "Enviando imagem...", timeoutMs: 180000 })
   }
@@ -792,9 +886,18 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                       if (f) void uploadLogo(f)
                     }}
                   />
-                  {settings.logo_url ? (
+                  {(settings.logo_url || settings.logo_path) ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={settings.logo_url} alt="Logo" className="mt-2 h-10 w-auto rounded bg-white p-1 border" />
+                    <img
+                      src={
+                        resolveMediaPathUrl("site-assets", settings.logo_path) ??
+                        resolveMediaUrl(settings.logo_url) ??
+                        settings.logo_url ??
+                        ""
+                      }
+                      alt="Logo"
+                      className="mt-2 h-10 w-auto rounded bg-white p-1 border"
+                    />
                   ) : (
                     <div className="text-xs text-muted-foreground">Sem logo por enquanto.</div>
                   )}
@@ -922,7 +1025,16 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                     <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label>Placement</Label>
-                        <Select value={newBanner.placement} onValueChange={(v) => setNewBanner((b) => ({ ...b, placement: v as BannerPlacement }))}>
+                        <Select
+                          value={newBanner.placement}
+                          onValueChange={(v) =>
+                            setNewBanner((b) => ({
+                              ...b,
+                              placement: v as BannerPlacement,
+                              variant: v === "hero" ? b.variant : "compact",
+                            }))
+                          }
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -933,7 +1045,25 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                             <SelectItem value="footer">footer</SelectItem>
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-muted-foreground">{getPlacementHint(newBanner.placement)}</p>
                       </div>
+                      {newBanner.placement === "hero" ? (
+                        <div className="grid gap-2">
+                          <Label>Estilo do hero</Label>
+                          <Select
+                            value={newBanner.variant}
+                            onValueChange={(v) => setNewBanner((b) => ({ ...b, variant: v as BannerVariant }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="compact">Compacto</SelectItem>
+                              <SelectItem value="destaque">Destaque</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : null}
 
                       <div className="grid gap-2">
                         <Label>Título</Label>
@@ -956,11 +1086,33 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                             if (f) void uploadBannerImage(f)
                           }}
                         />
-                        {newBanner.image_url ? (
+                        {(newBanner.image_url || newBanner.image_path) ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={newBanner.image_url} alt="Banner" className="mt-2 h-24 w-full object-cover rounded border" />
+                          <img
+                            src={
+                              resolveMediaPathUrl("site-assets", newBanner.image_path) ??
+                              resolveMediaUrl(newBanner.image_url) ??
+                              newBanner.image_url ??
+                              ""
+                            }
+                            alt="Banner"
+                            className="mt-2 h-24 w-full object-cover rounded border"
+                          />
                         ) : null}
                       </div>
+                      {newBanner.placement === "hero" ? (
+                        <HeroVariantPreview
+                          title={newBanner.title}
+                          body={newBanner.body}
+                          imageSrc={
+                            resolveMediaPathUrl("site-assets", newBanner.image_path) ??
+                            resolveMediaUrl(newBanner.image_url) ??
+                            newBanner.image_url ??
+                            null
+                          }
+                          variant={newBanner.variant}
+                        />
+                      ) : null}
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="grid gap-2">
@@ -1036,7 +1188,15 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                         <Select
                           value={editBanner.placement}
                           onValueChange={(v) =>
-                            setEditBanner((b) => (b ? { ...b, placement: v as BannerPlacement } : b))
+                            setEditBanner((b) =>
+                              b
+                                ? {
+                                    ...b,
+                                    placement: v as BannerPlacement,
+                                    variant: v === "hero" ? b.variant : "compact",
+                                  }
+                                : b
+                            )
                           }
                         >
                           <SelectTrigger>
@@ -1049,7 +1209,27 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                             <SelectItem value="footer">footer</SelectItem>
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-muted-foreground">{getPlacementHint(editBanner.placement)}</p>
                       </div>
+                      {editBanner.placement === "hero" ? (
+                        <div className="grid gap-2">
+                          <Label>Estilo do hero</Label>
+                          <Select
+                            value={editBanner.variant}
+                            onValueChange={(v) =>
+                              setEditBanner((b) => (b ? { ...b, variant: v as BannerVariant } : b))
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="compact">Compacto</SelectItem>
+                              <SelectItem value="destaque">Destaque</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : null}
 
                       <div className="grid gap-2">
                         <Label>Título</Label>
@@ -1078,15 +1258,33 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                             if (f) void uploadEditBannerImage(f)
                           }}
                         />
-                        {editBanner.image_url ? (
+                        {(editBanner.image_url || editBanner.image_path) ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={editBanner.image_url}
+                            src={
+                              resolveMediaPathUrl("site-assets", editBanner.image_path) ??
+                              resolveMediaUrl(editBanner.image_url) ??
+                              editBanner.image_url ??
+                              ""
+                            }
                             alt="Banner"
                             className="mt-2 h-24 w-full object-cover rounded border"
                           />
                         ) : null}
                       </div>
+                      {editBanner.placement === "hero" ? (
+                        <HeroVariantPreview
+                          title={editBanner.title}
+                          body={editBanner.body}
+                          imageSrc={
+                            resolveMediaPathUrl("site-assets", editBanner.image_path) ??
+                            resolveMediaUrl(editBanner.image_url) ??
+                            editBanner.image_url ??
+                            null
+                          }
+                          variant={editBanner.variant}
+                        />
+                      ) : null}
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="grid gap-2">
@@ -1165,6 +1363,9 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                         <div className="text-sm font-medium">
                           {b.placement}{" "}
                           {!b.is_active ? <span className="text-xs text-muted-foreground">(inativo)</span> : null}
+                          {b.placement === "hero" ? (
+                            <span className="ml-2 text-xs text-muted-foreground">[{b.variant === "destaque" ? "destaque" : "compacto"}]</span>
+                          ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground line-clamp-2">{b.title || "(sem título)"}</div>
                       </div>

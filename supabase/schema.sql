@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS properties (
   features JSONB DEFAULT '{}', -- bedrooms, bathrooms, area, garage, etc.
   address JSONB DEFAULT '{}', -- street, number, city, state, zip
   images TEXT[] DEFAULT '{}',
+  image_paths TEXT[] DEFAULT '{}',
   hide_from_site BOOLEAN NOT NULL DEFAULT FALSE,
   broker_id UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -134,6 +135,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
   theme TEXT NOT NULL DEFAULT 'search_first' CHECK (theme IN ('search_first', 'premium')),
   brand_name TEXT,
   logo_url TEXT,
+  logo_path TEXT,
   primary_color TEXT,
   secondary_color TEXT,
   whatsapp TEXT,
@@ -167,9 +169,11 @@ CREATE TABLE IF NOT EXISTS site_banners (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID REFERENCES organizations(id) NOT NULL,
   placement TEXT NOT NULL CHECK (placement IN ('popup', 'topbar', 'hero', 'footer')),
+  variant TEXT NOT NULL DEFAULT 'compact' CHECK (variant IN ('compact', 'destaque')),
   title TEXT,
   body TEXT,
   image_url TEXT,
+  image_path TEXT,
   link_url TEXT,
   starts_at TIMESTAMPTZ,
   ends_at TIMESTAMPTZ,
@@ -257,7 +261,10 @@ AS $$
     )
     AND (
       COALESCE((i.config->>'send_only_with_photos')::boolean, false) IS NOT TRUE
-      OR (p.images IS NOT NULL AND array_length(p.images, 1) > 0)
+      OR (
+        (p.images IS NOT NULL AND array_length(p.images, 1) > 0)
+        OR (p.image_paths IS NOT NULL AND array_length(p.image_paths, 1) > 0)
+      )
     );
 $$;
 
@@ -283,6 +290,7 @@ AS $$
       COALESCE(s.theme, 'search_first') AS theme,
       COALESCE(s.brand_name, org.name) AS brand_name,
       s.logo_url,
+      s.logo_path,
       s.primary_color,
       s.secondary_color,
       s.whatsapp,
@@ -310,9 +318,11 @@ AS $$
       jsonb_build_object(
         'id', b.id,
         'placement', b.placement,
+        'variant', b.variant,
         'title', b.title,
         'body', b.body,
         'image_url', b.image_url,
+        'image_path', b.image_path,
         'link_url', b.link_url,
         'starts_at', b.starts_at,
         'ends_at', b.ends_at,
@@ -361,6 +371,7 @@ RETURNS TABLE (
   state text,
   neighborhood text,
   thumbnail_url text,
+  thumbnail_path text,
   bedrooms int,
   bathrooms int,
   area numeric
@@ -418,6 +429,7 @@ AS $$
     p.address->>'state' AS state,
     p.address->>'neighborhood' AS neighborhood,
     NULLIF(p.images[1], '') AS thumbnail_url,
+    NULLIF(p.image_paths[1], '') AS thumbnail_path,
     CASE WHEN (p.features->>'bedrooms') ~ '^[0-9]+$' THEN (p.features->>'bedrooms')::int END AS bedrooms,
     CASE WHEN (p.features->>'bathrooms') ~ '^[0-9]+$' THEN (p.features->>'bathrooms')::int END AS bathrooms,
     CASE WHEN (p.features->>'area') ~ '^[0-9]+(\\.[0-9]+)?$' THEN (p.features->>'area')::numeric END AS area
@@ -462,6 +474,7 @@ AS $$
         'type', (SELECT type FROM prop),
         'features', (SELECT features FROM prop),
         'images', (SELECT images FROM prop),
+        'image_paths', (SELECT image_paths FROM prop),
         -- Safe address: omit street/number/zip.
         'address', jsonb_build_object(
           'city', (SELECT address->>'city' FROM prop),

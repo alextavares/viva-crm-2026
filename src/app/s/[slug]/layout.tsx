@@ -5,6 +5,7 @@ import { PopupBanner, TopbarBanner } from "@/components/public/site-banners"
 import { withBase, ogImages, truncate } from "@/lib/public-site/seo"
 import { getPublicSite } from "@/lib/public-site/site-data"
 import { getRequestHost, isPreviewHost, publicBasePath } from "@/lib/public-site/host"
+import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 
 export const dynamic = "force-dynamic"
 
@@ -26,7 +27,9 @@ export async function generateMetadata({
 
   const brandName = site.settings?.brand_name || site.slug
   const description = truncate(`Imóveis e contato de ${brandName}. Atendimento rápido e humano via WhatsApp.`)
-  const images = ogImages(site.settings?.logo_url)
+  const images = ogImages(
+    resolveMediaPathUrl("site-assets", site.settings?.logo_path) ?? resolveMediaUrl(site.settings?.logo_url)
+  )
 
   return withBase({
     title: {

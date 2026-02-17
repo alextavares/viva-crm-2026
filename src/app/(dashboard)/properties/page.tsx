@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge'
 import { PropertyFilters } from '@/components/properties/property-filters'
 import { PropertySiteVisibilityToggle } from '@/components/properties/property-site-visibility-toggle'
+import { resolveMediaPathUrl, resolveMediaUrl } from '@/lib/media'
 
 function isUuid(v: string) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim())
@@ -151,10 +152,15 @@ export default async function PropertiesPage({
                                 <Link href={`/properties/${property.id}`} className="block">
                                     {/* Fixed-height cover area to avoid huge thumbnails on large screens */}
                                     <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden">
-                                        {property.images && property.images.length > 0 ? (
+                                        {(property.images && property.images.length > 0) || (property.image_paths && property.image_paths.length > 0) ? (
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <img
-                                                src={property.images[0]}
+                                                src={
+                                                    resolveMediaPathUrl("properties", property.image_paths?.[0]) ??
+                                                    resolveMediaUrl(property.images?.[0]) ??
+                                                    property.images?.[0] ??
+                                                    ""
+                                                }
                                                 alt={property.title}
                                                 className="h-full w-full object-cover"
                                                 loading="lazy"

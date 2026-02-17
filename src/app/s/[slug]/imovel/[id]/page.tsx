@@ -5,6 +5,7 @@ import { SiteLeadForm } from "@/components/public/site-lead-form"
 import { getPublicProperty, getPublicSite } from "@/lib/public-site/site-data"
 import { ogImages, truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
+import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 
 function formatMoneyBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
@@ -51,6 +52,9 @@ export default async function PublicPropertyPage({
   const bedrooms = pickFeatureNumber((features as Record<string, unknown>).bedrooms)
   const bathrooms = pickFeatureNumber((features as Record<string, unknown>).bathrooms)
   const area = pickFeatureNumber((features as Record<string, unknown>).area)
+  const primaryImageUrl = prop.images?.[0] ?? null
+  const primaryImagePath = prop.image_paths?.[0] ?? null
+  const galleryItems = (prop.images ?? prop.image_paths ?? []).slice(0, 5)
 
   const addressLine =
     prop.address?.neighborhood || prop.address?.city || prop.address?.state
@@ -83,17 +87,30 @@ export default async function PublicPropertyPage({
       <section className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="overflow-hidden rounded-3xl border bg-white/85 shadow-sm">
           <div className="aspect-[16/10] bg-muted">
-            {prop.images?.[0] ? (
+            {(prop.images?.[0] || prop.image_paths?.[0]) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={prop.images[0]} alt={prop.title} className="h-full w-full object-cover" />
+              <img
+                src={
+                  resolveMediaPathUrl("properties", primaryImagePath) ??
+                  resolveMediaUrl(primaryImageUrl) ??
+                  primaryImageUrl ??
+                  ""
+                }
+                alt={prop.title}
+                className="h-full w-full object-cover"
+              />
             ) : null}
           </div>
-          {prop.images && prop.images.length > 1 ? (
+          {((prop.images && prop.images.length > 1) || (prop.image_paths && prop.image_paths.length > 1)) ? (
             <div className="grid grid-cols-5 gap-2 p-3">
-              {prop.images.slice(0, 5).map((src) => (
-                <div key={src} className="aspect-square overflow-hidden rounded-xl bg-muted">
+              {galleryItems.map((src, index) => (
+                <div key={`${src}-${index}`} className="aspect-square overflow-hidden rounded-xl bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={resolveMediaPathUrl("properties", prop.image_paths?.[index]) ?? resolveMediaUrl(src) ?? src}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
                 </div>
               ))}
             </div>
@@ -169,7 +186,10 @@ export async function generateMetadata({
     `${title}. ${price}${where ? ` · ${where}` : ""}. Atendimento: ${brandName}.`
   )
 
-  const images = ogImages(prop.images?.[0], site.settings?.logo_url)
+  const images = ogImages(
+    resolveMediaPathUrl("properties", prop.image_paths?.[0]) ?? resolveMediaUrl(prop.images?.[0]),
+    resolveMediaPathUrl("site-assets", site.settings?.logo_path) ?? resolveMediaUrl(site.settings?.logo_url)
+  )
 
   return withBase({
     title: `Imóvel: ${title}`,

@@ -12,6 +12,7 @@ export type SitePublicSettings = {
   theme: SiteTheme
   brand_name: string | null
   logo_url: string | null
+  logo_path?: string | null
   primary_color: string | null
   secondary_color: string | null
   whatsapp: string | null
@@ -31,9 +32,11 @@ export type SiteBannerPlacement = "popup" | "topbar" | "hero" | "footer"
 export type SitePublicBanner = {
   id: string
   placement: SiteBannerPlacement | string
+  variant?: "compact" | "destaque" | string | null
   title: string | null
   body: string | null
   image_url: string | null
+  image_path?: string | null
   link_url: string | null
   starts_at: string | null
   ends_at: string | null
@@ -56,6 +59,7 @@ export type SitePropertyCard = {
   state: string | null
   neighborhood: string | null
   thumbnail_url: string | null
+  thumbnail_path?: string | null
   bedrooms: number | null
   bathrooms: number | null
   area: number | null
@@ -69,6 +73,7 @@ export type SitePublicProperty = {
   type: string | null
   features: Record<string, unknown> | null
   images: string[] | null
+  image_paths?: string[] | null
   address: { city: string | null; state: string | null; neighborhood: string | null } | null
 }
 

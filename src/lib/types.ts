@@ -77,6 +77,7 @@ export interface Property {
     features: PropertyFeatures
     address: PropertyAddress
     images?: string[]
+    image_paths?: string[]
     hide_from_site?: boolean
     broker_id?: string | null
     created_at?: string

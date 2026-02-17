@@ -6,46 +6,51 @@ import { Button } from '@/components/ui/button'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { createMediaUploadPath, resolveMediaUrl, uploadPublicMedia } from '@/lib/media'
 
 interface ImageUploadProps {
     value?: string[]
     onChange: (value: string[]) => void
     disabled?: boolean
+    organizationId?: string | null
 }
 
-export function ImageUpload({ value = [], onChange, disabled }: ImageUploadProps) {
+export function ImageUpload({ value = [], onChange, disabled, organizationId }: ImageUploadProps) {
     const [isUploading, setIsUploading] = useState(false)
     const supabase = createClient()
+    const uploadDisabled = disabled || isUploading || !organizationId
 
     const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         try {
             const files = e.target.files
             if (!files || files.length === 0) return
+            if (!organizationId) {
+                toast.error('Organização não carregada. Tente novamente em instantes.')
+                return
+            }
 
             setIsUploading(true)
             const newUrls: string[] = []
 
             for (const file of Array.from(files)) {
                 const fileExt = file.name.split('.').pop()
-                // Avoid dots from Math.random() and reduce collision risk.
-                const fileName = `${crypto.randomUUID()}.${fileExt}`
-                const filePath = fileName
+                const filePath = createMediaUploadPath({
+                    organizationId,
+                    scope: 'properties',
+                    extension: fileExt,
+                    kind: 'image',
+                })
 
-                const { error: uploadError } = await supabase.storage
-                    .from('properties')
-                    .upload(filePath, file)
+                const { publicUrl } = await uploadPublicMedia({
+                    supabase,
+                    bucket: 'properties',
+                    path: filePath,
+                    file,
+                    upsert: true,
+                    cacheControl: '3600',
+                })
 
-                if (uploadError) {
-                    throw uploadError
-                }
-
-                const { data } = supabase.storage
-                    .from('properties')
-                    .getPublicUrl(filePath)
-
-                if (data?.publicUrl) {
-                    newUrls.push(data.publicUrl)
-                }
+                newUrls.push(publicUrl)
             }
 
             onChange([...value, ...newUrls])
@@ -83,7 +88,7 @@ export function ImageUpload({ value = [], onChange, disabled }: ImageUploadProps
                         variant="outline"
                         size="sm"
                         onClick={onRemoveAll}
-                        disabled={disabled || isUploading}
+                        disabled={uploadDisabled}
                     >
                         Remover todas
                     </Button>
@@ -105,7 +110,7 @@ export function ImageUpload({ value = [], onChange, disabled }: ImageUploadProps
                         </div>
                         {/* Avoid next/image remote domain config for Supabase public URLs */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="Property Image" className="h-full w-full object-cover" />
+                        <img src={resolveMediaUrl(url) ?? url} alt="Property Image" className="h-full w-full object-cover" />
                     </div>
                 ))}
 
@@ -116,10 +121,10 @@ export function ImageUpload({ value = [], onChange, disabled }: ImageUploadProps
                         multiple
                         className={cn(
                             "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
-                            (disabled || isUploading) && "pointer-events-none"
+                            uploadDisabled && "pointer-events-none"
                         )}
                         onChange={onUpload}
-                        disabled={disabled || isUploading}
+                        disabled={uploadDisabled}
                     />
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         {isUploading ? (

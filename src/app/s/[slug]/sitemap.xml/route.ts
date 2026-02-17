@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { siteGetSettings, siteListProperties } from "@/lib/site"
+import { publicBasePath } from "@/lib/public-site/host"
 
 export const dynamic = "force-dynamic"
 
@@ -16,8 +17,9 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;")
 }
 
-function sitePath(slug: string, path = "") {
-  return `/s/${encodeURIComponent(slug)}${path}`
+function sitePath(basePath: string, path = "") {
+  const raw = `${basePath}${path}`
+  return raw || "/"
 }
 
 function abs(origin: string, pathname: string) {
@@ -36,6 +38,8 @@ export async function GET(
   if (!url || !key) return new NextResponse("Server misconfigured", { status: 500 })
 
   const origin = new URL(req.url).origin
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || ""
+  const basePath = publicBasePath(slug, host)
   const supabase = createClient(url, key)
 
   // If the site doesn't exist (or isn't public), return 404 to avoid indexing garbage.
@@ -44,10 +48,10 @@ export async function GET(
   if (!settingsRes.data) return new NextResponse("Not found", { status: 404 })
 
   const urls: string[] = [
-    abs(origin, sitePath(slug)),
-    abs(origin, sitePath(slug, "/about")),
-    abs(origin, sitePath(slug, "/contact")),
-    abs(origin, sitePath(slug, "/lgpd")),
+    abs(origin, sitePath(basePath)),
+    abs(origin, sitePath(basePath, "/about")),
+    abs(origin, sitePath(basePath, "/contact")),
+    abs(origin, sitePath(basePath, "/lgpd")),
   ]
 
   for (let offset = 0; urls.length < MAX_URLS; offset += PAGE_SIZE) {
@@ -63,7 +67,7 @@ export async function GET(
 
     for (const p of data) {
       if (urls.length >= MAX_URLS) break
-      urls.push(abs(origin, sitePath(slug, `/imovel/${encodeURIComponent(p.id)}`)))
+      urls.push(abs(origin, sitePath(basePath, `/imovel/${encodeURIComponent(p.id)}`)))
     }
 
     if (data.length < limit) break
@@ -82,4 +86,3 @@ export async function GET(
     },
   })
 }
-

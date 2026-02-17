@@ -20,6 +20,25 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Optional Media/CDN Environment Variables
+
+Use these only when you want to serve storage assets from a custom media domain/CDN (for example Cloudflare R2 + custom domain):
+
+```bash
+# Generic fallback: rewrites Supabase public URLs to:
+# ${NEXT_PUBLIC_MEDIA_CDN_ORIGIN}/{bucket}/{path}
+NEXT_PUBLIC_MEDIA_CDN_ORIGIN=
+
+# Bucket-specific (takes precedence over generic origin):
+# rewrites to ${NEXT_PUBLIC_MEDIA_PROPERTIES_BASE_URL}/{path}
+NEXT_PUBLIC_MEDIA_PROPERTIES_BASE_URL=
+
+# rewrites to ${NEXT_PUBLIC_MEDIA_SITE_ASSETS_BASE_URL}/{path}
+NEXT_PUBLIC_MEDIA_SITE_ASSETS_BASE_URL=
+```
+
+If these variables are not set, the app keeps using Supabase public URLs exactly as today.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

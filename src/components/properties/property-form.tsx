@@ -24,6 +24,7 @@ import { ImageUpload } from "@/components/ui/image-upload"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { propertySchema, type PropertyFormValues, type PropertyFeatures, type PropertyAddress } from "@/lib/types"
+import { deriveStoragePathsForBucket } from "@/lib/media"
 
 interface PropertyFormProps {
     initialData?: {
@@ -36,6 +37,7 @@ interface PropertyFormProps {
         features: PropertyFeatures
         address: PropertyAddress
         images?: string[]
+        image_paths?: string[]
         hide_from_site?: boolean | null
     }
 }
@@ -168,7 +170,8 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                     zip: address_zip || null,
                     country: address_country || null,
                 },
-                images: data.images || []
+                images: data.images || [],
+                image_paths: deriveStoragePathsForBucket(data.images, "properties"),
             }
 
             if (initialData?.id) {
@@ -509,6 +512,7 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                                     value={field.value}
                                     onChange={field.onChange}
                                     disabled={isLoading}
+                                    organizationId={organizationId}
                                 />
                             </FormControl>
                             <FormMessage />

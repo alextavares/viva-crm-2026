@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
 import { Loader2, Upload, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { mapUnivenRowToProperty, type UnivenRow } from "@/lib/importers/univen"
+import { deriveStoragePathsForBucket } from "@/lib/media"
 
 type ImportSummary = {
   total: number
@@ -240,6 +241,7 @@ export function PropertyImportUniven() {
           features: mapped.features,
           address: mapped.address,
           images: mapped.images,
+          image_paths: deriveStoragePathsForBucket(mapped.images, "properties"),
           // Safe default: imported listings stay hidden; re-import won't unpublish.
           hide_from_site: alreadyPublished ? false : true,
         }

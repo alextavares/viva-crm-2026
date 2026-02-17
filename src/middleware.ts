@@ -83,8 +83,8 @@ export async function middleware(request: NextRequest) {
                 return NextResponse.redirect(url)
             }
 
-            // Do not rewrite Next/static or API paths.
-            if (pathname.startsWith("/_next") || pathname.startsWith("/api")) {
+            // Do not rewrite Next/static, API, or host-aware robots endpoint.
+            if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname === "/robots.txt") {
                 return NextResponse.next()
             }
 

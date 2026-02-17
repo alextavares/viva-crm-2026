@@ -14,6 +14,7 @@ type PropertyRowForIssues = {
     type: string | null
     status: string | null
     images: string[] | null
+    image_paths: string[] | null
     address: { city?: string | null; state?: string | null; zip?: string | null } | null
     hide_from_site: boolean | null
 }
@@ -102,7 +103,7 @@ export default async function IntegrationPortalReportPage({
 
         const { data: properties } = await supabase
             .from("properties")
-            .select("id,title,description,price,type,status,images,address,features,hide_from_site")
+            .select("id,title,description,price,type,status,images,image_paths,address,features,hide_from_site")
             .eq("organization_id", organizationId)
 
         const rows = (properties as PropertyRowForIssues[] | null) ?? []
@@ -131,12 +132,14 @@ export default async function IntegrationPortalReportPage({
             const type = String(p.type ?? "")
             const status = String(p.status ?? "")
             const images = Array.isArray(p.images) ? p.images : []
+            const imagePaths = Array.isArray(p.image_paths) ? p.image_paths : []
+            const photosCount = Math.max(images.length, imagePaths.length)
             const city = p.address?.city ?? ""
             const state = p.address?.state ?? ""
             const zip = p.address?.zip ?? ""
 
             const wouldBeExcludedByStatus = sendOnlyAvailable && status !== "available"
-            const wouldBeExcludedByPhotos = sendOnlyWithPhotos && images.length === 0
+            const wouldBeExcludedByPhotos = sendOnlyWithPhotos && photosCount === 0
 
             const add = (severity: "blocker" | "warning", key: string, message: string) => {
                 nextIssues.push({
@@ -174,7 +177,7 @@ export default async function IntegrationPortalReportPage({
                 add("warning", "missing_description", `O imóvel '${title}' está sem descrição. Isso pode reduzir a performance no portal.`)
             }
 
-            if (images.length > 0 && images.length < 3) {
+            if (photosCount > 0 && photosCount < 3) {
                 add("warning", "few_photos", `O imóvel '${title}' tem poucas fotos. Recomendado adicionar pelo menos 3.`)
             }
 

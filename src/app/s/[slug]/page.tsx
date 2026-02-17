@@ -5,6 +5,8 @@ import type { Metadata } from "next"
 import { getPublicSite } from "@/lib/public-site/site-data"
 import { truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
+import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
+import { HeroBanner } from "@/components/public/site-banners"
 
 function formatMoneyBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
@@ -99,6 +101,7 @@ export default async function PublicSiteHome({
 
   const list: SitePropertyCard[] = items ?? []
   const brandName = site.settings?.brand_name || site.slug
+  const heroBanner = site.banners.find((b) => b.placement === "hero") ?? null
 
   const host = await getRequestHost()
   const base = publicBasePath(site.slug, host)
@@ -110,6 +113,8 @@ export default async function PublicSiteHome({
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
+      {heroBanner ? <HeroBanner banner={heroBanner} /> : null}
+
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-3xl border bg-white/80 p-7 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
@@ -238,36 +243,44 @@ export default async function PublicSiteHome({
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((p) => (
-            <Link
-              key={p.id}
-              href={`${homeHref === "/" ? "" : homeHref}/imovel/${p.id}`}
-              className="group overflow-hidden rounded-3xl border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <div className="aspect-[4/3] bg-muted">
-                {p.thumbnail_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.thumbnail_url}
-                    alt={p.title}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                  />
-                ) : null}
-              </div>
-              <div className="p-5">
-                <div className="text-sm font-medium line-clamp-1">{p.title}</div>
-                <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                  {p.neighborhood || p.city ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}` : "Localização a informar"}
+          {list.map((p) => {
+            const thumbnailSrc =
+              resolveMediaPathUrl("properties", p.thumbnail_path) ??
+              resolveMediaUrl(p.thumbnail_url) ??
+              p.thumbnail_url ??
+              undefined
+
+            return (
+              <Link
+                key={p.id}
+                href={`${homeHref === "/" ? "" : homeHref}/imovel/${p.id}`}
+                className="group overflow-hidden rounded-3xl border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="aspect-[4/3] bg-muted">
+                  {thumbnailSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={thumbnailSrc}
+                      alt={p.title}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
+                  ) : null}
                 </div>
-                <div className="mt-4 flex items-end justify-between gap-3">
-                  <div className="text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
-                    {formatMoneyBRL(p.price)}
+                <div className="p-5">
+                  <div className="text-sm font-medium line-clamp-1">{p.title}</div>
+                  <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
+                    {p.neighborhood || p.city ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}` : "Localização a informar"}
                   </div>
-                  <div className="text-xs text-muted-foreground">{p.type || ""}</div>
+                  <div className="mt-4 flex items-end justify-between gap-3">
+                    <div className="text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
+                      {formatMoneyBRL(p.price)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{p.type || ""}</div>
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
         </div>
 
         {list.length === 0 ? (

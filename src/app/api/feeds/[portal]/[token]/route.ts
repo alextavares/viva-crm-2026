@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import type { PortalKey } from "@/lib/integrations"
 import { PORTALS } from "@/lib/integrations"
+import { resolveMediaPathUrl } from "@/lib/media"
 
 type FeedPropertyRow = {
   id: string
@@ -12,6 +13,7 @@ type FeedPropertyRow = {
   hide_from_site: boolean | null
   description: string | null
   images: string[] | null
+  image_paths: string[] | null
   external_id: string | null
   updated_at: string | null
   address: {
@@ -78,7 +80,13 @@ export async function GET(
       const externalId = p.external_id ? String(p.external_id) : ""
       const updatedAt = p.updated_at ? String(p.updated_at) : ""
 
-      const images = Array.isArray(p.images) ? p.images : []
+      const imageUrls = Array.isArray(p.images) ? p.images : []
+      const imagePaths = Array.isArray(p.image_paths) ? p.image_paths : []
+      const images = imageUrls.length
+        ? imageUrls.map((url, index) => resolveMediaPathUrl("properties", imagePaths[index]) ?? String(url))
+        : imagePaths
+            .map((path) => resolveMediaPathUrl("properties", path))
+            .filter((url): url is string => typeof url === "string" && url.length > 0)
       const imagesXml = images.length
         ? ["    <images>", ...images.map((src) => `      <image>${escapeXml(String(src))}</image>`), "    </images>"].join("\n")
         : "    <images />"
