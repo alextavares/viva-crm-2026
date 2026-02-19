@@ -7,6 +7,31 @@ import { Badge } from '@/components/ui/badge'
 import { PropertyFilters } from '@/components/properties/property-filters'
 import { PropertySiteVisibilityToggle } from '@/components/properties/property-site-visibility-toggle'
 import { resolveMediaPathUrl, resolveMediaUrl } from '@/lib/media'
+import { buildPropertyFixHref, getPropertyPublishIssues } from '@/lib/property-publish-readiness'
+
+type PropertyListRow = {
+    id: string
+    external_id?: string | null
+    title: string
+    description?: string | null
+    price?: number | null
+    type?: string | null
+    status?: string | null
+    hide_from_site?: boolean | null
+    images?: string[] | null
+    image_paths?: string[] | null
+    address?: {
+        full_address?: string | null
+        neighborhood?: string | null
+        city?: string | null
+        state?: string | null
+    } | null
+    features?: {
+        bedrooms?: number | null
+        bathrooms?: number | null
+        area?: number | null
+    } | null
+}
 
 function isUuid(v: string) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim())
@@ -51,6 +76,7 @@ export default async function PropertiesPage({
     const type = resolvedSearchParams?.type as string || 'all'
     const status = resolvedSearchParams?.status as string || 'all'
     const siteVisibility = resolvedSearchParams?.siteVisibility as string || 'all'
+    const publishQuality = resolvedSearchParams?.publishQuality as string || 'all'
     const minPrice = resolvedSearchParams?.minPrice ? Number(resolvedSearchParams.minPrice) : null
     const maxPrice = resolvedSearchParams?.maxPrice ? Number(resolvedSearchParams.maxPrice) : null
 
@@ -107,9 +133,23 @@ export default async function PropertiesPage({
         query = query.lte('price', maxPrice)
     }
 
-    // Apply pagination
-    const { data: properties, count, error } = await query
-        .range(start, end)
+    let properties: PropertyListRow[] = []
+    let count = 0
+    let error: unknown = null
+
+    if (publishQuality === 'pending') {
+        const pendingResult = await query.limit(2000)
+        error = pendingResult.error
+        const rows = (pendingResult.data as PropertyListRow[] | null) ?? []
+        const pendingRows = rows.filter((property) => getPropertyPublishIssues(property).length > 0)
+        count = pendingRows.length
+        properties = pendingRows.slice(start, end + 1)
+    } else {
+        const pagedResult = await query.range(start, end)
+        error = pagedResult.error
+        properties = (pagedResult.data as PropertyListRow[] | null) ?? []
+        count = pagedResult.count ?? 0
+    }
 
     if (error) {
         console.error('Error fetching properties:', {
@@ -242,13 +282,40 @@ export default async function PropertiesPage({
                                     </CardContent>
                                 </Link>
                                 <CardFooter className="p-4 border-t bg-muted/50 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+                                    {(() => {
+                                        const issues = getPropertyPublishIssues(property)
+                                        const hasIssues = issues.length > 0
+                                        const issueSummary = issues.map((item) => item.label).join(" · ")
+                                        const firstIssue = issues[0]
+
+                                        return (
+                                            <>
+                                                <Badge
+                                                    variant={hasIssues ? "outline" : "secondary"}
+                                                    className={hasIssues ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-emerald-100 text-emerald-800 border-emerald-200"}
+                                                >
+                                                    Publicação: {hasIssues ? "Com pendências" : "Pronto para site/feed"}
+                                                </Badge>
+                                                {hasIssues ? (
+                                                    <span className="w-full text-amber-800">
+                                                        {issueSummary}
+                                                    </span>
+                                                ) : null}
+                                                {hasIssues && firstIssue ? (
+                                                    <Link href={buildPropertyFixHref(property.id, firstIssue.focusFieldId)} className="underline">
+                                                        Corrigir
+                                                    </Link>
+                                                ) : null}
+                                            </>
+                                        )
+                                    })()}
                                     <span>{property.type === 'apartment' ? 'Apartamento' : property.type === 'house' ? 'Casa' : property.type}</span>
                                     <span>Ref: {refLabel(property)}</span>
                                     <span className="w-full sm:w-auto text-muted-foreground/90">
                                         {property.hide_from_site ? "Não aparece no site público" : "Aparece no site público"}
                                     </span>
                                     <div className="w-full sm:w-auto sm:ml-auto">
-                                        <PropertySiteVisibilityToggle propertyId={property.id} hideFromSite={property.hide_from_site} />
+                                        <PropertySiteVisibilityToggle propertyId={property.id} hideFromSite={property.hide_from_site ?? null} />
                                     </div>
                                 </CardFooter>
                             </Card>
@@ -258,13 +325,13 @@ export default async function PropertiesPage({
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
                         <div className="flex items-center justify-end gap-2 mt-4">
-                            <Link href={`/properties?page=${page - 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&siteVisibility=${siteVisibility}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page <= 1 ? "pointer-events-none opacity-50" : ""}>
+                            <Link href={`/properties?page=${page - 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&siteVisibility=${siteVisibility}&publishQuality=${publishQuality}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page <= 1 ? "pointer-events-none opacity-50" : ""}>
                                 <Button variant="outline" size="sm" disabled={page <= 1}>Anterior</Button>
                             </Link>
                             <span className="text-sm text-muted-foreground">
                                 Página {page} de {totalPages}
                             </span>
-                            <Link href={`/properties?page=${page + 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&siteVisibility=${siteVisibility}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page >= totalPages ? "pointer-events-none opacity-50" : ""}>
+                            <Link href={`/properties?page=${page + 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&siteVisibility=${siteVisibility}&publishQuality=${publishQuality}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page >= totalPages ? "pointer-events-none opacity-50" : ""}>
                                 <Button variant="outline" size="sm" disabled={page >= totalPages}>Próxima</Button>
                             </Link>
                         </div>

@@ -15,11 +15,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ImageUpload } from "@/components/ui/image-upload"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
@@ -45,8 +45,20 @@ interface PropertyFormProps {
 export function PropertyForm({ initialData }: PropertyFormProps) {
     const { user, organizationId } = useAuth()
     const router = useRouter()
+    const searchParams = useSearchParams()
     const [isLoading, setIsLoading] = useState(false)
     const supabase = createClient()
+    const focusField = searchParams.get("focus")
+
+    useEffect(() => {
+        if (!focusField) return
+        const el = document.getElementById(focusField)
+        if (!el) return
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+            el.focus()
+        }
+    }, [focusField])
 
     const form = useForm({
         resolver: zodResolver(propertySchema),
@@ -391,19 +403,19 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                                 </FormItem>
                             )}
                         />
-                        <FormField
-                            control={form.control}
-                            name="address_city"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Cidade</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Ex: São Paulo" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                <FormField
+                    control={form.control}
+                    name="address_city"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Cidade</FormLabel>
+                            <FormControl>
+                                <Input id="address_city" placeholder="Ex: São Paulo" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
                         <FormField
                             control={form.control}
                             name="address_state"
@@ -488,6 +500,7 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                                 <FormControl>
                                     <div className="flex items-center gap-2">
                                         <input
+                                            id="property-site-visibility"
                                             type="checkbox"
                                             checked={!Boolean(field.value)}
                                             onChange={(e) => field.onChange(!e.target.checked)}
@@ -510,7 +523,7 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                     control={form.control}
                     name="images"
                     render={({ field }) => (
-                        <FormItem>
+                        <FormItem id="property-images">
                             <FormLabel>Fotos do Imóvel</FormLabel>
                             <FormControl>
                                 <ImageUpload

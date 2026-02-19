@@ -49,7 +49,7 @@ export default async function EditPropertyPage({
                     </Button>
                 )}
                 <div className="text-xs text-muted-foreground">
-                    Dica: se o imóvel estiver com <span className="font-medium">Ocultar do site</span>, ele não aparece no site público.
+                    Dica: se <span className="font-medium">Exibir no site</span> estiver desativado, o imóvel não aparece no site público.
                 </div>
             </div>
 

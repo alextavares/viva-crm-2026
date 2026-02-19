@@ -11,14 +11,22 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Loader2, CheckSquare, Square, Eye, EyeOff, ExternalLink } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { buildPropertyFixHref, getPropertyPublishIssues } from "@/lib/property-publish-readiness"
 
 type Row = {
   id: string
   title: string
+  description: string | null
   price: number | null
   type: string | null
   status: string | null
   hide_from_site: boolean | null
+  address: {
+    city?: string | null
+    [key: string]: unknown
+  } | null
+  images: string[] | null
+  image_paths: string[] | null
   external_id: string | null
 }
 
@@ -71,6 +79,7 @@ export function PropertyBulkPublish() {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<"available" | "all">("available")
   const [onlyHidden, setOnlyHidden] = useState(true)
+  const [onlyPendingIssues, setOnlyPendingIssues] = useState(false)
   const debouncedSearch = useDebounce(search, 500)
 
   const selectedIds = Object.entries(selected)
@@ -78,6 +87,12 @@ export function PropertyBulkPublish() {
     .map(([k]) => k)
   const hiddenCount = rows.filter((r) => r.hide_from_site).length
   const publishedCount = rows.length - hiddenCount
+  const readinessById = useMemo(
+    () => new Map(rows.map((row) => [row.id, getPropertyPublishIssues(row)])),
+    [rows]
+  )
+  const pendingCount = rows.filter((row) => (readinessById.get(row.id) ?? []).length > 0).length
+  const readyCount = rows.length - pendingCount
 
   const allSelected = rows.length > 0 && rows.every((r) => selected[r.id])
 
@@ -94,7 +109,7 @@ export function PropertyBulkPublish() {
 
       let q = supabase
         .from("properties")
-        .select("id,title,price,type,status,hide_from_site,external_id")
+        .select("id,title,description,price,type,status,hide_from_site,address,images,image_paths,external_id")
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
         .limit(2000)
@@ -109,6 +124,7 @@ export function PropertyBulkPublish() {
         const ors: string[] = []
         if (s) {
           ors.push(`title.ilike.%${s}%`)
+          ors.push(`description.ilike.%${s}%`)
           ors.push(`external_id.ilike.%${s}%`)
         }
         if (digits && digits !== s) {
@@ -123,7 +139,8 @@ export function PropertyBulkPublish() {
       const { data, error } = await q.abortSignal(controller.signal)
       clearTimeout(t)
       if (error) throw error
-      setRows((data as Row[]) ?? [])
+      const loadedRows = (data as Row[]) ?? []
+      setRows(onlyPendingIssues ? loadedRows.filter((row) => getPropertyPublishIssues(row).length > 0) : loadedRows)
       setSelected({})
     } catch (err) {
       console.error("Bulk publish load error:", err)
@@ -136,7 +153,7 @@ export function PropertyBulkPublish() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, onlyHidden, organizationId, status, supabase])
+  }, [debouncedSearch, onlyHidden, onlyPendingIssues, organizationId, status, supabase])
 
   useEffect(() => {
     void load()
@@ -247,6 +264,26 @@ export function PropertyBulkPublish() {
                 </Button>
               </div>
             </div>
+
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Qualidade</div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={onlyPendingIssues ? "default" : "outline"}
+                  onClick={() => setOnlyPendingIssues(true)}
+                >
+                  Com pendências
+                </Button>
+                <Button
+                  type="button"
+                  variant={!onlyPendingIssues ? "default" : "outline"}
+                  onClick={() => setOnlyPendingIssues(false)}
+                >
+                  Todos
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -262,6 +299,12 @@ export function PropertyBulkPublish() {
             </Badge>
             <Badge variant="outline" className="text-xs">
               Ocultos: {hiddenCount}
+            </Badge>
+            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
+              Prontos: {readyCount}
+            </Badge>
+            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+              Com pendências: {pendingCount}
             </Badge>
           </div>
         </CardContent>
@@ -309,39 +352,57 @@ export function PropertyBulkPublish() {
             <div className="p-6 text-sm text-muted-foreground">Nenhum imóvel encontrado para os filtros atuais.</div>
           ) : (
             rows.map((r) => (
-              <div
-                key={r.id}
-                className="grid grid-cols-[44px_1fr_140px_120px_120px_140px] items-center gap-0 px-3 py-2 text-sm hover:bg-muted/20"
-              >
-                <div>
-                  <input
-                    type="checkbox"
-                    checked={!!selected[r.id]}
-                    onChange={() => toggleOne(r.id)}
-                    aria-label={`Selecionar ${r.title}`}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{r.title}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {r.external_id ? r.external_id : `ID: ${r.id.slice(0, 8)}`}
-                  </div>
-                </div>
-                <div className="text-sm">{formatMoneyBRL(typeof r.price === "number" ? r.price : 0)}</div>
-                <div className="text-sm">{typeLabel(r.type)}</div>
-                <div className="text-sm">{statusLabel(r.status)}</div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={r.hide_from_site ? "outline" : "secondary"}
-                    className={r.hide_from_site ? "text-xs" : "text-xs bg-emerald-100 text-emerald-800 border-emerald-200"}
+              (() => {
+                const issues = readinessById.get(r.id) ?? []
+                const hasIssues = issues.length > 0
+                const firstIssue = issues[0]
+
+                return (
+                  <div
+                    key={r.id}
+                    className="grid grid-cols-[44px_1fr_140px_120px_120px_140px] items-center gap-0 px-3 py-2 text-sm hover:bg-muted/20"
                   >
-                    {r.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
-                  </Badge>
-                  <Link href={`/properties/${r.id}`} className="text-xs underline inline-flex items-center gap-1">
-                    Editar <ExternalLink className="h-3 w-3" />
-                  </Link>
-                </div>
-              </div>
+                    <div>
+                      <input
+                        type="checkbox"
+                        checked={!!selected[r.id]}
+                        onChange={() => toggleOne(r.id)}
+                        aria-label={`Selecionar ${r.title}`}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{r.title}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {r.external_id ? r.external_id : `ID: ${r.id.slice(0, 8)}`}
+                      </div>
+                      {hasIssues ? (
+                        <div className="truncate text-xs text-amber-800">
+                          Pendências: {issues.map((issue) => issue.label).join(" · ")}
+                        </div>
+                      ) : (
+                        <div className="truncate text-xs text-emerald-700">Pronto para site/feed</div>
+                      )}
+                    </div>
+                    <div className="text-sm">{formatMoneyBRL(typeof r.price === "number" ? r.price : 0)}</div>
+                    <div className="text-sm">{typeLabel(r.type)}</div>
+                    <div className="text-sm">{statusLabel(r.status)}</div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={r.hide_from_site ? "outline" : "secondary"}
+                        className={r.hide_from_site ? "text-xs" : "text-xs bg-emerald-100 text-emerald-800 border-emerald-200"}
+                      >
+                        {r.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
+                      </Badge>
+                      <Link
+                        href={hasIssues && firstIssue ? buildPropertyFixHref(r.id, firstIssue.focusFieldId) : `/properties/${r.id}`}
+                        className="text-xs underline inline-flex items-center gap-1"
+                      >
+                        {hasIssues ? "Corrigir" : "Editar"} <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  </div>
+                )
+              })()
             ))
           )}
         </div>

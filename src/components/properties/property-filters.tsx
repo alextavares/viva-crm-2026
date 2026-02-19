@@ -17,6 +17,7 @@ export function PropertyFilters() {
     const [type, setType] = useState(searchParams.get('type') || 'all')
     const [status, setStatus] = useState(searchParams.get('status') || 'all')
     const [siteVisibility, setSiteVisibility] = useState(searchParams.get('siteVisibility') || 'all')
+    const [publishQuality, setPublishQuality] = useState(searchParams.get('publishQuality') || 'all')
     const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '')
     const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '')
 
@@ -69,11 +70,17 @@ export function PropertyFilters() {
         router.replace(`?${createQueryString({ siteVisibility: value })}`)
     }
 
+    const handlePublishQualityChange = (value: string) => {
+        setPublishQuality(value)
+        router.replace(`?${createQueryString({ publishQuality: value })}`)
+    }
+
     const clearFilters = () => {
         setSearch('')
         setType('all')
         setStatus('all')
         setSiteVisibility('all')
+        setPublishQuality('all')
         setMinPrice('')
         setMaxPrice('')
         router.replace('?')
@@ -81,7 +88,7 @@ export function PropertyFilters() {
 
     return (
         <div className="bg-card p-4 rounded-lg border shadow-sm space-y-4 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
                 {/* Search */}
                 <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -129,6 +136,17 @@ export function PropertyFilters() {
                         <SelectItem value="all">Site: Todos</SelectItem>
                         <SelectItem value="published">Site: Publicados</SelectItem>
                         <SelectItem value="hidden">Site: Ocultos</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {/* Publish Quality Filter */}
+                <Select value={publishQuality} onValueChange={handlePublishQualityChange}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Qualidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Qualidade: Todos</SelectItem>
+                        <SelectItem value="pending">Qualidade: Com pendências</SelectItem>
                     </SelectContent>
                 </Select>
 
