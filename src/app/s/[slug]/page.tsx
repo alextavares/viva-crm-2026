@@ -7,6 +7,7 @@ import { truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 import { HeroBanner } from "@/components/public/site-banners"
+import { PublicSearchFiltersInstant } from "@/components/public/public-search-filters-instant"
 
 function formatMoneyBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
@@ -158,83 +159,18 @@ export default async function PublicSiteHome({
 
         <div id="buscar" className="rounded-3xl border bg-white/80 p-7 shadow-sm">
           <div className="text-sm font-medium">Busca</div>
-          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={homeHref} method="get">
-            <div className="sm:col-span-2">
-              <label className="text-xs text-muted-foreground">Palavra-chave</label>
-              <input
-                name="q"
-                defaultValue={q ?? ""}
-                className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-                placeholder="Ex: varanda, suíte, 77848263, UUID"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Cidade</label>
-              <input
-                name="city"
-                defaultValue={city ?? ""}
-                className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-                placeholder="Ex: São Paulo"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Bairro</label>
-              <input
-                name="neighborhood"
-                defaultValue={neighborhood ?? ""}
-                className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-                placeholder="Ex: Moema"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Tipo</label>
-              <select
-                name="type"
-                defaultValue={type ?? ""}
-                className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-              >
-                <option value="">Qualquer</option>
-                <option value="apartment">Apartamento</option>
-                <option value="house">Casa</option>
-                <option value="land">Terreno</option>
-                <option value="commercial">Comercial</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">Min</label>
-                <input
-                  name="min_price"
-                  inputMode="numeric"
-                  defaultValue={minPrice ?? ""}
-                  className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Max</label>
-                <input
-                  name="max_price"
-                  inputMode="numeric"
-                  defaultValue={maxPrice ?? ""}
-                  className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="sm:col-span-2 flex items-center justify-between gap-3">
-              <div className="text-xs text-muted-foreground">
-                Mostrando {list.length} resultados nesta página
-              </div>
-              <button
-                type="submit"
-                className="rounded-2xl px-4 py-2 text-sm font-medium text-white"
-                style={{ backgroundColor: "var(--site-secondary)" }}
-              >
-                Aplicar filtros
-              </button>
-            </div>
-          </form>
+          <PublicSearchFiltersInstant
+            actionPath={homeHref}
+            resultCount={list.length}
+            initialValues={{
+              q: q ?? "",
+              city: city ?? "",
+              neighborhood: neighborhood ?? "",
+              type: type ?? "",
+              min_price: minPrice != null ? String(minPrice) : "",
+              max_price: maxPrice != null ? String(maxPrice) : "",
+            }}
+          />
         </div>
       </section>
 

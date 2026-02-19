@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ContactActions } from "@/components/contacts/contact-card-actions"
 import { SiteContactQuickActions } from "@/components/contacts/site-contact-quick-actions"
+import { ContactsFiltersInstant } from "@/components/contacts/contacts-filters-instant"
 import { LeadsKanban } from "@/components/leads/leads-kanban"
 import { createClient } from "@/lib/supabase/server"
 import type { Contact } from "@/lib/types"
@@ -313,86 +314,21 @@ export default async function ContactsPage({
         </div>
       ) : null}
 
-      <form method="get" className="grid gap-3 rounded-lg border bg-card p-3 md:grid-cols-6">
-        <input type="hidden" name="view" value={view} />
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-xs text-muted-foreground">Buscar</label>
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="Nome, email ou telefone"
-            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-muted-foreground">Status</label>
-          <select name="status" defaultValue={statusFilter} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-            <option value="all">Todos</option>
-            <option value="new">Novo</option>
-            <option value="contacted">Contactado</option>
-            <option value="qualified">Qualificado</option>
-            <option value="lost">Perdido</option>
-            <option value="won">Ganho</option>
-          </select>
-        </div>
-        {scope === "site" ? (
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Origem</label>
-            <input
-              value="Site"
-              readOnly
-              className="h-9 w-full rounded-md border bg-muted px-3 text-sm text-muted-foreground"
-            />
-            <input type="hidden" name="origin" value="site" />
-          </div>
-        ) : (
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Origem</label>
-            <select name="origin" defaultValue={originFilter} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-              <option value="all">Todas</option>
-              <option value="site">Site</option>
-            </select>
-          </div>
-        )}
-        <div>
-          <label className="mb-1 block text-xs text-muted-foreground">Domínio/Site</label>
-          <input
-            name="domain"
-            defaultValue={domainFilterRaw}
-            placeholder="ex: demo-vivacrm ou www..."
-            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-          />
-        </div>
-        {scope === "site" ? (
-          <>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Domínio no evento</label>
-              <select name="domainState" defaultValue={domainStateFilter} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-                <option value="all">Todos</option>
-                <option value="known">Com domínio</option>
-                <option value="unknown">Sem domínio</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Telefone</label>
-              <select name="withPhone" defaultValue={withPhoneFilter} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-                <option value="all">Todos</option>
-                <option value="yes">Com WhatsApp</option>
-              </select>
-            </div>
-          </>
-        ) : null}
-        <div className="md:col-span-6 flex justify-end gap-2">
-          <Button type="submit" variant="outline">
-            Aplicar filtros
-          </Button>
-          <Link href={scope === "site" ? buildContactsHref({ q: null, status: "all", domain: null, domainState: "all", withPhone: "all", page: 1 }) : view === "board" ? "/contacts?view=board" : "/contacts"}>
-            <Button type="button" variant="ghost">
-              Limpar
-            </Button>
-          </Link>
-        </div>
-      </form>
+      <ContactsFiltersInstant
+        key={`${scope}|${view}|${q}|${statusFilter}|${originFilter}|${domainFilterRaw}|${domainStateFilter}|${withPhoneFilter}|${pageSize}`}
+        baseRoute={baseRoute}
+        view={view}
+        scope={scope}
+        initialValues={{
+          q,
+          status: statusFilter,
+          origin: originFilter,
+          domain: domainFilterRaw,
+          domainState: domainStateFilter,
+          withPhone: withPhoneFilter,
+          pageSize,
+        }}
+      />
 
       <div className="flex items-center justify-end">
         <div className="flex bg-muted rounded-lg p-1">

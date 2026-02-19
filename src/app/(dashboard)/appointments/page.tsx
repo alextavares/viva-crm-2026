@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AppointmentsCalendar } from '@/components/appointments/appointments-calendar'
+import { AppointmentsFiltersInstant } from '@/components/appointments/appointments-filters-instant'
 import { LayoutGrid, Calendar as CalendarIcon } from 'lucide-react'
 
 export default async function AppointmentsPage({
@@ -15,8 +16,10 @@ export default async function AppointmentsPage({
     const supabase = await createClient()
     const resolvedSearchParams = await searchParams
     const view = resolvedSearchParams?.view as string || 'list'
+    const q = typeof resolvedSearchParams?.q === 'string' ? resolvedSearchParams.q.trim() : ''
+    const statusFilter = typeof resolvedSearchParams?.status === 'string' ? resolvedSearchParams.status : 'all'
 
-    const { data: appointments, error } = await supabase
+    let query = supabase
         .from('appointments')
         .select(`
             *,
@@ -26,8 +29,41 @@ export default async function AppointmentsPage({
         `)
         .order('date', { ascending: true })
 
+    if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter)
+    }
+
+    const { data: appointments, error } = await query
+
     if (error) {
         console.error('Error fetching appointments:', error)
+    }
+
+    const qLower = q.toLowerCase()
+    const filteredAppointments = (appointments || []).filter((appointment) => {
+        if (!qLower) return true
+        const haystack = [
+            appointment.contacts?.name,
+            appointment.contacts?.phone,
+            appointment.contacts?.email,
+            appointment.properties?.title,
+            appointment.properties?.address?.full_address,
+            appointment.notes,
+        ]
+            .filter((v): v is string => typeof v === 'string' && v.length > 0)
+            .join(' ')
+            .toLowerCase()
+
+        return haystack.includes(qLower)
+    })
+
+    const buildAppointmentsHref = (nextView: 'list' | 'calendar') => {
+        const params = new URLSearchParams()
+        if (nextView !== 'list') params.set('view', nextView)
+        if (q) params.set('q', q)
+        if (statusFilter !== 'all') params.set('status', statusFilter)
+        const qs = params.toString()
+        return qs ? `/appointments?${qs}` : '/appointments'
     }
 
     const getStatusLabel = (status: string) => {
@@ -77,13 +113,13 @@ export default async function AppointmentsPage({
 
             <div className="flex items-center justify-end">
                 <div className="flex bg-muted rounded-lg p-1">
-                    <Link href="/appointments?view=list">
+                    <Link href={buildAppointmentsHref('list')}>
                         <Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2">
                             <LayoutGrid className="h-4 w-4" />
                             Lista
                         </Button>
                     </Link>
-                    <Link href="/appointments?view=calendar">
+                    <Link href={buildAppointmentsHref('calendar')}>
                         <Button variant={view === 'calendar' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2">
                             <CalendarIcon className="h-4 w-4" />
                             Calendário
@@ -92,10 +128,20 @@ export default async function AppointmentsPage({
                 </div>
             </div>
 
+            <AppointmentsFiltersInstant
+                key={`${view}|${q}|${statusFilter}`}
+                baseRoute="/appointments"
+                view={view}
+                initialValues={{
+                    q,
+                    status: statusFilter,
+                }}
+            />
+
             {view === 'calendar' ? (
-                <AppointmentsCalendar appointments={appointments || []} />
+                <AppointmentsCalendar appointments={filteredAppointments} />
             ) : (
-                (!appointments || appointments.length === 0) ? (
+                (!filteredAppointments || filteredAppointments.length === 0) ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center border rounded-lg bg-muted/20 border-dashed">
                         <Calendar className="h-10 w-10 text-muted-foreground mb-4" />
                         <h3 className="text-lg font-semibold">Nenhum agendamento encontrado</h3>
@@ -108,7 +154,7 @@ export default async function AppointmentsPage({
                     </div>
                 ) : (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {appointments.map((appointment) => (
+                        {filteredAppointments.map((appointment) => (
                             <Card key={appointment.id} className="hover:shadow-md transition-shadow">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">

@@ -62,6 +62,7 @@ export default async function PropertiesPage({
         const ors = []
         if (s) {
             ors.push(`title.ilike.%${s}%`)
+            ors.push(`description.ilike.%${s}%`)
             ors.push(`external_id.ilike.%${s}%`)
         }
         if (digits && digits !== s) {
