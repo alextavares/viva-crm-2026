@@ -547,15 +547,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
       toast.error("Preencha Nome da marca, WhatsApp e E-mail.")
       return
     }
-    const trackingError = validateTrackingValues(settings)
-    if (trackingError) {
-      toast.error(trackingError)
-      return
-    }
 
     void run(async (signal) => {
       const payload = {
-        ...settings,
+        organization_id: org.id,
+        theme: settings.theme,
         brand_name: settings.brand_name?.trim() || null,
         logo_url: settings.logo_url?.trim() || null,
         logo_path: settings.logo_path?.trim() || extractStoragePathForBucket(settings.logo_url, "site-assets"),
@@ -564,6 +560,26 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
         whatsapp: settings.whatsapp?.trim() || null,
         phone: settings.phone?.trim() || null,
         email: settings.email?.trim() || null,
+        updated_at: nowIso(),
+      }
+
+      const { error } = await supabase.from("site_settings").upsert(payload).abortSignal(signal)
+      if (error) throw error
+
+      toast.success("Configurações do site salvas.")
+    }, "Error saving site_settings:", { busy: "Salvando configurações..." })
+  }
+
+  const saveTrackingSettings = () => {
+    const trackingError = validateTrackingValues(settings)
+    if (trackingError) {
+      toast.error(trackingError)
+      return
+    }
+
+    void run(async (signal) => {
+      const payload = {
+        organization_id: org.id,
         ga4_measurement_id: settings.ga4_measurement_id?.trim() || null,
         meta_pixel_id: settings.meta_pixel_id?.trim() || null,
         google_site_verification: settings.google_site_verification?.trim() || null,
@@ -576,8 +592,8 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
       const { error } = await supabase.from("site_settings").upsert(payload).abortSignal(signal)
       if (error) throw error
 
-      toast.success("Configurações do site salvas.")
-    }, "Error saving site_settings:", { busy: "Salvando configurações..." })
+      toast.success("Rastreamento salvo.")
+    }, "Error saving tracking settings:", { busy: "Salvando rastreamento..." })
   }
 
   const normalizeDomain = (raw: string) => {
@@ -1193,7 +1209,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
               </div>
 
               <div className="flex items-center justify-end gap-2">
-                <Button onClick={saveSettings} disabled={pending}>
+                <Button onClick={saveTrackingSettings} disabled={pending}>
                   {pending ? busyMsg ?? "Processando..." : "Salvar rastreamento"}
                 </Button>
               </div>
