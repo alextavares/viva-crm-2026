@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { WhatsAppFab } from "@/components/marketing/whatsapp-fab"
+import { getDemoSiteHref } from "@/lib/demo-site"
 
 export const metadata: Metadata = {
   title: "Precos | VivaCRM",
@@ -27,6 +28,7 @@ export default function PricingPage() {
   const salesText =
     process.env.NEXT_PUBLIC_SALES_WHATSAPP_TEXT ||
     "Oi! Quero testar o VivaCRM. Pode me ajudar com o plano e a configuracao do site?"
+  const demoSiteHref = getDemoSiteHref()
 
   return (
     <main className="min-h-dvh bg-[#070910] text-zinc-50">
@@ -123,7 +125,7 @@ export default function PricingPage() {
                 Testar gratis
               </Link>
               <Link
-                href="/s/demo-vivacrm"
+                href={demoSiteHref}
                 className="inline-flex items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
               >
                 Ver demo do site
@@ -172,7 +174,7 @@ export default function PricingPage() {
             <Link href="/register" className="hover:text-white">
               Testar
             </Link>
-            <Link href="/s/demo-vivacrm" className="hover:text-white">
+            <Link href={demoSiteHref} className="hover:text-white">
               Demo
             </Link>
           </div>

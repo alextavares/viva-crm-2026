@@ -2,7 +2,7 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { siteListProperties, type SitePropertyCard } from "@/lib/site"
 import type { Metadata } from "next"
-import { getPublicSite } from "@/lib/public-site/site-data"
+import { getPublicLinks, getPublicNewsList, getPublicSite } from "@/lib/public-site/site-data"
 import { truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
@@ -10,6 +10,13 @@ import { HeroBanner } from "@/components/public/site-banners"
 
 function formatMoneyBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
+}
+
+function formatDatePt(v: string | null | undefined) {
+  if (!v) return null
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return null
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(d)
 }
 
 function asString(v: string | string[] | undefined) {
@@ -100,6 +107,11 @@ export default async function PublicSiteHome({
   })
 
   const list: SitePropertyCard[] = items ?? []
+  const [news, links] = await Promise.all([
+    getPublicNewsList(site.slug, 3, 0),
+    getPublicLinks(site.slug),
+  ])
+
   const brandName = site.settings?.brand_name || site.slug
   const heroBanner = site.banners.find((b) => b.placement === "hero") ?? null
 
@@ -289,6 +301,69 @@ export default async function PublicSiteHome({
           </div>
         ) : null}
       </section>
+
+      {news.length > 0 ? (
+        <section className="mt-12">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <h2 className="text-2xl font-semibold">Notícias</h2>
+            <Link
+              href={`${homeHref === "/" ? "" : homeHref}/noticias`}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Ver todas
+            </Link>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {news.map((n) => (
+              <Link
+                key={n.id}
+                href={`${homeHref === "/" ? "" : homeHref}/noticias/${n.slug}`}
+                className="rounded-3xl border bg-white/85 p-5 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="text-xs text-muted-foreground">
+                  {formatDatePt(n.published_at || n.created_at) || "Publicação recente"}
+                </div>
+                <div className="mt-2 line-clamp-2 text-base font-semibold">{n.title}</div>
+                <div className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                  {n.excerpt || "Leia o conteúdo completo desta publicação no site."}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {links.length > 0 ? (
+        <section className="mt-12">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <h2 className="text-2xl font-semibold">Links úteis</h2>
+            <Link
+              href={`${homeHref === "/" ? "" : homeHref}/links`}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Ver todos
+            </Link>
+          </div>
+          <div className="rounded-3xl border bg-white/85 p-5 shadow-sm">
+            <div className="grid gap-3 md:grid-cols-2">
+              {links.slice(0, 6).map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border bg-white px-4 py-3 transition-colors hover:bg-muted/30"
+                >
+                  <div className="text-sm font-medium">{item.title}</div>
+                  {item.description ? (
+                    <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</div>
+                  ) : null}
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </main>
   )
 }

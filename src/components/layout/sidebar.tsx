@@ -8,6 +8,7 @@ import {
     LayoutDashboard,
     Building2,
     Users,
+    Globe,
     Calendar,
     Plug,
     Settings,
@@ -30,6 +31,11 @@ const sidebarItems = [
         title: 'Contatos',
         href: '/contacts',
         icon: Users,
+    },
+    {
+        title: 'Contatos do Site',
+        href: '/contacts/site',
+        icon: Globe,
     },
     {
         title: 'Agendamentos',
@@ -64,13 +70,18 @@ export function Sidebar({ className }: { className?: string }) {
                 <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
                     {sidebarItems.map((item) => {
                         const Icon = item.icon
+                        const isActive =
+                            item.href === "/contacts"
+                                ? pathname === "/contacts" ||
+                                  (pathname.startsWith("/contacts/") && !pathname.startsWith("/contacts/site"))
+                                : pathname === item.href || pathname.startsWith(`${item.href}/`)
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
                                 className={cn(
                                     "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-primary",
-                                    pathname === item.href
+                                    isActive
                                         ? "bg-muted text-primary"
                                         : "text-muted-foreground"
                                 )}

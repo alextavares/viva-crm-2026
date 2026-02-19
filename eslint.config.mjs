@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "coverage/**",
+    // Temporary: ignore ad-hoc operational scripts from QA/debug flows.
+    "scripts/**",
   ]),
 ]);
 

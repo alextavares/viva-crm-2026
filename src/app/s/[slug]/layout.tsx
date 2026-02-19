@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
+import Script from "next/script"
 import { PopupBanner, TopbarBanner } from "@/components/public/site-banners"
 import { withBase, ogImages, truncate } from "@/lib/public-site/seo"
 import { getPublicSite } from "@/lib/public-site/site-data"
@@ -30,6 +31,8 @@ export async function generateMetadata({
   const images = ogImages(
     resolveMediaPathUrl("site-assets", site.settings?.logo_path) ?? resolveMediaUrl(site.settings?.logo_url)
   )
+  const googleSiteVerification = site.settings?.google_site_verification?.trim() || undefined
+  const facebookDomainVerification = site.settings?.facebook_domain_verification?.trim() || undefined
 
   return withBase({
     title: {
@@ -51,6 +54,14 @@ export async function generateMetadata({
       description,
       images,
     },
+    verification: !isPreview
+      ? {
+          google: googleSiteVerification,
+          other: facebookDomainVerification
+            ? { "facebook-domain-verification": facebookDomainVerification }
+            : undefined,
+        }
+      : undefined,
   })
 }
 
@@ -69,6 +80,11 @@ export default async function PublicSiteLayout({
   const primary = site.settings?.primary_color || "#0f172a"
   const secondary = site.settings?.secondary_color || "#14b8a6"
   const whatsapp = site.settings?.whatsapp ? digitsOnly(site.settings.whatsapp) : null
+  const ga4MeasurementId = site.settings?.ga4_measurement_id?.trim() || null
+  const metaPixelId = site.settings?.meta_pixel_id?.trim() || null
+  const googleAdsConversionId = site.settings?.google_ads_conversion_id?.trim() || null
+  const googleAdsConversionLabel = site.settings?.google_ads_conversion_label?.trim() || null
+  const gtagBootstrapId = ga4MeasurementId || googleAdsConversionId
   const host = await getRequestHost()
   const isPreview = isPreviewHost(host)
   const base = publicBasePath(site.slug, host)
@@ -87,6 +103,61 @@ export default async function PublicSiteLayout({
       }
       className="min-h-screen bg-[radial-gradient(1100px_550px_at_10%_-10%,color-mix(in_oklch,var(--site-secondary)_25%,transparent)_0%,transparent_60%),radial-gradient(900px_500px_at_110%_10%,color-mix(in_oklch,var(--site-primary)_18%,transparent)_0%,transparent_55%)]"
     >
+      {!isPreview && gtagBootstrapId ? (
+        <>
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gtagBootstrapId)}`}
+            strategy="afterInteractive"
+          />
+          <Script
+            id="viva-gtag-init"
+            strategy="afterInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                window.gtag = window.gtag || gtag;
+                gtag('js', new Date());
+                ${
+                  ga4MeasurementId
+                    ? `gtag('config', ${JSON.stringify(ga4MeasurementId)}, { anonymize_ip: true });`
+                    : ""
+                }
+                ${
+                  googleAdsConversionId
+                    ? `gtag('config', ${JSON.stringify(googleAdsConversionId)});`
+                    : ""
+                }
+                window.__vivaTracking = Object.assign({}, window.__vivaTracking || {}, {
+                  googleAdsConversionId: ${JSON.stringify(googleAdsConversionId)},
+                  googleAdsConversionLabel: ${JSON.stringify(googleAdsConversionLabel)}
+                });
+              `,
+            }}
+          />
+        </>
+      ) : null}
+      {!isPreview && metaPixelId ? (
+        <Script
+          id="viva-meta-pixel"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              !function(f,b,e,v,n,t,s){
+                if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                n.queue=[];t=b.createElement(e);t.async=!0;
+                t.src=v;s=b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t,s)
+              }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
+              fbq('init', ${JSON.stringify(metaPixelId)});
+              fbq('track', 'PageView');
+            `,
+          }}
+        />
+      ) : null}
+
       {topbar ? <TopbarBanner banner={topbar} /> : null}
       {popup ? <PopupBanner banner={popup} /> : null}
 
@@ -111,6 +182,12 @@ export default async function PublicSiteLayout({
           <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex">
             <Link href={homeHref} className="hover:text-foreground">
               Imóveis
+            </Link>
+            <Link href={`${homeHref === "/" ? "" : homeHref}/noticias`} className="hover:text-foreground">
+              Notícias
+            </Link>
+            <Link href={`${homeHref === "/" ? "" : homeHref}/links`} className="hover:text-foreground">
+              Links
             </Link>
             <Link href={`${homeHref === "/" ? "" : homeHref}/about`} className="hover:text-foreground">
               Sobre

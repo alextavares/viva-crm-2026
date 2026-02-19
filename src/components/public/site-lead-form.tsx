@@ -14,6 +14,38 @@ function digitsOnly(s: string) {
   return s.replace(/[^0-9]/g, "")
 }
 
+function trackLeadConversion(siteSlug: string, propertyId: string | null) {
+  if (typeof window === "undefined") return
+  const w = window as unknown as {
+    gtag?: (...args: unknown[]) => void
+    fbq?: (...args: unknown[]) => void
+    __vivaTracking?: {
+      googleAdsConversionId?: string | null
+      googleAdsConversionLabel?: string | null
+    }
+  }
+
+  if (typeof w.gtag === "function") {
+    w.gtag("event", "generate_lead", {
+      source: "site_form",
+      site_slug: siteSlug,
+      property_id: propertyId ?? undefined,
+    })
+
+    const adsId = w.__vivaTracking?.googleAdsConversionId?.trim()
+    const adsLabel = w.__vivaTracking?.googleAdsConversionLabel?.trim()
+    if (adsId && adsLabel) {
+      w.gtag("event", "conversion", {
+        send_to: `${adsId}/${adsLabel}`,
+      })
+    }
+  }
+
+  if (typeof w.fbq === "function") {
+    w.fbq("track", "Lead")
+  }
+}
+
 export function SiteLeadForm({ siteSlug, propertyId, propertyTitle }: Props) {
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
@@ -42,6 +74,7 @@ export function SiteLeadForm({ siteSlug, propertyId, propertyTitle }: Props) {
             name: name.trim(),
             phone: phone.trim(),
             message: msg.length ? msg : null,
+            sourceDomain: typeof window !== "undefined" ? window.location.host : null,
           })
 
           if (error || !data?.contact_id) {
@@ -54,6 +87,7 @@ export function SiteLeadForm({ siteSlug, propertyId, propertyTitle }: Props) {
           setName("")
           setPhone("")
           setMessage("")
+          trackLeadConversion(siteSlug, propertyId)
         })
       }}
     >

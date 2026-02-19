@@ -16,6 +16,7 @@ export function PropertyFilters() {
     const [search, setSearch] = useState(searchParams.get('search') || '')
     const [type, setType] = useState(searchParams.get('type') || 'all')
     const [status, setStatus] = useState(searchParams.get('status') || 'all')
+    const [siteVisibility, setSiteVisibility] = useState(searchParams.get('siteVisibility') || 'all')
     const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '')
     const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '')
 
@@ -63,10 +64,16 @@ export function PropertyFilters() {
         router.push(`?${createQueryString({ status: value })}`)
     }
 
+    const handleSiteVisibilityChange = (value: string) => {
+        setSiteVisibility(value)
+        router.push(`?${createQueryString({ siteVisibility: value })}`)
+    }
+
     const clearFilters = () => {
         setSearch('')
         setType('all')
         setStatus('all')
+        setSiteVisibility('all')
         setMinPrice('')
         setMaxPrice('')
         router.push('?')
@@ -74,7 +81,7 @@ export function PropertyFilters() {
 
     return (
         <div className="bg-card p-4 rounded-lg border shadow-sm space-y-4 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 {/* Search */}
                 <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -110,6 +117,18 @@ export function PropertyFilters() {
                         <SelectItem value="available">Disponível</SelectItem>
                         <SelectItem value="sold">Vendido</SelectItem>
                         <SelectItem value="rented">Alugado</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {/* Site Visibility Filter */}
+                <Select value={siteVisibility} onValueChange={handleSiteVisibilityChange}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Site" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Site: Todos</SelectItem>
+                        <SelectItem value="published">Site: Publicados</SelectItem>
+                        <SelectItem value="hidden">Site: Ocultos</SelectItem>
                     </SelectContent>
                 </Select>
 

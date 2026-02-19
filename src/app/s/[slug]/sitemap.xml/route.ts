@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { siteGetSettings, siteListProperties } from "@/lib/site"
+import { siteGetSettings, siteListNews, siteListProperties } from "@/lib/site"
 import { publicBasePath } from "@/lib/public-site/host"
 
 export const dynamic = "force-dynamic"
@@ -52,6 +52,8 @@ export async function GET(
     abs(origin, sitePath(basePath, "/about")),
     abs(origin, sitePath(basePath, "/contact")),
     abs(origin, sitePath(basePath, "/lgpd")),
+    abs(origin, sitePath(basePath, "/noticias")),
+    abs(origin, sitePath(basePath, "/links")),
   ]
 
   for (let offset = 0; urls.length < MAX_URLS; offset += PAGE_SIZE) {
@@ -68,6 +70,25 @@ export async function GET(
     for (const p of data) {
       if (urls.length >= MAX_URLS) break
       urls.push(abs(origin, sitePath(basePath, `/imovel/${encodeURIComponent(p.id)}`)))
+    }
+
+    if (data.length < limit) break
+  }
+
+  for (let offset = 0; urls.length < MAX_URLS; offset += PAGE_SIZE) {
+    const limit = Math.min(PAGE_SIZE, MAX_URLS - urls.length)
+    const { data, error } = await siteListNews(supabase, {
+      siteSlug: slug,
+      limit,
+      offset,
+    })
+
+    if (error) break
+    if (!data || data.length === 0) break
+
+    for (const item of data) {
+      if (urls.length >= MAX_URLS) break
+      urls.push(abs(origin, sitePath(basePath, `/noticias/${encodeURIComponent(item.slug)}`)))
     }
 
     if (data.length < limit) break

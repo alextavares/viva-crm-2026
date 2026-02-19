@@ -18,6 +18,12 @@ export type SitePublicSettings = {
   whatsapp: string | null
   phone: string | null
   email: string | null
+  ga4_measurement_id?: string | null
+  meta_pixel_id?: string | null
+  google_site_verification?: string | null
+  facebook_domain_verification?: string | null
+  google_ads_conversion_id?: string | null
+  google_ads_conversion_label?: string | null
 }
 
 export type SitePublicPage = {
@@ -41,6 +47,34 @@ export type SitePublicBanner = {
   starts_at: string | null
   ends_at: string | null
   priority: number
+}
+
+export type SitePublicNewsCard = {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  published_at: string | null
+  created_at: string | null
+}
+
+export type SitePublicNews = {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  content: string | null
+  published_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export type SitePublicLink = {
+  id: string
+  title: string
+  url: string
+  description: string | null
+  sort_order: number
 }
 
 export type SiteGetSettingsResponse = {
@@ -134,12 +168,53 @@ export async function siteGetProperty(
   return res as PostgrestSingleResponse<SitePublicProperty>
 }
 
+export type SiteListNewsArgs = {
+  siteSlug: string
+  limit?: number | null
+  offset?: number | null
+}
+
+export async function siteListNews(
+  supabase: SupabaseClient,
+  args: SiteListNewsArgs
+) {
+  const res = await supabase.rpc("site_list_news", {
+    p_site_slug: args.siteSlug,
+    p_limit: args.limit ?? null,
+    p_offset: args.offset ?? null,
+  })
+  return res as PostgrestResponse<SitePublicNewsCard>
+}
+
+export async function siteGetNews(
+  supabase: SupabaseClient,
+  siteSlug: string,
+  newsSlug: string
+) {
+  const res = await supabase.rpc("site_get_news", {
+    p_site_slug: siteSlug,
+    p_news_slug: newsSlug,
+  })
+  return res as PostgrestSingleResponse<SitePublicNews>
+}
+
+export async function siteListLinks(
+  supabase: SupabaseClient,
+  siteSlug: string
+) {
+  const res = await supabase.rpc("site_list_links", {
+    p_site_slug: siteSlug,
+  })
+  return res as PostgrestResponse<SitePublicLink>
+}
+
 export type SiteCreateLeadArgs = {
   siteSlug: string
   propertyId?: string | null
   name: string
   phone: string
   message?: string | null
+  sourceDomain?: string | null
 }
 
 export async function siteCreateLead(
@@ -152,6 +227,7 @@ export async function siteCreateLead(
     p_name: args.name,
     p_phone: args.phone,
     p_message: args.message ?? null,
+    p_source_domain: args.sourceDomain ?? null,
   })
   return res as PostgrestSingleResponse<SiteCreateLeadResult>
 }

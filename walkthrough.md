@@ -71,6 +71,40 @@ Resultado consolidado:
 - `npm test`: passou (2 suites)
 - `npm run build`: passou (exit 0, sem warnings)
 
+## Hardening: Separação Site Principal x Sites de Clientes
+
+### O que foi ajustado
+
+- Landing e página de preços agora usam slug de demo por variável de ambiente:
+  - `NEXT_PUBLIC_DEMO_SITE_SLUG` (fallback: `demo-vivacrm`)
+  - Helper: `src/lib/demo-site.ts`
+- Scripts de seed agora exigem `--site-slug` obrigatório:
+  - `scripts/seed_db.js`
+  - `scripts/final_auth_seed.js`
+  - `scripts/final_seed.js`
+  - `scripts/seed_test_data.js`
+- Novo script de limpeza de conteúdo E2E por organização:
+  - `scripts/cleanup_site_content.js`
+
+### Comandos de referência
+
+```bash
+# Seed (obrigatório informar slug)
+node scripts/final_seed.js --site-slug demo-vivacrm
+node scripts/seed_test_data.js --site-slug demo-vivacrm
+node scripts/seed_db.js --site-slug demo-vivacrm
+node scripts/final_auth_seed.js --site-slug demo-vivacrm
+
+# Se não existir SUPABASE_SERVICE_ROLE_KEY, use também:
+# --email e2e.imobicrm.2026@gmail.com --password TempE2E!2026
+
+# Limpeza segura (primeiro simulação)
+node scripts/cleanup_site_content.js --site-slug demo-vivacrm --dry-run
+
+# Execução real (usa service role se disponível; sem service role exige --email/--password)
+node scripts/cleanup_site_content.js --site-slug demo-vivacrm
+```
+
 ## Ciclo 9.4 - Site Público (MVP) + Captura de Leads (Entregue)
 
 ### Escopo entregue

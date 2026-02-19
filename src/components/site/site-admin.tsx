@@ -34,6 +34,12 @@ type SiteSettingsRow = {
   whatsapp: string | null
   phone: string | null
   email: string | null
+  ga4_measurement_id: string | null
+  meta_pixel_id: string | null
+  google_site_verification: string | null
+  facebook_domain_verification: string | null
+  google_ads_conversion_id: string | null
+  google_ads_conversion_label: string | null
 }
 
 type SitePageKey = "about" | "contact" | "lgpd"
@@ -290,6 +296,30 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function validateTrackingValues(settings: SiteSettingsRow): string | null {
+  const ga4 = settings.ga4_measurement_id?.trim()
+  if (ga4 && !/^G-[A-Z0-9]+$/i.test(ga4)) {
+    return "GA4 inválido. Use o formato G-XXXXXXXX."
+  }
+
+  const pixel = settings.meta_pixel_id?.trim()
+  if (pixel && !/^[0-9]{6,20}$/.test(pixel)) {
+    return "Meta Pixel inválido. Use somente números."
+  }
+
+  const adsId = settings.google_ads_conversion_id?.trim()
+  if (adsId && !/^AW-[0-9]+$/i.test(adsId)) {
+    return "Google Ads Conversion ID inválido. Use o formato AW-123456789."
+  }
+
+  const adsLabel = settings.google_ads_conversion_label?.trim()
+  if (adsLabel && !/^[A-Za-z0-9_-]{2,120}$/.test(adsLabel)) {
+    return "Google Ads Conversion Label inválido."
+  }
+
+  return null
+}
+
 async function uploadSiteAsset(
   supabase: SupabaseClient,
   opts: { orgId: string; file: File; kind: "logo" | "banner" }
@@ -409,6 +439,12 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
       whatsapp: s?.whatsapp ?? "",
       phone: s?.phone ?? "",
       email: s?.email ?? "",
+      ga4_measurement_id: s?.ga4_measurement_id ?? "",
+      meta_pixel_id: s?.meta_pixel_id ?? "",
+      google_site_verification: s?.google_site_verification ?? "",
+      facebook_domain_verification: s?.facebook_domain_verification ?? "",
+      google_ads_conversion_id: s?.google_ads_conversion_id ?? "",
+      google_ads_conversion_label: s?.google_ads_conversion_label ?? "",
     }
   })
 
@@ -449,6 +485,13 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const hasRequiredContact = Boolean(settings.whatsapp?.trim() && settings.email?.trim() && settings.brand_name?.trim())
   const isDomainVerified = domainRow?.status === "verified"
   const hasPublicProperty = Boolean(checklist?.hasPublicProperty)
+  const hasGa4 = Boolean(settings.ga4_measurement_id?.trim())
+  const hasMetaPixel = Boolean(settings.meta_pixel_id?.trim())
+  const hasGoogleAds = Boolean(settings.google_ads_conversion_id?.trim() && settings.google_ads_conversion_label?.trim())
+  const hasVerificationTokens = Boolean(
+    settings.google_site_verification?.trim() || settings.facebook_domain_verification?.trim()
+  )
+  const trackingConfigured = [hasGa4, hasMetaPixel, hasGoogleAds, hasVerificationTokens].filter(Boolean).length
 
   useEffect(() => {
     // Keep slot in case we later sync live preview.
@@ -457,6 +500,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const saveSettings = () => {
     if (!canSaveSettings) {
       toast.error("Preencha Nome da marca, WhatsApp e E-mail.")
+      return
+    }
+    const trackingError = validateTrackingValues(settings)
+    if (trackingError) {
+      toast.error(trackingError)
       return
     }
 
@@ -471,6 +519,12 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
         whatsapp: settings.whatsapp?.trim() || null,
         phone: settings.phone?.trim() || null,
         email: settings.email?.trim() || null,
+        ga4_measurement_id: settings.ga4_measurement_id?.trim() || null,
+        meta_pixel_id: settings.meta_pixel_id?.trim() || null,
+        google_site_verification: settings.google_site_verification?.trim() || null,
+        facebook_domain_verification: settings.facebook_domain_verification?.trim() || null,
+        google_ads_conversion_id: settings.google_ads_conversion_id?.trim() || null,
+        google_ads_conversion_label: settings.google_ads_conversion_label?.trim() || null,
         updated_at: nowIso(),
       }
 
@@ -750,7 +804,37 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
             </Link>
           </div>
 
-          <Card>
+          <Card id="site-section-nav">
+            <CardHeader>
+              <CardTitle>Navegação rápida</CardTitle>
+              <CardDescription>Atalho para as seções mais usadas.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-brand">Marca e contato</a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-domain">Domínio próprio</a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-tracking">Rastreamento</a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-pages">Páginas</a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-banners">Banners</a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-news">Notícias</a>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <a href="#site-section-links">Links úteis</a>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card id="site-section-checklist">
             <CardHeader>
               <CardTitle>Checklist de publicação</CardTitle>
               <CardDescription>Antes de divulgar o link do site, confirme estes itens.</CardDescription>
@@ -796,7 +880,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="site-section-brand">
             <CardHeader>
               <CardTitle>Marca e Contato</CardTitle>
               <CardDescription>
@@ -912,7 +996,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="site-section-domain">
             <CardHeader>
               <CardTitle>Domínio próprio</CardTitle>
               <CardDescription>
@@ -952,7 +1036,97 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="site-section-tracking">
+            <CardHeader>
+              <CardTitle>Rastreamento</CardTitle>
+              <CardDescription>
+                Opcional. Configure analytics e pixel para medir visitas e conversões de lead do site.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-2 rounded-lg border bg-muted/10 p-3 text-sm">
+                <div className="font-medium">Status de configuração</div>
+                <div className="text-muted-foreground">
+                  {trackingConfigured}/4 blocos configurados (GA4, Meta Pixel, Google Ads, Verificações).
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>GA4 Measurement ID</Label>
+                  <Input
+                    value={settings.ga4_measurement_id ?? ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, ga4_measurement_id: e.target.value }))}
+                    placeholder="G-XXXXXXXXXX"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Meta Pixel ID</Label>
+                  <Input
+                    value={settings.meta_pixel_id ?? ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, meta_pixel_id: e.target.value }))}
+                    placeholder="123456789012345"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Google Site Verification</Label>
+                  <Input
+                    value={settings.google_site_verification ?? ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, google_site_verification: e.target.value }))}
+                    placeholder="token de verificação do Search Console"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Facebook Domain Verification</Label>
+                  <Input
+                    value={settings.facebook_domain_verification ?? ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, facebook_domain_verification: e.target.value }))}
+                    placeholder="token de verificação de domínio"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Google Ads Conversion ID</Label>
+                  <Input
+                    value={settings.google_ads_conversion_id ?? ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, google_ads_conversion_id: e.target.value }))}
+                    placeholder="AW-123456789"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Google Ads Conversion Label</Label>
+                  <Input
+                    value={settings.google_ads_conversion_label ?? ""}
+                    onChange={(e) => setSettings((s) => ({ ...s, google_ads_conversion_label: e.target.value }))}
+                    placeholder="AbCdEfGhIjKlMnOpQr"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/10 p-3 text-xs text-muted-foreground">
+                Eventos enviados automaticamente no lead: <span className="font-medium">GA4 generate_lead</span>,{" "}
+                <span className="font-medium">Meta Lead</span> e conversão do Google Ads (quando ID + label estiverem preenchidos).
+              </div>
+
+              <div className="rounded-lg border bg-muted/10 p-3 text-xs text-muted-foreground">
+                Dica de validação: abra o DevTools &gt; Network e filtre por <span className="font-medium">collect?v=2</span> (GA4) e{" "}
+                <span className="font-medium">tr?id=</span> (Meta Pixel) após enviar um lead.
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <Button onClick={saveSettings} disabled={pending}>
+                  {pending ? busyMsg ?? "Processando..." : "Salvar rastreamento"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card id="site-section-pages">
             <CardHeader>
               <CardTitle>Páginas</CardTitle>
               <CardDescription>Edite e publique as páginas institucionais.</CardDescription>
@@ -1003,7 +1177,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="site-section-banners">
             <CardHeader>
               <CardTitle>Banners</CardTitle>
               <CardDescription>Topbar, popup e outros destaques do site.</CardDescription>

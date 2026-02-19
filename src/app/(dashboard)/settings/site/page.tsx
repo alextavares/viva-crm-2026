@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { SiteAdmin } from "@/components/site/site-admin"
+import { SiteContentAdmin } from "@/components/site/site-content-admin"
 import { Button } from "@/components/ui/button"
 
 type OrgInfo = { id: string; name: string; slug: string }
@@ -90,7 +91,7 @@ export default async function SiteSettingsPage() {
     )
   }
 
-  const [{ data: settings }, { data: pages }, { data: banners }, { data: domain }, { count: publicCount }] = await Promise.all([
+  const [{ data: settings }, { data: pages }, { data: banners }, { data: domain }, { count: publicCount }, { data: news }, { data: links }] = await Promise.all([
     supabase.from("site_settings").select("*").eq("organization_id", org.id).maybeSingle(),
     supabase
       .from("site_pages")
@@ -110,21 +111,63 @@ export default async function SiteSettingsPage() {
       .eq("organization_id", org.id)
       .eq("status", "available")
       .eq("hide_from_site", false),
+    supabase
+      .from("site_news")
+      .select("*")
+      .eq("organization_id", org.id)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("site_links")
+      .select("*")
+      .eq("organization_id", org.id)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false }),
   ])
 
   return (
-    <SiteAdmin
-      org={org as OrgInfo}
-      previewUrl={getPreviewUrlForOrg(org.slug, requestHost, forwardedProto)}
-      checklist={{
-        hasPublicProperty: (publicCount ?? 0) > 0,
-      } as SiteChecklist}
-      initial={{
-        settings: settings ?? null,
-        pages: (pages ?? []) as unknown as Array<Record<string, unknown>>,
-        banners: (banners ?? []) as unknown as Array<Record<string, unknown>>,
-        domain: (domain ?? null) as unknown as Record<string, unknown> | null,
-      }}
-    />
+    <div className="grid gap-8">
+      <SiteAdmin
+        org={org as OrgInfo}
+        previewUrl={getPreviewUrlForOrg(org.slug, requestHost, forwardedProto)}
+        checklist={{
+          hasPublicProperty: (publicCount ?? 0) > 0,
+        } as SiteChecklist}
+        initial={{
+          settings: settings ?? null,
+          pages: (pages ?? []) as unknown as Array<Record<string, unknown>>,
+          banners: (banners ?? []) as unknown as Array<Record<string, unknown>>,
+          domain: (domain ?? null) as unknown as Record<string, unknown> | null,
+        }}
+      />
+      <SiteContentAdmin
+        org={org as OrgInfo}
+        initial={{
+          news: (news ?? []) as unknown as Array<{
+            id: string
+            organization_id: string
+            title: string
+            slug: string
+            excerpt: string | null
+            content: string
+            is_published: boolean
+            published_at: string | null
+            created_at: string
+            updated_at: string
+          }>,
+          links: (links ?? []) as unknown as Array<{
+            id: string
+            organization_id: string
+            title: string
+            url: string
+            description: string | null
+            sort_order: number
+            is_published: boolean
+            created_at: string
+            updated_at: string
+          }>,
+        }}
+      />
+    </div>
   )
 }

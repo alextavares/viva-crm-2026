@@ -141,6 +141,12 @@ CREATE TABLE IF NOT EXISTS site_settings (
   whatsapp TEXT,
   phone TEXT,
   email TEXT,
+  ga4_measurement_id TEXT,
+  meta_pixel_id TEXT,
+  google_site_verification TEXT,
+  facebook_domain_verification TEXT,
+  google_ads_conversion_id TEXT,
+  google_ads_conversion_label TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -201,7 +207,45 @@ CREATE TABLE IF NOT EXISTS custom_domains (
 
 CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
 
--- 12. WEBHOOK ENDPOINTS (public ingest)
+-- 12. SITE NEWS
+-- Lightweight blog-like content for SEO and authority.
+CREATE TABLE IF NOT EXISTS site_news (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) NOT NULL,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  excerpt TEXT,
+  content TEXT NOT NULL,
+  is_published BOOLEAN NOT NULL DEFAULT FALSE,
+  published_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (organization_id, slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_news_org ON site_news(organization_id);
+CREATE INDEX IF NOT EXISTS idx_site_news_org_published ON site_news(organization_id, is_published);
+CREATE INDEX IF NOT EXISTS idx_site_news_org_published_at ON site_news(organization_id, published_at DESC, created_at DESC);
+
+-- 13. SITE LINKS
+-- Useful external links shown in public site.
+CREATE TABLE IF NOT EXISTS site_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  description TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_published BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_links_org ON site_links(organization_id);
+CREATE INDEX IF NOT EXISTS idx_site_links_org_published ON site_links(organization_id, is_published);
+CREATE INDEX IF NOT EXISTS idx_site_links_org_order ON site_links(organization_id, sort_order ASC, created_at DESC);
+
+-- 14. WEBHOOK ENDPOINTS (public ingest)
 -- Token-authenticated endpoints to ingest leads into the CRM.
 CREATE TABLE IF NOT EXISTS webhook_endpoints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -215,7 +259,7 @@ CREATE TABLE IF NOT EXISTS webhook_endpoints (
 CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_org ON webhook_endpoints(organization_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_active ON webhook_endpoints(is_active);
 
--- 13. CONTACT EVENTS (timeline)
+-- 15. CONTACT EVENTS (timeline)
 CREATE TABLE IF NOT EXISTS contact_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -226,7 +270,7 @@ CREATE TABLE IF NOT EXISTS contact_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 14. MESSAGES (inbound/outbound)
+-- 16. MESSAGES (inbound/outbound)
 CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -295,7 +339,13 @@ AS $$
       s.secondary_color,
       s.whatsapp,
       s.phone,
-      s.email
+      s.email,
+      s.ga4_measurement_id,
+      s.meta_pixel_id,
+      s.google_site_verification,
+      s.facebook_domain_verification,
+      s.google_ads_conversion_id,
+      s.google_ads_conversion_label
     FROM org
     LEFT JOIN public.site_settings s ON s.organization_id = org.id
   ),
@@ -488,6 +538,126 @@ $$;
 REVOKE ALL ON FUNCTION public.site_get_property(text, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.site_get_property(text, uuid) TO anon, authenticated;
 
+CREATE OR REPLACE FUNCTION public.site_list_news(
+  p_site_slug text,
+  p_limit int DEFAULT 12,
+  p_offset int DEFAULT 0
+)
+RETURNS TABLE (
+  id uuid,
+  slug text,
+  title text,
+  excerpt text,
+  published_at timestamptz,
+  created_at timestamptz
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH org AS (
+    SELECT o.id
+    FROM public.organizations o
+    WHERE o.slug = p_site_slug
+    LIMIT 1
+  )
+  SELECT
+    n.id,
+    n.slug,
+    n.title,
+    n.excerpt,
+    n.published_at,
+    n.created_at
+  FROM public.site_news n
+  JOIN org ON org.id = n.organization_id
+  WHERE n.is_published IS TRUE
+    AND (n.published_at IS NULL OR n.published_at <= now())
+  ORDER BY COALESCE(n.published_at, n.created_at) DESC, n.created_at DESC
+  LIMIT LEAST(GREATEST(COALESCE(p_limit, 12), 1), 100)
+  OFFSET GREATEST(COALESCE(p_offset, 0), 0);
+$$;
+
+REVOKE ALL ON FUNCTION public.site_list_news(text, int, int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.site_list_news(text, int, int) TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.site_get_news(
+  p_site_slug text,
+  p_news_slug text
+)
+RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH org AS (
+    SELECT o.id
+    FROM public.organizations o
+    WHERE o.slug = p_site_slug
+    LIMIT 1
+  ),
+  news AS (
+    SELECT n.*
+    FROM public.site_news n
+    JOIN org ON org.id = n.organization_id
+    WHERE n.slug = p_news_slug
+      AND n.is_published IS TRUE
+      AND (n.published_at IS NULL OR n.published_at <= now())
+    LIMIT 1
+  )
+  SELECT
+    CASE
+      WHEN (SELECT id FROM news) IS NULL THEN NULL
+      ELSE jsonb_build_object(
+        'id', (SELECT id FROM news),
+        'slug', (SELECT slug FROM news),
+        'title', (SELECT title FROM news),
+        'excerpt', (SELECT excerpt FROM news),
+        'content', (SELECT content FROM news),
+        'published_at', (SELECT published_at FROM news),
+        'updated_at', (SELECT updated_at FROM news),
+        'created_at', (SELECT created_at FROM news)
+      )
+    END;
+$$;
+
+REVOKE ALL ON FUNCTION public.site_get_news(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.site_get_news(text, text) TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.site_list_links(
+  p_site_slug text
+)
+RETURNS TABLE (
+  id uuid,
+  title text,
+  url text,
+  description text,
+  sort_order int
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH org AS (
+    SELECT o.id
+    FROM public.organizations o
+    WHERE o.slug = p_site_slug
+    LIMIT 1
+  )
+  SELECT
+    l.id,
+    l.title,
+    l.url,
+    l.description,
+    l.sort_order
+  FROM public.site_links l
+  JOIN org ON org.id = l.organization_id
+  WHERE l.is_published IS TRUE
+  ORDER BY l.sort_order ASC, l.created_at DESC;
+$$;
+
+REVOKE ALL ON FUNCTION public.site_list_links(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.site_list_links(text) TO anon, authenticated;
+
 -- Public (anon) resolver: map verified domain -> site slug.
 CREATE OR REPLACE FUNCTION public.site_resolve_slug_by_domain(p_domain text)
 RETURNS text
@@ -515,7 +685,8 @@ CREATE OR REPLACE FUNCTION public.site_create_lead(
   p_property_id uuid DEFAULT NULL,
   p_name text,
   p_phone text,
-  p_message text DEFAULT NULL
+  p_message text DEFAULT NULL,
+  p_source_domain text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -529,6 +700,7 @@ DECLARE
   v_phone_raw text;
   v_phone_norm text;
   v_message text;
+  v_source_domain text;
   v_prop_title text;
   v_contact_id uuid;
   v_existing_contact_id uuid;
@@ -548,6 +720,7 @@ BEGIN
   v_phone_raw := left(btrim(COALESCE(p_phone, '')), 80);
   v_phone_norm := left(regexp_replace(COALESCE(p_phone, ''), '[^0-9]', '', 'g'), 32);
   v_message := NULLIF(left(btrim(COALESCE(p_message, '')), 2000), '');
+  v_source_domain := NULLIF(lower(left(btrim(COALESCE(p_source_domain, '')), 255)), '');
 
   IF length(v_name) = 0 OR length(v_phone_norm) = 0 THEN
     RAISE EXCEPTION 'name and phone are required' USING ERRCODE = '22023';
@@ -629,6 +802,8 @@ BEGIN
     'site',
     jsonb_build_object(
       'property_id', p_property_id,
+      'site_slug', p_site_slug,
+      'source_domain', v_source_domain,
       'raw_phone', v_phone_raw,
       'phone_normalized', v_phone_norm,
       'message_preview', left(COALESCE(v_message, ''), 140)
@@ -676,8 +851,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.site_create_lead(text, uuid, text, text, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.site_create_lead(text, uuid, text, text, text) TO anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_create_lead(text, uuid, text, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.site_create_lead(text, uuid, text, text, text, text) TO anon, authenticated;
 
 -- PUBLIC WEBHOOK RPCs (SECURITY DEFINER)
 -- Token-based ingest of inbound leads/messages without exposing tables to anon.
@@ -968,6 +1143,8 @@ ALTER TABLE site_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_pages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_domains ENABLE ROW LEVEL SECURITY;
+ALTER TABLE site_news ENABLE ROW LEVEL SECURITY;
+ALTER TABLE site_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_endpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contact_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
@@ -1095,6 +1272,28 @@ BEGIN
 
     EXECUTE 'DROP POLICY IF EXISTS "Owners/Managers can manage custom domains" ON custom_domains';
     EXECUTE 'CREATE POLICY "Owners/Managers can manage custom domains" ON custom_domains FOR ALL USING (organization_id = public.current_user_org_id() AND public.current_user_role() IN (''owner'', ''manager'')) WITH CHECK (organization_id = public.current_user_org_id() AND public.current_user_role() IN (''owner'', ''manager''))';
+END
+$$;
+
+-- Site News
+DO $$
+BEGIN
+    EXECUTE 'DROP POLICY IF EXISTS "View site news in same org" ON site_news';
+    EXECUTE 'CREATE POLICY "View site news in same org" ON site_news FOR SELECT USING (organization_id = public.current_user_org_id())';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Owners/Managers can manage site news" ON site_news';
+    EXECUTE 'CREATE POLICY "Owners/Managers can manage site news" ON site_news FOR ALL USING (organization_id = public.current_user_org_id() AND public.current_user_role() IN (''owner'', ''manager'')) WITH CHECK (organization_id = public.current_user_org_id() AND public.current_user_role() IN (''owner'', ''manager''))';
+END
+$$;
+
+-- Site Links
+DO $$
+BEGIN
+    EXECUTE 'DROP POLICY IF EXISTS "View site links in same org" ON site_links';
+    EXECUTE 'CREATE POLICY "View site links in same org" ON site_links FOR SELECT USING (organization_id = public.current_user_org_id())';
+
+    EXECUTE 'DROP POLICY IF EXISTS "Owners/Managers can manage site links" ON site_links';
+    EXECUTE 'CREATE POLICY "Owners/Managers can manage site links" ON site_links FOR ALL USING (organization_id = public.current_user_org_id() AND public.current_user_role() IN (''owner'', ''manager'')) WITH CHECK (organization_id = public.current_user_org_id() AND public.current_user_role() IN (''owner'', ''manager''))';
 END
 $$;
 

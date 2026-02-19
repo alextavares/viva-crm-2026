@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Building, Users, Calendar, DollarSign } from "lucide-react"
+import { Building, Users, Calendar, Globe } from "lucide-react"
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
 
@@ -30,7 +30,10 @@ export default async function DashboardPage() {
     const siteSlug = (org?.slug as string | null) ?? null
 
     // Fetch stats in parallel
-    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount] = await Promise.all([
+    // eslint-disable-next-line react-hooks/purity -- Server-side snapshot for dashboard metric window.
+    const siteLeadsSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d] = await Promise.all([
         supabase.from('properties').select('*', { count: 'exact', head: true }).eq('status', 'available'),
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('type', 'lead'),
         supabase.from('appointments').select('*', { count: 'exact', head: true }).gte('date', new Date().toISOString()),
@@ -48,11 +51,18 @@ export default async function DashboardPage() {
             .select("id", { count: "exact", head: true })
             .eq("status", "available")
             .eq("hide_from_site", false),
+        supabase
+            .from("contact_events")
+            .select("id", { count: "exact", head: true })
+            .eq("type", "lead_received")
+            .eq("source", "site")
+            .gte("created_at", siteLeadsSince),
     ])
 
     const activeProperties = propertiesResult.count || 0
     const activeLeads = contactsResult.count || 0
     const upcomingAppointments = appointmentsResult.count || 0
+    const siteLeadsCount7d = siteLeads7d.count || 0
 
     const hasProperty = (propertiesAll.data?.length ?? 0) > 0
     const hasPublishedProperty = (publishedCount.count ?? 0) > 0
@@ -141,13 +151,13 @@ export default async function DashboardPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Vendas (Mês)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Leads do Site (7 dias)</CardTitle>
+                        <Globe className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">R$ 0,00</div>
+                        <div className="text-2xl font-bold">{siteLeadsCount7d}</div>
                         <p className="text-xs text-muted-foreground">
-                            Placeholder (Em Breve)
+                            Captações via formulário público
                         </p>
                     </CardContent>
                 </Card>

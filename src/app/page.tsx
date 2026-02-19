@@ -1,12 +1,14 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { WhatsAppFab } from "@/components/marketing/whatsapp-fab"
+import { getDemoSiteHref } from "@/lib/demo-site"
 
 export default function Home() {
   const salesPhone = process.env.NEXT_PUBLIC_SALES_WHATSAPP_E164 || "5511999999999"
   const salesText =
     process.env.NEXT_PUBLIC_SALES_WHATSAPP_TEXT ||
     "Oi! Quero testar o VivaCRM. Voce pode me ajudar a configurar meu site e importar meus imoveis?"
+  const demoSiteHref = getDemoSiteHref()
 
   return (
     <main className="min-h-dvh bg-[#070910] text-zinc-50">
@@ -88,7 +90,7 @@ export default function Home() {
                 Criar minha conta
               </Link>
               <Link
-                href="/s/demo-vivacrm"
+                href={demoSiteHref}
                 className="inline-flex items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
               >
                 Ver demo do site
@@ -129,7 +131,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-white">Demo</div>
                 <span className="rounded-full bg-black/30 px-2 py-1 text-xs text-white/70 ring-1 ring-white/10">
-                  /s/demo-vivacrm
+                  {demoSiteHref}
                 </span>
               </div>
               <div className="mt-4 grid gap-3">
@@ -157,7 +159,7 @@ export default function Home() {
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link
-                  href="/s/demo-vivacrm"
+                  href={demoSiteHref}
                   className="inline-flex flex-1 items-center justify-center rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
                 >
                   Abrir demo
@@ -229,7 +231,7 @@ export default function Home() {
                 Testar gratis
               </Link>
               <Link
-                href="/s/demo-vivacrm"
+                href={demoSiteHref}
                 className="inline-flex flex-1 items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10 md:flex-none"
               >
                 Ver demo
@@ -273,7 +275,7 @@ export default function Home() {
               <div className="mt-1 text-sm text-white/65">Abra o demo e navegue como seu cliente navegaria.</div>
             </div>
             <Link
-              href="/s/demo-vivacrm"
+              href={demoSiteHref}
               className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black hover:bg-white/90"
             >
               Abrir demo agora
@@ -365,7 +367,7 @@ export default function Home() {
                     Testar gratis
                   </Link>
                   <Link
-                    href="/s/demo-vivacrm"
+                    href={demoSiteHref}
                     className="inline-flex flex-1 items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
                   >
                     Ver demo
@@ -406,7 +408,7 @@ export default function Home() {
             <Link href="/register" className="hover:text-white">
               Criar conta
             </Link>
-            <Link href="/s/demo-vivacrm" className="hover:text-white">
+            <Link href={demoSiteHref} className="hover:text-white">
               Demo
             </Link>
           </div>

@@ -42,6 +42,7 @@ export default async function PropertiesPage({
     const search = resolvedSearchParams?.search as string || ''
     const type = resolvedSearchParams?.type as string || 'all'
     const status = resolvedSearchParams?.status as string || 'all'
+    const siteVisibility = resolvedSearchParams?.siteVisibility as string || 'all'
     const minPrice = resolvedSearchParams?.minPrice ? Number(resolvedSearchParams.minPrice) : null
     const maxPrice = resolvedSearchParams?.maxPrice ? Number(resolvedSearchParams.maxPrice) : null
 
@@ -81,6 +82,12 @@ export default async function PropertiesPage({
 
     if (status !== 'all') {
         query = query.eq('status', status)
+    }
+
+    if (siteVisibility === 'hidden') {
+        query = query.eq('hide_from_site', true)
+    } else if (siteVisibility === 'published') {
+        query = query.or('hide_from_site.is.null,hide_from_site.eq.false')
     }
 
     if (minPrice !== null) {
@@ -173,13 +180,14 @@ export default async function PropertiesPage({
                                                 {property.status === 'available' ? 'Disponível' : property.status}
                                             </Badge>
                                         </div>
-                                        {property.hide_from_site ? (
-                                            <div className="absolute top-2 left-2">
-                                                <Badge variant="outline" className="bg-white/90">
-                                                    Oculto do site
-                                                </Badge>
-                                            </div>
-                                        ) : null}
+                                        <div className="absolute top-2 left-2">
+                                            <Badge
+                                                variant={property.hide_from_site ? "outline" : "secondary"}
+                                                className={property.hide_from_site ? "bg-white/90" : "bg-emerald-100 text-emerald-800 border-emerald-200"}
+                                            >
+                                                {property.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
+                                            </Badge>
+                                        </div>
                                     </div>
                                     <CardHeader className="p-4">
                                         <div className="flex justify-between items-start">
@@ -217,6 +225,9 @@ export default async function PropertiesPage({
                                 <CardFooter className="p-4 border-t bg-muted/50 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
                                     <span>{property.type === 'apartment' ? 'Apartamento' : property.type === 'house' ? 'Casa' : property.type}</span>
                                     <span>Ref: {refLabel(property)}</span>
+                                    <span className="w-full sm:w-auto text-muted-foreground/90">
+                                        {property.hide_from_site ? "Não aparece no site público" : "Aparece no site público"}
+                                    </span>
                                     <div className="w-full sm:w-auto sm:ml-auto">
                                         <PropertySiteVisibilityToggle propertyId={property.id} hideFromSite={property.hide_from_site} />
                                     </div>
@@ -228,13 +239,13 @@ export default async function PropertiesPage({
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
                         <div className="flex items-center justify-end gap-2 mt-4">
-                            <Link href={`/properties?page=${page - 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page <= 1 ? "pointer-events-none opacity-50" : ""}>
+                            <Link href={`/properties?page=${page - 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&siteVisibility=${siteVisibility}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page <= 1 ? "pointer-events-none opacity-50" : ""}>
                                 <Button variant="outline" size="sm" disabled={page <= 1}>Anterior</Button>
                             </Link>
                             <span className="text-sm text-muted-foreground">
                                 Página {page} de {totalPages}
                             </span>
-                            <Link href={`/properties?page=${page + 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page >= totalPages ? "pointer-events-none opacity-50" : ""}>
+                            <Link href={`/properties?page=${page + 1}&pageSize=${pageSize}&search=${search}&type=${type}&status=${status}&siteVisibility=${siteVisibility}&minPrice=${minPrice || ''}&maxPrice=${maxPrice || ''}`} className={page >= totalPages ? "pointer-events-none opacity-50" : ""}>
                                 <Button variant="outline" size="sm" disabled={page >= totalPages}>Próxima</Button>
                             </Link>
                         </div>

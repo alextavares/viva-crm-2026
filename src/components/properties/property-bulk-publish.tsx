@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Loader2, CheckSquare, Square, Eye, EyeOff, ExternalLink } from "lucide-react"
 
@@ -73,6 +74,8 @@ export function PropertyBulkPublish() {
   const selectedIds = Object.entries(selected)
     .filter(([, v]) => v)
     .map(([k]) => k)
+  const hiddenCount = rows.filter((r) => r.hide_from_site).length
+  const publishedCount = rows.length - hiddenCount
 
   const allSelected = rows.length > 0 && rows.every((r) => selected[r.id])
 
@@ -253,6 +256,12 @@ export function PropertyBulkPublish() {
             <div className="text-xs text-muted-foreground">
               Mostrando <span className="font-medium">{rows.length}</span> imóveis (limite 2000).
             </div>
+            <Badge variant="outline" className="text-xs">
+              Publicados: {publishedCount}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              Ocultos: {hiddenCount}
+            </Badge>
           </div>
         </CardContent>
       </Card>
@@ -321,9 +330,12 @@ export function PropertyBulkPublish() {
                 <div className="text-sm">{typeLabel(r.type)}</div>
                 <div className="text-sm">{statusLabel(r.status)}</div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {r.hide_from_site ? "Oculto" : "Publicado"}
-                  </span>
+                  <Badge
+                    variant={r.hide_from_site ? "outline" : "secondary"}
+                    className={r.hide_from_site ? "text-xs" : "text-xs bg-emerald-100 text-emerald-800 border-emerald-200"}
+                  >
+                    {r.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
+                  </Badge>
                   <Link href={`/properties/${r.id}`} className="text-xs underline inline-flex items-center gap-1">
                     Editar <ExternalLink className="h-3 w-3" />
                   </Link>
