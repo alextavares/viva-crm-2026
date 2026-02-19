@@ -492,6 +492,51 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
     settings.google_site_verification?.trim() || settings.facebook_domain_verification?.trim()
   )
   const trackingConfigured = [hasGa4, hasMetaPixel, hasGoogleAds, hasVerificationTokens].filter(Boolean).length
+  const trackingSteps = [
+    {
+      key: "ga4",
+      title: "Etapa 1 · GA4",
+      done: hasGa4,
+      value: settings.ga4_measurement_id?.trim() ? `ID: ${settings.ga4_measurement_id?.trim()}` : "Não configurado",
+      action: hasGa4
+        ? "Teste agora no DevTools: Network > collect?v=2 após enviar um lead."
+        : "Preencha o Measurement ID (G-...) e clique em Salvar rastreamento.",
+      href: "#tracking-ga4",
+    },
+    {
+      key: "pixel",
+      title: "Etapa 2 · Meta Pixel",
+      done: hasMetaPixel,
+      value: settings.meta_pixel_id?.trim() ? `Pixel: ${settings.meta_pixel_id?.trim()}` : "Não configurado",
+      action: hasMetaPixel
+        ? "Teste agora no DevTools: Network > tr?id=... após enviar um lead."
+        : "Preencha o Pixel ID (somente números) e salve.",
+      href: "#tracking-meta-pixel",
+    },
+    {
+      key: "ads",
+      title: "Etapa 3 · Google Ads",
+      done: hasGoogleAds,
+      value:
+        hasGoogleAds && settings.google_ads_conversion_id && settings.google_ads_conversion_label
+          ? `${settings.google_ads_conversion_id} / ${settings.google_ads_conversion_label}`
+          : "Não configurado",
+      action: hasGoogleAds
+        ? "Envie um lead teste e valide evento conversion com send_to correto."
+        : "Preencha Conversion ID (AW-...) + Conversion Label e salve.",
+      href: "#tracking-google-ads-id",
+    },
+    {
+      key: "verification",
+      title: "Etapa 4 · Verificação de domínio",
+      done: hasVerificationTokens,
+      value: hasVerificationTokens ? "Token configurado" : "Não configurado",
+      action: hasVerificationTokens
+        ? "Valide no Search Console e no Meta Business com seu domínio público."
+        : "Cole token do Google e/ou Meta, salve e valide no provedor.",
+      href: "#tracking-google-site-verification",
+    },
+  ]
 
   useEffect(() => {
     // Keep slot in case we later sync live preview.
@@ -1051,10 +1096,34 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 </div>
               </div>
 
+              <div className="grid gap-3 rounded-lg border bg-muted/10 p-3">
+                <div className="text-sm font-medium">Checklist guiado</div>
+                {trackingSteps.map((step) => (
+                  <div key={step.key} className="rounded-lg border bg-background p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {step.done ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <div className="text-sm font-medium">{step.title}</div>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <a href={step.href}>Ir para campo</a>
+                      </Button>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{step.value}</div>
+                    <div className="mt-1 text-xs">{step.action}</div>
+                  </div>
+                ))}
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>GA4 Measurement ID</Label>
                   <Input
+                    id="tracking-ga4"
                     value={settings.ga4_measurement_id ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, ga4_measurement_id: e.target.value }))}
                     placeholder="G-XXXXXXXXXX"
@@ -1063,6 +1132,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 <div className="grid gap-2">
                   <Label>Meta Pixel ID</Label>
                   <Input
+                    id="tracking-meta-pixel"
                     value={settings.meta_pixel_id ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, meta_pixel_id: e.target.value }))}
                     placeholder="123456789012345"
@@ -1074,6 +1144,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 <div className="grid gap-2">
                   <Label>Google Site Verification</Label>
                   <Input
+                    id="tracking-google-site-verification"
                     value={settings.google_site_verification ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, google_site_verification: e.target.value }))}
                     placeholder="token de verificação do Search Console"
@@ -1082,6 +1153,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 <div className="grid gap-2">
                   <Label>Facebook Domain Verification</Label>
                   <Input
+                    id="tracking-facebook-domain-verification"
                     value={settings.facebook_domain_verification ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, facebook_domain_verification: e.target.value }))}
                     placeholder="token de verificação de domínio"
@@ -1093,6 +1165,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 <div className="grid gap-2">
                   <Label>Google Ads Conversion ID</Label>
                   <Input
+                    id="tracking-google-ads-id"
                     value={settings.google_ads_conversion_id ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, google_ads_conversion_id: e.target.value }))}
                     placeholder="AW-123456789"
@@ -1101,6 +1174,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 <div className="grid gap-2">
                   <Label>Google Ads Conversion Label</Label>
                   <Input
+                    id="tracking-google-ads-label"
                     value={settings.google_ads_conversion_label ?? ""}
                     onChange={(e) => setSettings((s) => ({ ...s, google_ads_conversion_label: e.target.value }))}
                     placeholder="AbCdEfGhIjKlMnOpQr"
