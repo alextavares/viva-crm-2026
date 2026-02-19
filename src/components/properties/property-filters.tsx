@@ -46,7 +46,7 @@ export function PropertyFilters() {
 
     // Effect for debounced values
     useEffect(() => {
-        router.push(`?${createQueryString({
+        router.replace(`?${createQueryString({
             search: debouncedSearch,
             minPrice: debouncedMinPrice,
             maxPrice: debouncedMaxPrice
@@ -56,17 +56,17 @@ export function PropertyFilters() {
     // Handlers for immediate filters
     const handleTypeChange = (value: string) => {
         setType(value)
-        router.push(`?${createQueryString({ type: value })}`)
+        router.replace(`?${createQueryString({ type: value })}`)
     }
 
     const handleStatusChange = (value: string) => {
         setStatus(value)
-        router.push(`?${createQueryString({ status: value })}`)
+        router.replace(`?${createQueryString({ status: value })}`)
     }
 
     const handleSiteVisibilityChange = (value: string) => {
         setSiteVisibility(value)
-        router.push(`?${createQueryString({ siteVisibility: value })}`)
+        router.replace(`?${createQueryString({ siteVisibility: value })}`)
     }
 
     const clearFilters = () => {
@@ -76,7 +76,7 @@ export function PropertyFilters() {
         setSiteVisibility('all')
         setMinPrice('')
         setMaxPrice('')
-        router.push('?')
+        router.replace('?')
     }
 
     return (

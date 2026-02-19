@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Loader2, CheckSquare, Square, Eye, EyeOff, ExternalLink } from "lucide-react"
+import { useDebounce } from "@/hooks/use-debounce"
 
 type Row = {
   id: string
@@ -70,6 +71,7 @@ export function PropertyBulkPublish() {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<"available" | "all">("available")
   const [onlyHidden, setOnlyHidden] = useState(true)
+  const debouncedSearch = useDebounce(search, 500)
 
   const selectedIds = Object.entries(selected)
     .filter(([, v]) => v)
@@ -79,7 +81,7 @@ export function PropertyBulkPublish() {
 
   const allSelected = rows.length > 0 && rows.every((r) => selected[r.id])
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!organizationId) {
       setLastError("Organização ainda está carregando. Aguarde 2s e tente novamente.")
       return
@@ -99,8 +101,8 @@ export function PropertyBulkPublish() {
 
       if (onlyHidden) q = q.eq("hide_from_site", true)
       if (status !== "all") q = q.eq("status", status)
-      if (search.trim()) {
-        const raw = search.trim()
+      if (debouncedSearch.trim()) {
+        const raw = debouncedSearch.trim()
         const s = sanitizeForOrIlike(raw)
         const digits = s.replace(/[^0-9]/g, "")
 
@@ -134,12 +136,11 @@ export function PropertyBulkPublish() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [debouncedSearch, onlyHidden, organizationId, status, supabase])
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId])
+  }, [load])
 
   const toggleAll = () => {
     if (rows.length === 0) return
