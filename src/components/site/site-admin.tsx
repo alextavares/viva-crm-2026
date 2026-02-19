@@ -148,6 +148,7 @@ type Props = {
   previewUrl?: string
   checklist?: {
     hasPublicProperty: boolean
+    hasSiteLead?: boolean
   }
   initial: {
     settings: SiteSettingsRow | null
@@ -484,7 +485,10 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const canSaveSettings = settings.brand_name?.trim() && settings.whatsapp?.trim() && settings.email?.trim()
   const hasRequiredContact = Boolean(settings.whatsapp?.trim() && settings.email?.trim() && settings.brand_name?.trim())
   const isDomainVerified = domainRow?.status === "verified"
+  const hasPreviewReady = Boolean(org.slug?.trim())
+  const hasDomainReady = isDomainVerified || hasPreviewReady
   const hasPublicProperty = Boolean(checklist?.hasPublicProperty)
+  const hasSiteLead = Boolean(checklist?.hasSiteLead)
   const hasGa4 = Boolean(settings.ga4_measurement_id?.trim())
   const hasMetaPixel = Boolean(settings.meta_pixel_id?.trim())
   const hasGoogleAds = Boolean(settings.google_ads_conversion_id?.trim() && settings.google_ads_conversion_label?.trim())
@@ -535,6 +539,33 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
         ? "Valide no Search Console e no Meta Business com seu domínio público."
         : "Cole token do Google e/ou Meta, salve e valide no provedor.",
       href: "#tracking-google-site-verification",
+    },
+  ]
+  const activationSteps = [
+    {
+      done: hasRequiredContact,
+      title: "Marca + WhatsApp + E-mail configurados",
+      hint: "Necessário para captar e responder leads.",
+    },
+    {
+      done: hasDomainReady,
+      title: "Site pronto para abrir (domínio ou preview)",
+      hint: isDomainVerified ? "Domínio verificado com sucesso." : "Use o preview enquanto o domínio não é verificado.",
+    },
+    {
+      done: trackingConfigured > 0,
+      title: "Rastreamento configurado",
+      hint: "Configure GA4, Meta Pixel ou Google Ads para medir conversão.",
+    },
+    {
+      done: hasPublicProperty,
+      title: "Existe pelo menos 1 imóvel visível no site",
+      hint: "Use Publicar em massa ou o toggle na lista de imóveis.",
+    },
+    {
+      done: hasSiteLead,
+      title: "Primeiro lead recebido no CRM",
+      hint: "Envie um lead teste pelo formulário público e valide em Contatos.",
     },
   ]
 
@@ -897,27 +928,14 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
 
           <Card id="site-section-checklist">
             <CardHeader>
-              <CardTitle>Checklist de publicação</CardTitle>
-              <CardDescription>Antes de divulgar o link do site, confirme estes itens.</CardDescription>
+              <CardTitle>Onboarding de ativação</CardTitle>
+              <CardDescription>Antes de divulgar o site, confirme os itens críticos de go-live.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {[
-                {
-                  done: hasRequiredContact,
-                  title: "Marca + WhatsApp + E-mail configurados",
-                  hint: "Necessário para captar e responder leads.",
-                },
-                {
-                  done: hasPublicProperty,
-                  title: "Existe pelo menos 1 imóvel visível no site",
-                  hint: "Use Publicar em massa ou o toggle na lista de imóveis.",
-                },
-                {
-                  done: isDomainVerified,
-                  title: "Domínio próprio verificado (DNS)",
-                  hint: "Opcional no início, recomendado para go-live.",
-                },
-              ].map((item) => (
+              <div className="text-sm text-muted-foreground">
+                {activationSteps.filter((x) => x.done).length}/{activationSteps.length} concluídos
+              </div>
+              {activationSteps.map((item) => (
                 <div key={item.title} className="flex items-start gap-3 rounded-xl border bg-muted/10 p-3">
                   {item.done ? (
                     <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
@@ -934,8 +952,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 <Link href="/properties/publish">
                   <Button variant="outline" size="sm">Publicar em massa</Button>
                 </Link>
-                <Link href="/properties" target="_blank" rel="noreferrer">
-                  <Button variant="outline" size="sm">Abrir imóveis</Button>
+                <Link href={`/s/${org.slug}/contact`} target="_blank" rel="noreferrer">
+                  <Button variant="outline" size="sm">Testar formulário público</Button>
+                </Link>
+                <Link href="/contacts">
+                  <Button variant="outline" size="sm">Ver contatos</Button>
                 </Link>
               </div>
             </CardContent>

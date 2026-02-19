@@ -33,7 +33,7 @@ export default async function DashboardPage() {
     // eslint-disable-next-line react-hooks/purity -- Server-side snapshot for dashboard metric window.
     const siteLeadsSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d] = await Promise.all([
+    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d, customDomain] = await Promise.all([
         supabase.from('properties').select('*', { count: 'exact', head: true }).eq('status', 'available'),
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('type', 'lead'),
         supabase.from('appointments').select('*', { count: 'exact', head: true }).gte('date', new Date().toISOString()),
@@ -42,7 +42,9 @@ export default async function DashboardPage() {
         orgId
             ? supabase
                   .from("site_settings")
-                  .select("brand_name, whatsapp, email")
+                  .select(
+                      "brand_name, whatsapp, email, ga4_measurement_id, meta_pixel_id, google_site_verification, facebook_domain_verification, google_ads_conversion_id, google_ads_conversion_label, onboarding_collapsed"
+                  )
                   .eq("organization_id", orgId)
                   .maybeSingle()
             : Promise.resolve({ data: null }),
@@ -57,6 +59,13 @@ export default async function DashboardPage() {
             .eq("type", "lead_received")
             .eq("source", "site")
             .gte("created_at", siteLeadsSince),
+        orgId
+            ? supabase
+                  .from("custom_domains")
+                  .select("status")
+                  .eq("organization_id", orgId)
+                  .maybeSingle()
+            : Promise.resolve({ data: null }),
     ])
 
     const activeProperties = propertiesResult.count || 0
@@ -72,6 +81,18 @@ export default async function DashboardPage() {
             siteSettings?.data?.whatsapp?.trim() &&
             siteSettings?.data?.email?.trim()
     )
+    const hasTrackingConfigured = Boolean(
+        siteSettings?.data?.ga4_measurement_id?.trim() ||
+            siteSettings?.data?.meta_pixel_id?.trim() ||
+            siteSettings?.data?.google_site_verification?.trim() ||
+            siteSettings?.data?.facebook_domain_verification?.trim() ||
+            (siteSettings?.data?.google_ads_conversion_id?.trim() &&
+                siteSettings?.data?.google_ads_conversion_label?.trim())
+    )
+    const hasDomainVerified = customDomain?.data?.status === "verified"
+    const hasPreviewReady = Boolean(siteSlug)
+    const hasDomainReady = hasDomainVerified || hasPreviewReady
+    const onboardingCollapsed = Boolean(siteSettings?.data?.onboarding_collapsed)
 
     // Aggregate data for charts
     const propertyStatusCounts = (propertiesAll.data || []).reduce((acc, curr) => {
@@ -107,9 +128,12 @@ export default async function DashboardPage() {
                 siteSlug={siteSlug}
                 isAdmin={isAdmin}
                 hasSiteConfigured={hasSiteConfigured}
+                hasDomainReady={hasDomainReady}
+                hasTrackingConfigured={hasTrackingConfigured}
                 hasProperty={hasProperty}
                 hasPublishedProperty={hasPublishedProperty}
                 hasLead={hasLead}
+                initialCollapsed={onboardingCollapsed}
             />
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
   facebook_domain_verification TEXT,
   google_ads_conversion_id TEXT,
   google_ads_conversion_label TEXT,
+  onboarding_collapsed BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

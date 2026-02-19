@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 type OrgInfo = { id: string; name: string; slug: string }
 type SiteChecklist = {
   hasPublicProperty: boolean
+  hasSiteLead: boolean
 }
 
 function normalizeHost(v: string) {
@@ -91,7 +92,7 @@ export default async function SiteSettingsPage() {
     )
   }
 
-  const [{ data: settings }, { data: pages }, { data: banners }, { data: domain }, { count: publicCount }, { data: news }, { data: links }] = await Promise.all([
+  const [{ data: settings }, { data: pages }, { data: banners }, { data: domain }, { count: publicCount }, { count: siteLeadCount }, { data: news }, { data: links }] = await Promise.all([
     supabase.from("site_settings").select("*").eq("organization_id", org.id).maybeSingle(),
     supabase
       .from("site_pages")
@@ -111,6 +112,12 @@ export default async function SiteSettingsPage() {
       .eq("organization_id", org.id)
       .eq("status", "available")
       .eq("hide_from_site", false),
+    supabase
+      .from("contact_events")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .eq("type", "lead_received")
+      .eq("source", "site"),
     supabase
       .from("site_news")
       .select("*")
@@ -132,6 +139,7 @@ export default async function SiteSettingsPage() {
         previewUrl={getPreviewUrlForOrg(org.slug, requestHost, forwardedProto)}
         checklist={{
           hasPublicProperty: (publicCount ?? 0) > 0,
+          hasSiteLead: (siteLeadCount ?? 0) > 0,
         } as SiteChecklist}
         initial={{
           settings: settings ?? null,
