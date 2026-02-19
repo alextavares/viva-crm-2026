@@ -27,6 +27,14 @@ function refLabel(property: { id?: string | null; external_id?: string | null })
     return typeof property?.id === "string" ? property.id.slice(0, 8) : "-"
 }
 
+function statusLabel(status?: string | null) {
+    if (!status) return "Indefinido"
+    if (status === "available") return "Disponível"
+    if (status === "sold") return "Vendido"
+    if (status === "rented") return "Alugado"
+    return status
+}
+
 export default async function PropertiesPage({
     searchParams,
 }: {
@@ -139,6 +147,12 @@ export default async function PropertiesPage({
 
             <PropertyFilters />
 
+            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Status</span> indica a situação comercial.
+                {" "}
+                <span className="font-medium text-foreground">Site: Publicado/Oculto</span> controla se aparece no site público e no feed.
+            </div>
+
             {(!properties || properties.length === 0) ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center border rounded-lg bg-muted/20 border-dashed">
                     <Building2 className="h-10 w-10 text-muted-foreground mb-4" />
@@ -177,14 +191,18 @@ export default async function PropertiesPage({
                                             <Building2 className="h-10 w-10 text-muted-foreground/50" />
                                         )}
                                         <div className="absolute top-2 right-2">
-                                            <Badge variant={property.status === 'available' ? 'default' : 'secondary'}>
-                                                {property.status === 'available' ? 'Disponível' : property.status}
+                                            <Badge
+                                                variant={property.status === 'available' ? 'default' : 'secondary'}
+                                                title="Status comercial do imóvel"
+                                            >
+                                                {statusLabel(property.status)}
                                             </Badge>
                                         </div>
                                         <div className="absolute top-2 left-2">
                                             <Badge
                                                 variant={property.hide_from_site ? "outline" : "secondary"}
                                                 className={property.hide_from_site ? "bg-white/90" : "bg-emerald-100 text-emerald-800 border-emerald-200"}
+                                                title="Visibilidade no site público e no feed"
                                             >
                                                 {property.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
                                             </Badge>

@@ -465,6 +465,9 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                                     <SelectItem value="rented">Alugado</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <div className="text-xs text-muted-foreground">
+                                Status é comercial (Disponível/Vendido/Alugado) e não controla sozinho a exibição no site.
+                            </div>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -477,22 +480,24 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
                         <FormItem>
                             <div className="flex items-start justify-between gap-4 rounded-md border p-3">
                                 <div className="space-y-1">
-                                    <FormLabel className="m-0">Ocultar do site</FormLabel>
+                                    <FormLabel className="m-0">Exibir no site</FormLabel>
                                     <div className="text-xs text-muted-foreground">
-                                        Se marcado, o imóvel não aparece no site público nem no feed de portais.
+                                        Controla a vitrine pública (site + feed de portais). O status comercial continua independente.
                                     </div>
                                 </div>
                                 <FormControl>
                                     <div className="flex items-center gap-2">
                                         <input
                                             type="checkbox"
-                                            checked={Boolean(field.value)}
-                                            onChange={(e) => field.onChange(e.target.checked)}
+                                            checked={!Boolean(field.value)}
+                                            onChange={(e) => field.onChange(!e.target.checked)}
                                             disabled={isLoading}
                                             className="h-4 w-4"
-                                            aria-label="Ocultar do site"
+                                            aria-label="Exibir no site"
                                         />
-                                        <Label className="text-sm text-muted-foreground">Oculto</Label>
+                                        <Label className="text-sm text-muted-foreground">
+                                            {Boolean(field.value) ? "Oculto" : "Exibido"}
+                                        </Label>
                                     </div>
                                 </FormControl>
                             </div>
