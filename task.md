@@ -47,6 +47,12 @@
 - [x] Migration: site_list_properties search by external_id (20260215)
 - [x] Validation: site_list_properties search (demo-vivacrm) -> 1 record found
 
+### Ciclo 10.4 — Pipeline de Qualidade (CI)
+- [x] Workflow GitHub Actions criado: `.github/workflows/ci.yml`
+- [x] Gatilhos em `push` e `pull_request` para `main`
+- [x] Execução automática de `npm ci`, `npm run lint`, `npm test`, `npm run build`
+- [x] Concurrency habilitado para evitar jobs duplicados em branch
+
 
 ## Verificação Atual (executada no workspace)
 - [x] `npm run lint` (pass)

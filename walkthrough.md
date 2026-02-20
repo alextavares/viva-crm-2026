@@ -46,6 +46,26 @@ Resultado consolidado:
 2. Fechar pipeline de deploy/staging e checklist de produção.
 3. Iniciar fase de design técnico da IA de fotos (sem implementação imediata).
 
+## Ciclo 10.4 - Pipeline de Qualidade (CI)
+
+### Entregue
+
+- Workflow criado em `.github/workflows/ci.yml`.
+- Execução automática no GitHub Actions para:
+  - `pull_request` -> `main`
+  - `push` -> `main`
+- Job único de qualidade com:
+  - `npm ci`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+- `concurrency` habilitado para cancelar runs antigos da mesma branch/referência.
+
+### Observações técnicas
+
+- `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` foram definidos com valores de placeholder no workflow para garantir build determinístico sem segredos de produção.
+- O pipeline atual valida qualidade de código e build; deploy continua desacoplado (próximo passo).
+
 ## Ciclo 9.1 - Optimistic Update (Kanban)
 
 ### Implementação
