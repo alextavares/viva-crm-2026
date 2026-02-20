@@ -131,6 +131,26 @@ export default async function SettingsPage() {
 
         <Card className="h-full">
           <CardHeader>
+            <CardTitle>Distribuição de Leads + SLA</CardTitle>
+            <CardDescription>
+              Round-robin para brokers, SLA visível e redistribuição automática de leads parados.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/leads" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin}>Configurar distribuição</Button>
+            </Link>
+            <div className="text-xs text-muted-foreground">
+              Foco em resposta rápida e menos lead esquecido.
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader>
             <CardTitle>Equipe</CardTitle>
             <CardDescription>Usuários, permissões e corretores.</CardDescription>
           </CardHeader>

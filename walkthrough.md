@@ -13,6 +13,24 @@ O projeto está estabilizado até **Ciclo 9.3 (Integrações - MVP)**, com valid
   - processador de fila: `POST /api/jobs/followups/process` retornando `200 OK`
 - Evidência funcional confirmada no relatório QA informado pelo usuário.
 
+## Sprint 2 — Distribuição de Leads + SLA (Fase 1)
+- Implementado round-robin automático para novos `lead_received`, com foco em `broker` (opção escolhida).
+- Entregas:
+  - migration `20260220152000_lead_distribution_sla.sql`
+  - tabela `lead_distribution_settings` (enabled, sla_minutes, redistribute_overdue)
+  - tabela `lead_distribution_state` (cursor de round-robin por organização)
+  - função `lead_assign_next_broker(...)`
+  - trigger `trg_lead_assign_on_lead_event` em `contact_events`
+  - função `lead_redistribute_overdue(...)`
+  - endpoint `POST /api/jobs/leads/redistribute`
+  - tela `/settings/leads`
+  - badge de SLA por lead em `/contacts` (No prazo / Atenção / Atrasado)
+- Validação técnica local:
+  - `npm run lint` ✅
+  - `npm test` ✅
+  - `npm run build` ✅
+- Pendência: QA externo funcional do Sprint 2.
+
 ## Ciclo 8 + Patch 8.1 (Produção)
 
 ### Arquivos alterados e motivo

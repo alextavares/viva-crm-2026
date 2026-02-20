@@ -18,6 +18,7 @@ type ContactRow = {
   phone: string | null
   status: string
   type: string
+  assigned_to?: string | null
   organization_id: string
   created_at: string | null
   updated_at?: string | null
@@ -34,6 +35,17 @@ type SiteMeta = {
   source: string | null
   domain: string | null
   lastEventAt: string | null
+}
+
+type LeadDistributionSettings = {
+  sla_minutes: number
+  enabled: boolean
+}
+
+type SlaBadgeInfo = {
+  label: string
+  elapsed: string
+  className: string
 }
 
 function getTypeLabel(type: string) {
@@ -95,6 +107,39 @@ function formatDateTime(value: string) {
   }).format(d)
 }
 
+function buildSlaBadge(lastLeadAt: string | null, status: string, settings: LeadDistributionSettings): SlaBadgeInfo | null {
+  if (!lastLeadAt || status !== "new" || !settings.enabled) return null
+
+  const dt = new Date(lastLeadAt)
+  if (Number.isNaN(dt.getTime())) return null
+
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 60000))
+  const slaMinutes = Math.max(1, settings.sla_minutes || 15)
+  const warnThreshold = Math.max(1, Math.floor(slaMinutes * 0.66))
+
+  if (elapsedMinutes <= warnThreshold) {
+    return {
+      label: "No prazo",
+      elapsed: `${elapsedMinutes} min`,
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    }
+  }
+
+  if (elapsedMinutes <= slaMinutes) {
+    return {
+      label: "Atenção",
+      elapsed: `${elapsedMinutes} min`,
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    }
+  }
+
+  return {
+    label: "Atrasado",
+    elapsed: `${elapsedMinutes} min`,
+    className: "border-rose-200 bg-rose-50 text-rose-700",
+  }
+}
+
 export default async function ContactsPage({
   searchParams,
 }: {
@@ -123,7 +168,32 @@ export default async function ContactsPage({
 
   const shouldFilterBySiteEvent = originFilter === "site" || domainFilter.length > 0
   const siteMetaByContactId = new Map<string, SiteMeta>()
+  const latestLeadEventByContactId = new Map<string, string>()
   let siteContactIds: string[] | null = null
+
+  let leadDistributionSettings: LeadDistributionSettings = {
+    sla_minutes: 15,
+    enabled: true,
+  }
+
+  const { data: leadSettings, error: leadSettingsError } = await supabase
+    .from("lead_distribution_settings")
+    .select("sla_minutes, enabled")
+    .maybeSingle()
+
+  if (leadSettingsError && leadSettingsError.code !== "42P01") {
+    console.error("Error fetching lead_distribution_settings:", {
+      message: leadSettingsError.message,
+      details: leadSettingsError.details,
+      hint: leadSettingsError.hint,
+      code: leadSettingsError.code,
+    })
+  } else if (leadSettings) {
+    leadDistributionSettings = {
+      sla_minutes: leadSettings.sla_minutes ?? 15,
+      enabled: leadSettings.enabled ?? true,
+    }
+  }
 
   if (shouldFilterBySiteEvent) {
     let eventsQuery = supabase
@@ -214,6 +284,32 @@ export default async function ContactsPage({
     contacts = (queryResult.data as ContactRow[] | null) || []
     count = queryResult.count || 0
     error = queryResult.error as { message?: string; details?: string; hint?: string; code?: string } | null
+  }
+
+  if (contacts && contacts.length > 0) {
+    const contactIds = contacts.map((c) => c.id)
+    const { data: latestLeadEvents, error: latestLeadEventsError } = await supabase
+      .from("contact_events")
+      .select("contact_id,created_at")
+      .eq("type", "lead_received")
+      .in("contact_id", contactIds)
+      .order("created_at", { ascending: false })
+      .limit(Math.max(contactIds.length * 4, 50))
+
+    if (latestLeadEventsError && latestLeadEventsError.code !== "42P01") {
+      console.error("Error fetching latest lead events:", {
+        message: latestLeadEventsError.message,
+        details: latestLeadEventsError.details,
+        hint: latestLeadEventsError.hint,
+        code: latestLeadEventsError.code,
+      })
+    } else {
+      for (const evt of (latestLeadEvents as ContactEventRow[] | null) || []) {
+        if (evt.contact_id && evt.created_at && !latestLeadEventByContactId.has(evt.contact_id)) {
+          latestLeadEventByContactId.set(evt.contact_id, evt.created_at)
+        }
+      }
+    }
   }
 
   if (error) {
@@ -367,6 +463,8 @@ export default async function ContactsPage({
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {contacts.map((contact) => {
               const siteMeta = siteMetaByContactId.get(contact.id)
+              const latestLeadAt = latestLeadEventByContactId.get(contact.id) ?? siteMeta?.lastEventAt ?? null
+              const slaBadge = buildSlaBadge(latestLeadAt, contact.status, leadDistributionSettings)
               return (
                 <div key={contact.id} className="relative group">
                   <Link href={`/contacts/${contact.id}`}>
@@ -380,9 +478,18 @@ export default async function ContactsPage({
                           <CardTitle className="text-base">{contact.name}</CardTitle>
                           <p className="text-xs text-muted-foreground">{getTypeLabel(contact.type)}</p>
                         </div>
-                        <Badge variant={getStatusColor(contact.status) as "default" | "secondary" | "destructive" | "outline"} className="ml-auto">
-                          {getStatusLabel(contact.status)}
-                        </Badge>
+                        <div className="ml-auto flex flex-col items-end gap-1">
+                          <Badge
+                            variant={getStatusColor(contact.status) as "default" | "secondary" | "destructive" | "outline"}
+                          >
+                            {getStatusLabel(contact.status)}
+                          </Badge>
+                          {slaBadge ? (
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${slaBadge.className}`}>
+                              SLA: {slaBadge.label} ({slaBadge.elapsed})
+                            </span>
+                          ) : null}
+                        </div>
                       </CardHeader>
                       <CardContent className="grid gap-2 text-sm">
                         {contact.email && (

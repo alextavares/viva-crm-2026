@@ -68,6 +68,14 @@
 - [x] Endpoint de processamento: `POST /api/jobs/followups/process` (200 OK validado)
 - [x] QA externo concluído (PASS) com evidência funcional ponta a ponta
 
+### Sprint 2 — Distribuição de Leads + SLA (Fase 1)
+- [x] Migração criada: `20260220152000_lead_distribution_sla.sql`
+- [x] Round-robin automático para `broker` via trigger em `contact_events` (`lead_received`)
+- [x] Configuração admin em `/settings/leads` (`enabled`, `sla_minutes`, `redistribute_overdue`)
+- [x] Endpoint de redistribuição por SLA: `POST /api/jobs/leads/redistribute`
+- [x] Indicador visual SLA (verde/amarelo/vermelho) em `/contacts`
+- [ ] QA externo do Sprint 2 (pendente)
+
 
 ## Verificação Atual (executada no workspace)
 - [x] `npm run lint` (pass)
@@ -80,7 +88,7 @@
 - [x] Ciclo 9.5: Bucket `site-assets` e RLS policies (Aplicado)
 
 ## Pendências de Liberação
-- [ ] QA externo do Sprint 2 (Distribuição de Leads + SLA) — ainda não iniciado
+- [ ] QA externo do Sprint 2 (Distribuição de Leads + SLA) — pendente
 
 ## Backlog Futuro
 - [ ] Optimistic updates nos fluxos críticos (contacts/properties/appointments/kanban)
