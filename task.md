@@ -53,6 +53,13 @@
 - [x] Execução automática de `npm ci`, `npm run lint`, `npm test`, `npm run build`
 - [x] Concurrency habilitado para evitar jobs duplicados em branch
 
+### Ciclo 10.5 — Deploy Manual (Staging/Produção)
+- [x] Workflow de deploy criado: `.github/workflows/deploy.yml`
+- [x] `workflow_dispatch` com alvo (`staging` ou `production`)
+- [x] Quality gate obrigatório antes do deploy
+- [x] Deploy Vercel via CLI com `vercel pull/build/deploy`
+- [x] Smoke test automático pós-deploy (`/`, `/robots.txt`, `/login`)
+
 
 ## Verificação Atual (executada no workspace)
 - [x] `npm run lint` (pass)
@@ -67,7 +74,7 @@
 ## Backlog Futuro
 - [ ] Optimistic updates nos fluxos críticos (contacts/properties/appointments/kanban)
 - [ ] Expandir E2E para CRUD core e permissões
-- [ ] Pipeline de deploy em staging/produção (Vercel/Railway + variáveis + smoke tests)
+- [x] Pipeline de deploy em staging/produção (Vercel + variáveis + smoke tests)
 - [ ] IA para fotos de imóveis (futuro):
   - [ ] melhoria automática (iluminação, nitidez, redução de ruído)
   - [ ] pipeline assíncrono com status

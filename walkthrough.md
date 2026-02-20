@@ -66,6 +66,37 @@ Resultado consolidado:
 - `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` foram definidos com valores de placeholder no workflow para garantir build determinístico sem segredos de produção.
 - O pipeline atual valida qualidade de código e build; deploy continua desacoplado (próximo passo).
 
+## Ciclo 10.5 - Deploy Manual (Staging/Produção)
+
+### Entregue
+
+- Workflow criado em `.github/workflows/deploy.yml`.
+- Execução manual via **Actions > Deploy > Run workflow**.
+- Input de destino:
+  - `staging`
+  - `production`
+- `quality-gate` obrigatório antes do deploy:
+  - `npm ci`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+- Deploy com Vercel CLI:
+  - `vercel pull`
+  - `vercel build`
+  - `vercel deploy`
+- Smoke test pós-deploy validando HTTP 200:
+  - `/`
+  - `/robots.txt`
+  - `/login`
+
+### Secrets necessários no GitHub (Repository Settings > Secrets and variables > Actions)
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+Sem esses 3 secrets, o job de deploy falha cedo com mensagem clara.
+
 ## Ciclo 9.1 - Optimistic Update (Kanban)
 
 ### Implementação

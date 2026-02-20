@@ -1,0 +1,119 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Destino do deploy"
+        required: true
+        type: choice
+        default: staging
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ github.event.inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  quality-gate:
+    name: Quality Gate (Lint, Test, Build)
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  deploy-vercel:
+    name: Deploy to Vercel
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target == 'production' && 'production' || 'staging' }}
+    permissions:
+      contents: read
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "Missing required secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "production" ]; then
+            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          else
+            vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Build artifact with Vercel
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "production" ]; then
+            vercel build --prod --token="$VERCEL_TOKEN"
+          else
+            vercel build --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Deploy and capture URL
+        id: deploy
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "production" ]; then
+            DEPLOY_URL="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          else
+            DEPLOY_URL="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")"
+          fi
+          DEPLOY_URL="$(echo "$DEPLOY_URL" | tail -n 1)"
+          echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed URL: $DEPLOY_URL"
+
+      - name: Smoke test (HTTP 200)
+        run: |
+          DEPLOY_URL="${{ steps.deploy.outputs.url }}"
+          curl -fsS "$DEPLOY_URL/" > /dev/null
+          curl -fsS "$DEPLOY_URL/robots.txt" > /dev/null
+          curl -fsS "$DEPLOY_URL/login" > /dev/null
+          echo "Smoke tests passed for $DEPLOY_URL"
+
