@@ -1,4 +1,5 @@
 import { ContactForm } from "@/components/contacts/contact-form"
+import { ContactFollowupPanel } from "@/components/followups/contact-followup-panel"
 import { createClient } from "@/lib/supabase/server"
 import { buildWhatsAppUrl } from "@/lib/whatsapp"
 import { notFound } from "next/navigation"
@@ -12,6 +13,17 @@ interface PageProps {
 export default async function ContactEditPage({ params }: PageProps) {
     const { id } = await params
     const supabase = await createClient()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+
+    const { data: profile } = user
+        ? await supabase
+              .from("profiles")
+              .select("organization_id, role")
+              .eq("id", user.id)
+              .single()
+        : { data: null }
 
     const { data: contact } = await supabase
         .from('contacts')
@@ -21,6 +33,28 @@ export default async function ContactEditPage({ params }: PageProps) {
 
     if (!contact) {
         notFound()
+    }
+
+    const role = (profile?.role as string | null) ?? null
+    const canManageFollowup = role === "owner" || role === "manager"
+
+    let followupJobs: Array<{
+        id: string
+        step: "5m" | "24h" | "3d"
+        status: "pending" | "sent" | "failed" | "paused" | "canceled"
+        scheduled_at: string
+        processed_at: string | null
+        error: string | null
+    }> = []
+
+    const { data: jobsData, error: jobsError } = await supabase
+        .from("followup_jobs")
+        .select("id, step, status, scheduled_at, processed_at, error")
+        .eq("contact_id", id)
+        .order("scheduled_at", { ascending: true })
+
+    if (!jobsError) {
+        followupJobs = (jobsData as typeof followupJobs) || []
     }
 
     const waHref = contact.phone
@@ -52,6 +86,8 @@ export default async function ContactEditPage({ params }: PageProps) {
             <div className="border rounded-lg p-4 bg-muted/10">
                 <ContactForm initialData={contact} />
             </div>
+
+            <ContactFollowupPanel contactId={id} canManage={canManageFollowup} jobs={followupJobs} />
         </div>
     )
 }

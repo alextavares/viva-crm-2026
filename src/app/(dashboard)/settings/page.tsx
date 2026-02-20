@@ -114,6 +114,23 @@ export default async function SettingsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="h-full">
           <CardHeader>
+            <CardTitle>Follow-up Automático</CardTitle>
+            <CardDescription>
+              Configure a régua de 5min, 24h e 3dias para não deixar lead esfriar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/followup" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin}>Configurar follow-up</Button>
+            </Link>
+            <div className="text-xs text-muted-foreground">
+              Templates por organização e disparo automático para novos leads.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
+          <CardHeader>
             <CardTitle>Equipe</CardTitle>
             <CardDescription>Usuários, permissões e corretores.</CardDescription>
           </CardHeader>

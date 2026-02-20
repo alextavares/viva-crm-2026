@@ -60,6 +60,14 @@
 - [x] Deploy Vercel via CLI com `vercel pull/build/deploy`
 - [x] Smoke test automático pós-deploy (`/`, `/robots.txt`, `/login`)
 
+### Sprint 1 — Follow-up Automático
+- [x] Migração aplicada: `20260220133000_followup_automation.sql`
+- [x] Estruturas criadas: `followup_settings`, `followup_jobs`, trigger em `contact_events`
+- [x] Tela admin: `/settings/followup` (ativar/desativar + templates 5m/24h/3d)
+- [x] Painel por contato: visualização e ações `pause/resume/cancel` em `/contacts/[id]`
+- [x] Endpoint de processamento: `POST /api/jobs/followups/process` (200 OK validado)
+- [x] QA externo concluído (PASS) com evidência funcional ponta a ponta
+
 
 ## Verificação Atual (executada no workspace)
 - [x] `npm run lint` (pass)
@@ -70,6 +78,9 @@
 - [x] Validação Lead Capture: `site_create_lead` -> contacts/events/messages (OK, tabelas criadas)
 - [x] Ciclo 9.5: Build, Lint e Tests (OK)
 - [x] Ciclo 9.5: Bucket `site-assets` e RLS policies (Aplicado)
+
+## Pendências de Liberação
+- [ ] QA externo do Sprint 2 (Distribuição de Leads + SLA) — ainda não iniciado
 
 ## Backlog Futuro
 - [ ] Optimistic updates nos fluxos críticos (contacts/properties/appointments/kanban)

@@ -3,6 +3,16 @@
 ## Estado Atual
 O projeto está estabilizado até **Ciclo 9.3 (Integrações - MVP)**, com validações principais passando.
 
+## Sprint 1 — Follow-up Automático (Fechado)
+- Status: **PASS (QA externo concluído)**.
+- Banco: migração `20260220133000_followup_automation.sql` aplicada.
+- Fluxo validado:
+  - configuração em `/settings/followup`
+  - agendamento automático 5m/24h/3d ao criar lead
+  - ações por contato: `pause`, `resume`, `cancel`
+  - processador de fila: `POST /api/jobs/followups/process` retornando `200 OK`
+- Evidência funcional confirmada no relatório QA informado pelo usuário.
+
 ## Ciclo 8 + Patch 8.1 (Produção)
 
 ### Arquivos alterados e motivo

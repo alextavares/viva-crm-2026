@@ -78,7 +78,22 @@ export function ContactForm({ initialData }: ContactFormProps) {
                 const result = await supabase
                     .from('contacts')
                     .insert(payload)
+                    .select("id, type")
+                    .single()
                 error = result.error
+
+                if (!error && result.data?.id && (result.data.type || data.type) === "lead") {
+                    const { error: followupError } = await supabase.rpc("followup_schedule_sequence", {
+                        p_org_id: organizationId,
+                        p_contact_id: result.data.id,
+                        p_start_at: new Date().toISOString(),
+                        p_source: "crm_manual",
+                    })
+
+                    if (followupError) {
+                        console.error("Error scheduling manual follow-up:", followupError)
+                    }
+                }
             }
 
             if (error) throw error
