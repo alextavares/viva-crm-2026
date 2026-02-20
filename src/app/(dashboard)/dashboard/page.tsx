@@ -33,7 +33,7 @@ export default async function DashboardPage() {
     // eslint-disable-next-line react-hooks/purity -- Server-side snapshot for dashboard metric window.
     const siteLeadsSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d, customDomain] = await Promise.all([
+    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d, siteLeadsAllTime, customDomain] = await Promise.all([
         supabase.from('properties').select('*', { count: 'exact', head: true }).eq('status', 'available'),
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('type', 'lead'),
         supabase.from('appointments').select('*', { count: 'exact', head: true }).gte('date', new Date().toISOString()),
@@ -59,6 +59,11 @@ export default async function DashboardPage() {
             .eq("type", "lead_received")
             .eq("source", "site")
             .gte("created_at", siteLeadsSince),
+        supabase
+            .from("contact_events")
+            .select("id", { count: "exact", head: true })
+            .eq("type", "lead_received")
+            .eq("source", "site"),
         orgId
             ? supabase
                   .from("custom_domains")
@@ -73,21 +78,13 @@ export default async function DashboardPage() {
     const upcomingAppointments = appointmentsResult.count || 0
     const siteLeadsCount7d = siteLeads7d.count || 0
 
-    const hasProperty = (propertiesAll.data?.length ?? 0) > 0
+    const hasAnyProperty = (propertiesAll.data?.length ?? 0) > 0
     const hasPublishedProperty = (publishedCount.count ?? 0) > 0
-    const hasLead = activeLeads > 0
+    const hasSiteLead = (siteLeadsAllTime.count ?? 0) > 0
     const hasSiteConfigured = Boolean(
         siteSettings?.data?.brand_name?.trim() &&
             siteSettings?.data?.whatsapp?.trim() &&
             siteSettings?.data?.email?.trim()
-    )
-    const hasTrackingConfigured = Boolean(
-        siteSettings?.data?.ga4_measurement_id?.trim() ||
-            siteSettings?.data?.meta_pixel_id?.trim() ||
-            siteSettings?.data?.google_site_verification?.trim() ||
-            siteSettings?.data?.facebook_domain_verification?.trim() ||
-            (siteSettings?.data?.google_ads_conversion_id?.trim() &&
-                siteSettings?.data?.google_ads_conversion_label?.trim())
     )
     const hasDomainVerified = customDomain?.data?.status === "verified"
     const hasPreviewReady = Boolean(siteSlug)
@@ -128,11 +125,10 @@ export default async function DashboardPage() {
                 siteSlug={siteSlug}
                 isAdmin={isAdmin}
                 hasSiteConfigured={hasSiteConfigured}
-                hasDomainReady={hasDomainReady}
-                hasTrackingConfigured={hasTrackingConfigured}
-                hasProperty={hasProperty}
+                hasAnyProperty={hasAnyProperty}
                 hasPublishedProperty={hasPublishedProperty}
-                hasLead={hasLead}
+                hasSiteLead={hasSiteLead}
+                hasDomainReady={hasDomainReady}
                 initialCollapsed={onboardingCollapsed}
             />
 

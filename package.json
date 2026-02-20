@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3015",
-    "build": "next build --webpack",
+    "build": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\" && next build --webpack",
     "start": "next start -p 3015",
     "lint": "eslint",
     "test": "jest",

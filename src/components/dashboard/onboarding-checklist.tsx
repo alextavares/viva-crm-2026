@@ -14,6 +14,7 @@ type Item = {
   cta: string
   external?: boolean
   adminOnlyAction?: boolean
+  optional?: boolean
 }
 
 function ItemRow({ item, canAct }: { item: Item; canAct: boolean }) {
@@ -24,7 +25,14 @@ function ItemRow({ item, canAct }: { item: Item; canAct: boolean }) {
       <div className="flex items-start gap-3">
         <Icon className={item.done ? "mt-0.5 h-5 w-5 text-emerald-500" : "mt-0.5 h-5 w-5 text-muted-foreground"} />
         <div>
-          <div className="text-sm font-semibold">{item.title}</div>
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span>{item.title}</span>
+            {item.optional ? (
+              <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Opcional
+              </span>
+            ) : null}
+          </div>
           <div className="mt-1 text-sm text-muted-foreground">{item.description}</div>
         </div>
       </div>
@@ -51,21 +59,19 @@ export function OnboardingChecklist({
   siteSlug,
   isAdmin,
   hasSiteConfigured,
-  hasDomainReady,
-  hasTrackingConfigured,
-  hasProperty,
+  hasAnyProperty,
   hasPublishedProperty,
-  hasLead,
+  hasSiteLead,
+  hasDomainReady,
   initialCollapsed,
 }: {
   siteSlug: string | null
   isAdmin: boolean
   hasSiteConfigured: boolean
-  hasDomainReady: boolean
-  hasTrackingConfigured: boolean
-  hasProperty: boolean
+  hasAnyProperty: boolean
   hasPublishedProperty: boolean
-  hasLead: boolean
+  hasSiteLead: boolean
+  hasDomainReady: boolean
   initialCollapsed: boolean
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
@@ -100,54 +106,50 @@ export function OnboardingChecklist({
           ? "Defina nome da marca, WhatsApp e e-mail no site."
           : "Peça ao admin da sua organização para configurar o site.",
         href: "/settings/site#site-section-brand",
-        cta: "Configurar",
+        cta: "Ir para Configurações do Site",
         adminOnlyAction: true,
+      },
+      {
+        done: hasPublishedProperty,
+        title: "Publicar primeiro imóvel",
+        description: "Cadastre um imóvel e deixe visível no site.",
+        href: hasAnyProperty ? "/properties/publish" : "/properties/new",
+        cta: hasAnyProperty ? "Ir para Publicação" : "Cadastrar primeiro imóvel",
+      },
+      {
+        done: hasSiteLead,
+        title: "Enviar 1 lead de teste",
+        description: "Use a página de contato pública e confirme o lead no CRM.",
+        href: siteSlug ? `/s/${encodeURIComponent(siteSlug)}/contact` : "/contacts/site",
+        cta: "Testar lead agora",
+        external: Boolean(siteSlug),
       },
       {
         done: hasDomainReady,
-        title: "Site pronto para abrir (domínio ou preview)",
-        description: "Válido quando o domínio está verificado ou o preview já está disponível.",
+        title: "Conectar domínio próprio",
+        description: "Opcional por enquanto. Você pode fazer isso depois.",
         href: "/settings/site#site-section-domain",
-        cta: "Ver domínio",
+        cta: "Conectar domínio",
         adminOnlyAction: true,
-      },
-      {
-        done: hasTrackingConfigured,
-        title: "Ativar rastreamento de marketing",
-        description: "Configure GA4, Meta Pixel ou Google Ads para medir conversão.",
-        href: "/settings/site#site-section-tracking",
-        cta: "Configurar tracking",
-        adminOnlyAction: true,
-      },
-      {
-        done: hasProperty && hasPublishedProperty,
-        title: "Publicar primeiro imóvel",
-        description: "Cadastre um imóvel e deixe visível no site.",
-        href: hasProperty ? "/properties/publish" : "/properties/new",
-        cta: hasProperty ? "Publicar em massa" : "Cadastrar imóvel",
-      },
-      {
-        done: hasLead,
-        title: "Receber primeiro lead",
-        description: "Teste o formulário público e valide entrada em Contatos.",
-        href: "/contacts",
-        cta: "Abrir contatos",
+        optional: true,
       },
     ],
-    [hasDomainReady, hasLead, hasProperty, hasPublishedProperty, hasSiteConfigured, hasTrackingConfigured, isAdmin]
+    [hasAnyProperty, hasDomainReady, hasPublishedProperty, hasSiteConfigured, hasSiteLead, isAdmin, siteSlug]
   )
 
   const doneCount = items.filter((i) => i.done).length
-  const allDone = doneCount === items.length
+  const requiredItems = items.filter((item) => !item.optional)
+  const requiredDoneCount = requiredItems.filter((item) => item.done).length
+  const readyForSales = requiredDoneCount === requiredItems.length
 
   useEffect(() => {
     if (!isAdmin || autoCollapsedRef.current) return
-    if (!allDone || collapsed) return
+    if (!readyForSales || collapsed) return
 
     autoCollapsedRef.current = true
     setCollapsed(true)
     void persistCollapsed(true)
-  }, [allDone, collapsed, isAdmin, persistCollapsed])
+  }, [readyForSales, collapsed, isAdmin, persistCollapsed])
 
   const handleToggle = () => {
     const next = !collapsed
@@ -163,6 +165,12 @@ export function OnboardingChecklist({
           <p className="mt-1 text-sm text-muted-foreground">
             {doneCount}/{items.length} concluídos
           </p>
+          <div className="mt-2 h-2 w-44 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all"
+              style={{ width: `${Math.round((doneCount / items.length) * 100)}%` }}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {siteSlug ? (
@@ -184,8 +192,8 @@ export function OnboardingChecklist({
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="text-sm text-muted-foreground">
-          {allDone
-            ? "Perfeito. Seu site e CRM estão prontos para operação."
+          {readyForSales
+            ? "CRM pronto para vender. Se quiser, conecte o domínio próprio depois."
             : "Complete estes passos para publicar o site e começar a captar leads."}
         </div>
         {!collapsed ? (
@@ -199,4 +207,3 @@ export function OnboardingChecklist({
     </Card>
   )
 }
-
