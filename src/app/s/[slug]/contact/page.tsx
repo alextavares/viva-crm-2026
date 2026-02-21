@@ -37,22 +37,6 @@ export default async function PublicContactPage({
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
-              {whatsapp ? (
-                <a
-                  className="inline-flex rounded-2xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
-                  style={{ backgroundColor: "var(--site-secondary)" }}
-                  href={`https://wa.me/${whatsapp}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Falar no WhatsApp
-                </a>
-              ) : (
-                <div className="inline-flex rounded-2xl border bg-white px-5 py-2.5 text-sm font-semibold text-muted-foreground">
-                  WhatsApp não configurado
-                </div>
-              )}
-
               <a
                 className="inline-flex rounded-2xl border bg-white px-5 py-2.5 text-sm font-semibold"
                 href="#enviar-mensagem"
@@ -86,17 +70,6 @@ export default async function PublicContactPage({
             <div className="mt-1 text-xs text-muted-foreground">
               {whatsapp ? whatsapp : "Não configurado"}
             </div>
-            {whatsapp ? (
-              <a
-                className="mt-4 inline-flex rounded-2xl px-4 py-2 text-sm font-medium text-white"
-                style={{ backgroundColor: "var(--site-secondary)" }}
-                href={`https://wa.me/${whatsapp}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Falar no WhatsApp
-              </a>
-            ) : null}
           </div>
 
           <div className="rounded-3xl border bg-white p-5">

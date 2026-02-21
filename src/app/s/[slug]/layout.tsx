@@ -3,6 +3,8 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import Script from "next/script"
 import { PopupBanner, TopbarBanner } from "@/components/public/site-banners"
+import { WhatsAppIcon } from "@/components/ui/whatsapp-icon"
+import { WhatsAppWave } from "@/components/ui/whatsapp-wave"
 import { withBase, ogImages, truncate } from "@/lib/public-site/seo"
 import { getPublicSite } from "@/lib/public-site/site-data"
 import { getRequestHost, isPreviewHost, publicBasePath } from "@/lib/public-site/host"
@@ -203,13 +205,22 @@ export default async function PublicSiteLayout({
           <div className="flex items-center gap-2">
             {whatsapp ? (
               <a
-                className="rounded-xl px-3 py-2 text-sm font-medium text-white"
-                style={{ backgroundColor: "var(--site-secondary)" }}
+                className="wa-wave-btn wa-btn-cta wa-btn-whatsapp wa-btn-icon"
+                style={
+                  {
+                    ["--wa-wave-color" as string]: "#25d366",
+                  } as React.CSSProperties
+                }
                 href={`https://wa.me/${whatsapp}`}
                 target="_blank"
                 rel="noreferrer"
+                aria-label="Falar no WhatsApp"
+                title="Falar no WhatsApp"
               >
-                WhatsApp
+                <WhatsAppWave />
+                <span className="relative z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/12">
+                  <WhatsAppIcon className="h-5 w-5" />
+                </span>
               </a>
             ) : null}
             <Link

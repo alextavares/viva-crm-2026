@@ -11,10 +11,6 @@ function formatMoneyBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
 }
 
-function digitsOnly(s: string) {
-  return s.replace(/[^0-9]/g, "")
-}
-
 function pickFeatureNumber(v: unknown) {
   if (typeof v === "number") return v
   if (typeof v === "string") {
@@ -42,12 +38,6 @@ export default async function PublicPropertyPage({
   const base = publicBasePath(site.slug, host)
   const homeHref = base || "/"
 
-  const whatsapp = site.settings?.whatsapp ? digitsOnly(site.settings.whatsapp) : null
-  const waText = `Olá, vi o imóvel "${prop.title}" no seu site e gostaria de mais informações.`
-  const waHref = whatsapp
-    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(waText)}`
-    : null
-
   const features = prop.features ?? {}
   const bedrooms = pickFeatureNumber((features as Record<string, unknown>).bedrooms)
   const bathrooms = pickFeatureNumber((features as Record<string, unknown>).bathrooms)
@@ -71,17 +61,6 @@ export default async function PublicPropertyPage({
           <span aria-hidden>/</span>{" "}
           <span className="text-foreground">{prop.title}</span>
         </div>
-        {waHref ? (
-          <a
-            className="rounded-2xl px-4 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: "var(--site-secondary)" }}
-            href={waHref}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Falar no WhatsApp
-          </a>
-        ) : null}
       </div>
 
       <section className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -119,7 +98,10 @@ export default async function PublicPropertyPage({
 
         <aside className="rounded-3xl border bg-white/85 p-6 shadow-sm">
           <div className="text-2xl font-semibold leading-tight">{prop.title}</div>
-          <div className="mt-2 text-sm text-muted-foreground">{addressLine}</div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            Ref: {prop.public_code || prop.id.slice(0, 8)}
+          </div>
+          <div className="mt-1 text-sm text-muted-foreground">{addressLine}</div>
           <div className="mt-5 text-3xl font-semibold" style={{ color: "var(--site-primary)" }}>
             {formatMoneyBRL(prop.price)}
           </div>
