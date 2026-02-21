@@ -67,6 +67,14 @@ export async function middleware(request: NextRequest) {
     const isLocal = host === "localhost" || host === "127.0.0.1"
     const isAppHost = isLocal || host === appPrimary || host === appAlt || host.endsWith(".vercel.app")
 
+    // Canonical host redirect (apex -> www) as permanent redirect for SEO.
+    if (!isLocal && host === appPrimary && appAlt && appAlt !== appPrimary) {
+        const url = request.nextUrl.clone()
+        url.protocol = "https"
+        url.host = appAlt
+        return NextResponse.redirect(url, 308)
+    }
+
     // For preview subdomains and customer domains, serve the public site with clean URLs (no /s/[slug] in the browser).
     if (host && !isAppHost) {
         const previewSlug = slugFromPreviewHost(host)
