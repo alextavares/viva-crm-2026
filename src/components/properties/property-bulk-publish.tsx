@@ -15,6 +15,7 @@ import { buildPropertyFixHref, getPropertyPublishIssues } from "@/lib/property-p
 
 type Row = {
   id: string
+  public_code: string | null
   title: string
   description: string | null
   price: number | null
@@ -109,7 +110,7 @@ export function PropertyBulkPublish() {
 
       let q = supabase
         .from("properties")
-        .select("id,title,description,price,type,status,hide_from_site,address,images,image_paths,external_id")
+        .select("id,public_code,title,description,price,type,status,hide_from_site,address,images,image_paths,external_id")
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
         .limit(2000)
@@ -125,9 +126,11 @@ export function PropertyBulkPublish() {
         if (s) {
           ors.push(`title.ilike.%${s}%`)
           ors.push(`description.ilike.%${s}%`)
+          ors.push(`public_code.ilike.%${s}%`)
           ors.push(`external_id.ilike.%${s}%`)
         }
         if (digits && digits !== s) {
+          ors.push(`public_code.ilike.%${digits}%`)
           ors.push(`external_id.ilike.%${digits}%`)
         }
         if (isUuid(raw)) {
@@ -222,7 +225,7 @@ export function PropertyBulkPublish() {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">Buscar por título, código ou UUID</div>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex.: Apartamento, 77848263, univen:..., UUID" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex.: V-1200, Apartamento, 77848263, UUID" />
             </div>
 
             <div className="space-y-1">
@@ -373,7 +376,7 @@ export function PropertyBulkPublish() {
                     <div className="min-w-0">
                       <div className="truncate font-medium">{r.title}</div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {r.external_id ? r.external_id : `ID: ${r.id.slice(0, 8)}`}
+                        {r.public_code ? r.public_code : `ID: ${r.id.slice(0, 8)}`}
                       </div>
                       {hasIssues ? (
                         <div className="truncate text-xs text-amber-800">

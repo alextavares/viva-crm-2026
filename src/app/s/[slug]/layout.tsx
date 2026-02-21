@@ -218,8 +218,8 @@ export default async function PublicSiteLayout({
                 title="Falar no WhatsApp"
               >
                 <WhatsAppWave />
-                <span className="relative z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/12">
-                  <WhatsAppIcon className="h-5 w-5" />
+                <span className="wa-btn-icon-core relative z-10">
+                  <WhatsAppIcon className="h-4 w-4 lg:h-3.5 lg:w-3.5" />
                 </span>
               </a>
             ) : null}

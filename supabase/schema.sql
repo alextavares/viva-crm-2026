@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS properties (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   organization_id UUID REFERENCES organizations(id) NOT NULL,
+  external_id TEXT,
+  public_code TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
   price DECIMAL,
@@ -39,6 +41,14 @@ CREATE TABLE IF NOT EXISTS properties (
   broker_id UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3b. PROPERTY PUBLIC CODE SEQUENCE (per organization)
+-- Generates user-facing refs: V-1, V-2, ...
+CREATE TABLE IF NOT EXISTS property_public_code_sequences (
+  organization_id UUID PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  last_value BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 4. CONTACTS (Leads/Clients)
@@ -282,6 +292,43 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Auto-generate human-friendly property codes per organization (V-1, V-2, ...).
+CREATE OR REPLACE FUNCTION public.assign_property_public_code()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_next BIGINT;
+BEGIN
+  IF NEW.public_code IS NOT NULL AND BTRIM(NEW.public_code) <> '' THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.organization_id IS NULL THEN
+    RAISE EXCEPTION 'organization_id is required to assign public_code';
+  END IF;
+
+  INSERT INTO public.property_public_code_sequences (organization_id, last_value, updated_at)
+  VALUES (NEW.organization_id, 1, NOW())
+  ON CONFLICT (organization_id) DO UPDATE
+  SET
+    last_value = public.property_public_code_sequences.last_value + 1,
+    updated_at = NOW()
+  RETURNING last_value INTO v_next;
+
+  NEW.public_code := 'V-' || v_next::text;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_assign_property_public_code ON public.properties;
+CREATE TRIGGER trg_assign_property_public_code
+BEFORE INSERT ON public.properties
+FOR EACH ROW
+EXECUTE FUNCTION public.assign_property_public_code();
+
 -- Public feed access (token-gated) via SECURITY DEFINER function.
 -- This enables portals to pull XML feeds without requiring user auth.
 CREATE OR REPLACE FUNCTION public.feed_properties(p_portal text, p_feed_token text)
@@ -415,6 +462,7 @@ CREATE OR REPLACE FUNCTION public.site_list_properties(
 )
 RETURNS TABLE (
   id uuid,
+  public_code text,
   title text,
   price numeric,
   type text,
@@ -459,7 +507,12 @@ AS $$
         OR (
           COALESCE(p.title, '') ILIKE ('%' || p_q || '%')
           OR COALESCE(p.description, '') ILIKE ('%' || p_q || '%')
+          OR COALESCE(p.public_code, '') ILIKE ('%' || p_q || '%')
           OR COALESCE(p.external_id, '') ILIKE ('%' || p_q || '%')
+          OR (
+            regexp_replace(p_q, '[^0-9]', '', 'g') <> ''
+            AND COALESCE(p.public_code, '') ILIKE ('%' || regexp_replace(p_q, '[^0-9]', '', 'g') || '%')
+          )
           OR (
             regexp_replace(p_q, '[^0-9]', '', 'g') <> ''
             AND COALESCE(p.external_id, '') ILIKE ('%' || regexp_replace(p_q, '[^0-9]', '', 'g') || '%')
@@ -473,6 +526,7 @@ AS $$
   )
   SELECT
     p.id,
+    p.public_code,
     p.title,
     p.price,
     p.type,
@@ -519,6 +573,7 @@ AS $$
       WHEN (SELECT id FROM prop) IS NULL THEN NULL
       ELSE jsonb_build_object(
         'id', (SELECT id FROM prop),
+        'public_code', (SELECT public_code FROM prop),
         'title', (SELECT title FROM prop),
         'description', (SELECT description FROM prop),
         'price', (SELECT price FROM prop),
@@ -1406,6 +1461,10 @@ CREATE INDEX IF NOT EXISTS idx_properties_org ON properties(organization_id);
 CREATE INDEX IF NOT EXISTS idx_properties_created ON properties(created_at);
 CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
 CREATE INDEX IF NOT EXISTS idx_properties_broker ON properties(broker_id);
+CREATE INDEX IF NOT EXISTS idx_properties_public_code ON properties(public_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_properties_org_public_code_unique
+  ON properties(organization_id, public_code)
+  WHERE public_code IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_contacts_org ON contacts(organization_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_created ON contacts(created_at);

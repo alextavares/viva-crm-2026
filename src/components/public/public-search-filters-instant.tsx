@@ -101,7 +101,7 @@ export function PublicSearchFiltersInstant({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-          placeholder="Ex: varanda, suíte, 77848263, UUID"
+          placeholder="Ex: V-1200, varanda, suíte, 77848263, UUID"
         />
       </div>
       <div>

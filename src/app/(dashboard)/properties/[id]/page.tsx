@@ -51,6 +51,9 @@ export default async function EditPropertyPage({
                 <div className="text-xs text-muted-foreground">
                     Dica: se <span className="font-medium">Exibir no site</span> estiver desativado, o imóvel não aparece no site público.
                 </div>
+                <div className="text-xs text-muted-foreground">
+                    Referência pública: <span className="font-medium">{property.public_code || property.id.slice(0, 8)}</span>
+                </div>
             </div>
 
             <div className="p-6 border rounded-lg bg-card text-card-foreground shadow-sm">

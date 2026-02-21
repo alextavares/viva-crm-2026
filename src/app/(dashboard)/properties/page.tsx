@@ -11,6 +11,7 @@ import { buildPropertyFixHref, getPropertyPublishIssues } from '@/lib/property-p
 
 type PropertyListRow = {
     id: string
+    public_code?: string | null
     external_id?: string | null
     title: string
     description?: string | null
@@ -42,13 +43,10 @@ function sanitizeForOrIlike(v: string) {
     return v.replace(/[,%()]/g, " ").trim()
 }
 
-function refLabel(property: { id?: string | null; external_id?: string | null }) {
-    const ext = typeof property.external_id === "string" ? property.external_id : ""
-    if (ext) {
-        const last = ext.split(":").pop()
-        if (last) return last
-        return ext
-    }
+function refLabel(property: { id?: string | null; public_code?: string | null; external_id?: string | null }) {
+    const publicCode = typeof property.public_code === "string" ? property.public_code.trim() : ""
+    if (publicCode) return publicCode
+
     return typeof property?.id === "string" ? property.id.slice(0, 8) : "-"
 }
 
@@ -97,9 +95,11 @@ export default async function PropertiesPage({
         if (s) {
             ors.push(`title.ilike.%${s}%`)
             ors.push(`description.ilike.%${s}%`)
+            ors.push(`public_code.ilike.%${s}%`)
             ors.push(`external_id.ilike.%${s}%`)
         }
         if (digits && digits !== s) {
+            ors.push(`public_code.ilike.%${digits}%`)
             ors.push(`external_id.ilike.%${digits}%`)
         }
         if (isUuid(raw)) {

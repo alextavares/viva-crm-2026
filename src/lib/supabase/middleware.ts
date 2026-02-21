@@ -47,6 +47,11 @@ export async function updateSession(request: NextRequest) {
         !request.nextUrl.pathname.startsWith('/precos') &&
         !request.nextUrl.pathname.startsWith('/api/webhooks/') &&
         !request.nextUrl.pathname.startsWith('/api/feeds/') &&
+        !request.nextUrl.pathname.startsWith('/sobre') &&
+        !request.nextUrl.pathname.startsWith('/about') &&
+        !request.nextUrl.pathname.startsWith('/contato') &&
+        !request.nextUrl.pathname.startsWith('/contact') &&
+        !request.nextUrl.pathname.startsWith('/lgpd') &&
         request.nextUrl.pathname !== '/robots.txt' &&
         request.nextUrl.pathname !== '/sitemap.xml' &&
         request.nextUrl.pathname !== '/'

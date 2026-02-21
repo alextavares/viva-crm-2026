@@ -216,6 +216,9 @@ export default async function PublicSiteHome({
                 </div>
                 <div className="p-5">
                   <div className="text-sm font-medium line-clamp-1">{p.title}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Ref: {p.public_code || p.id.slice(0, 8)}
+                  </div>
                   <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
                     {p.neighborhood || p.city ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}` : "Localização a informar"}
                   </div>

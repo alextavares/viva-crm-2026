@@ -86,6 +86,7 @@ export type SiteGetSettingsResponse = {
 
 export type SitePropertyCard = {
   id: string
+  public_code?: string | null
   title: string
   price: number | null
   type: string | null
@@ -101,6 +102,7 @@ export type SitePropertyCard = {
 
 export type SitePublicProperty = {
   id: string
+  public_code?: string | null
   title: string
   description: string | null
   price: number | null

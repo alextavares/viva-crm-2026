@@ -69,6 +69,7 @@ export interface Property {
     id: string
     organization_id: string
     external_id?: string | null
+    public_code?: string | null
     title: string
     description?: string | null
     price: number
