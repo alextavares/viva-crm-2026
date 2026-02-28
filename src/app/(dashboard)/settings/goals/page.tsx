@@ -19,7 +19,7 @@ type GoalSettingsRow = {
 
 type BrokerProfile = {
   id: string
-  name: string | null
+  full_name: string | null
   email: string | null
 }
 
@@ -118,7 +118,7 @@ export default async function GoalsSettingsPage() {
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("id, name, email")
+      .select("id, full_name, email")
       .eq("organization_id", organizationId)
       .eq("role", "broker")
       .order("created_at", { ascending: true }),
@@ -150,7 +150,7 @@ export default async function GoalsSettingsPage() {
 
   const brokers = ((brokersResult.data as BrokerProfile[] | null) || []).map((b) => ({
     id: b.id,
-    name: b.name,
+    name: b.full_name,
     email: b.email,
   }))
 
