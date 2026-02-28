@@ -42,6 +42,9 @@ interface PropertyFormProps {
     }
 }
 
+const PROPERTY_SAVE_REQUEST_TIMEOUT_MS = 90_000
+const PROPERTY_SAVE_WATCHDOG_TIMEOUT_MS = 120_000
+
 export function PropertyForm({ initialData }: PropertyFormProps) {
     const { user, organizationId } = useAuth()
     const router = useRouter()
@@ -101,7 +104,10 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
         return [parts, locality, zip].filter(Boolean).join(" | ").trim()
     }
 
-    async function execWithTimeout<T>(promiseFactory: (signal: AbortSignal) => Promise<T>, ms = 30_000): Promise<T> {
+    async function execWithTimeout<T>(
+        promiseFactory: (signal: AbortSignal) => Promise<T>,
+        ms = PROPERTY_SAVE_REQUEST_TIMEOUT_MS
+    ): Promise<T> {
         const controller = new AbortController()
         let timeoutId: ReturnType<typeof setTimeout> | null = null
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -131,7 +137,7 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
             console.warn("Property save watchdog fired (still loading after timeout)")
             toast.error("Demorou demais para salvar. Tente novamente.")
             setIsLoading(false)
-        }, 45_000)
+        }, PROPERTY_SAVE_WATCHDOG_TIMEOUT_MS)
         try {
             // Avoid an extra roundtrip to `profiles` and reduce the chance of aborted requests during navigation.
             const orgId = organizationId

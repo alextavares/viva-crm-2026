@@ -142,6 +142,7 @@ export interface Profile {
     organization_id?: string | null
     full_name?: string | null
     role: UserRole
+    is_active?: boolean
     avatar_url?: string | null
     created_at?: string
     updated_at?: string
@@ -153,6 +154,62 @@ export interface Organization {
     slug: string
     created_at?: string
     updated_at?: string
+}
+
+export interface WhatsAppAddonPricingSettings {
+    organization_id: string
+    addon_enabled: boolean
+    included_quota: number
+    overage_price: number
+    currency_code: string
+    billing_timezone: string
+}
+
+export interface WhatsAppAddonUsageSnapshot {
+    organization_id: string | null
+    addon_enabled: boolean
+    timezone: string
+    period_start: string | null
+    period_end: string | null
+    included_quota: number
+    consumed: number
+    balance: number
+    usage_percent: number
+    alert_level: "ok" | "warning" | "limit" | "disabled"
+}
+
+export interface TeamSeatUsage {
+    used: number
+    seat_limit: number
+    available: number
+}
+
+export interface TeamMember {
+    id: string
+    full_name: string | null
+    role: UserRole | string
+    is_active: boolean
+    consumes_seat: boolean
+    created_at?: string | null
+    updated_at?: string | null
+}
+
+export interface TeamInvite {
+    id: string
+    email: string
+    role: UserRole | string
+    status: "pending" | "accepted" | "revoked" | "expired" | string
+    expires_at?: string | null
+    created_at?: string
+}
+
+export interface TeamAuditEvent {
+    id: string
+    action: string
+    level: "info" | "warning" | "error" | string
+    message?: string | null
+    metadata?: Record<string, unknown> | null
+    created_at: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

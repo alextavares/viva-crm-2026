@@ -75,7 +75,15 @@ export function FollowupSettingsForm({ organizationId, canManage, tableReady, in
       }
 
       const result = data?.result || {}
-      toast.success(`Processado: ${result.processed ?? 0} | Enviados: ${result.sent ?? 0} | Falhas: ${result.failed ?? 0}`)
+      const processed = Number(result.processed ?? 0)
+      const sent = Number(result.sent ?? 0)
+      const failed = Number(result.failed ?? 0)
+      const blocked = Number(result.blocked ?? 0)
+      const officialSent = Number(result.official_sent ?? 0)
+
+      toast.success(
+        `Processado: ${processed} | Enviados: ${sent} | Oficiais: ${officialSent} | Bloqueados (política): ${blocked} | Falhas: ${failed}`
+      )
     } catch (error) {
       console.error("Error processing followups:", error)
       toast.error("Erro ao processar follow-ups.")
@@ -140,4 +148,3 @@ export function FollowupSettingsForm({ organizationId, canManage, tableReady, in
     </div>
   )
 }
-

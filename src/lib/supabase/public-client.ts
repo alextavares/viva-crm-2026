@@ -24,7 +24,12 @@ export function createPublicClient() {
   globalForSupabase.__supabasePublicBrowserClient = createBrowserClient(url, key, {
     isSingleton: true,
     global: {
-      fetch: fetchWithTimeout(120_000),
+      fetch: fetchWithTimeout({
+        defaultMs: 60_000,
+        authMs: 25_000,
+        restMs: 60_000,
+        storageMs: 180_000,
+      }),
     },
     db: {
       timeout: 45_000,

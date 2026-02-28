@@ -15,10 +15,29 @@ interface ImageUploadProps {
     organizationId?: string | null
 }
 
+const IMAGE_UPLOAD_TIMEOUT_MS = 120_000
+
 export function ImageUpload({ value = [], onChange, disabled, organizationId }: ImageUploadProps) {
     const [isUploading, setIsUploading] = useState(false)
     const supabase = createClient()
     const uploadDisabled = disabled || isUploading || !organizationId
+
+    async function withTimeout<T>(promise: Promise<T>, ms = IMAGE_UPLOAD_TIMEOUT_MS): Promise<T> {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+                const err = new Error("UploadTimeout")
+                err.name = "TimeoutError"
+                reject(err)
+            }, ms)
+        })
+
+        try {
+            return await Promise.race([promise, timeoutPromise])
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId)
+        }
+    }
 
     const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         try {
@@ -41,14 +60,16 @@ export function ImageUpload({ value = [], onChange, disabled, organizationId }: 
                     kind: 'image',
                 })
 
-                const { publicUrl } = await uploadPublicMedia({
-                    supabase,
-                    bucket: 'properties',
-                    path: filePath,
-                    file,
-                    upsert: true,
-                    cacheControl: '3600',
-                })
+                const { publicUrl } = await withTimeout(
+                    uploadPublicMedia({
+                        supabase,
+                        bucket: 'properties',
+                        path: filePath,
+                        file,
+                        upsert: true,
+                        cacheControl: '3600',
+                    })
+                )
 
                 newUrls.push(publicUrl)
             }
@@ -56,7 +77,12 @@ export function ImageUpload({ value = [], onChange, disabled, organizationId }: 
             onChange([...value, ...newUrls])
         } catch (error) {
             console.error('Error uploading image:', error)
-            toast.error('Erro ao fazer upload da imagem.')
+            const isTimeout =
+                typeof error === 'object' &&
+                error !== null &&
+                'name' in error &&
+                (error as { name?: unknown }).name === 'TimeoutError'
+            toast.error(isTimeout ? 'Upload demorou demais. Tente de novo com menos fotos por vez.' : 'Erro ao fazer upload da imagem.')
         } finally {
             // Allow re-selecting the same file(s) again.
             e.target.value = ''

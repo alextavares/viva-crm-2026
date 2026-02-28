@@ -22,23 +22,24 @@ export function createClient() {
         throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
     }
 
-    // Use a process-level lock in the browser to avoid Navigator Lock API abort noise in dev
-    // ("signal is aborted without reason" from auth-js locks.ts). We still get mutual exclusion
-    // within the current tab/process, which is enough for our low-touch CRM UX.
     globalForSupabase.__supabaseBrowserClient = createBrowserClient(url, key, {
         isSingleton: true,
         global: {
-            // Ensure auth/REST calls never hang forever and keep locks held.
-            // Use a more lenient timeout here because Storage uploads can take longer on slow networks.
-            // Save operations use explicit abort signals in the UI for responsiveness.
-            fetch: fetchWithTimeout(120_000),
+            // Keep auth calls below lock acquire timeout to avoid long lock contention.
+            // Storage uploads get a longer budget because files can legitimately take more time.
+            fetch: fetchWithTimeout({
+                defaultMs: 60_000,
+                authMs: 25_000,
+                restMs: 60_000,
+                storageMs: 180_000,
+            }),
         },
         db: {
             timeout: 45_000,
         },
         auth: {
-            lock: (name, acquireTimeout, fn) =>
-                processLock(name, Math.max(acquireTimeout, 60_000), fn),
+            // Reduce noisy lock races in browser/dev while keeping behavior deterministic.
+            lock: (name, acquireTimeout, fn) => processLock(name, Math.max(acquireTimeout, 120_000), fn),
         },
     })
     return globalForSupabase.__supabaseBrowserClient
