@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Loader2, CheckSquare, Square, Eye, EyeOff, ExternalLink } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
-import { buildPropertyFixHref, getPropertyPublishIssues } from "@/lib/property-publish-readiness"
+import { buildPropertyFixHref, getPropertyPublishIssues, isPropertyPublishReady } from "@/lib/property-publish-readiness"
 
 type Row = {
   id: string
@@ -93,7 +93,11 @@ export function PropertyBulkPublish() {
     [rows]
   )
   const pendingCount = rows.filter((row) => (readinessById.get(row.id) ?? []).length > 0).length
-  const readyCount = rows.length - pendingCount
+  const readyCount = rows.filter((row) => isPropertyPublishReady(row)).length
+  const selectedBlockingCount = selectedIds.filter((id) =>
+    (readinessById.get(id) ?? []).some((issue) => issue.severity === "blocking")
+  ).length
+  const canPublishSelection = isAdmin && selectedIds.length > 0 && !loading && !saving && selectedBlockingCount === 0
 
   const allSelected = rows.length > 0 && rows.every((r) => selected[r.id])
 
@@ -182,6 +186,10 @@ export function PropertyBulkPublish() {
     }
     if (!organizationId) return
     if (selectedIds.length === 0) return
+    if (!hide_from_site && selectedBlockingCount > 0) {
+      toast.error("Há imóveis selecionados com bloqueios de qualidade. Corrija antes de publicar.")
+      return
+    }
 
     setSaving(true)
     try {
@@ -304,7 +312,7 @@ export function PropertyBulkPublish() {
               Ocultos: {hiddenCount}
             </Badge>
             <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
-              Prontos: {readyCount}
+              Publicáveis: {readyCount}
             </Badge>
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
               Com pendências: {pendingCount}
@@ -321,7 +329,7 @@ export function PropertyBulkPublish() {
         <Button
           type="button"
           onClick={() => applyVisibility(false)}
-          disabled={!isAdmin || selectedIds.length === 0 || loading || saving}
+          disabled={!canPublishSelection}
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
           Publicar selecionados ({selectedIds.length})
@@ -357,8 +365,11 @@ export function PropertyBulkPublish() {
             rows.map((r) => (
               (() => {
                 const issues = readinessById.get(r.id) ?? []
+                const blockingIssues = issues.filter((issue) => issue.severity === "blocking")
+                const warningIssues = issues.filter((issue) => issue.severity === "warning")
                 const hasIssues = issues.length > 0
-                const firstIssue = issues[0]
+                const firstIssue = blockingIssues[0] ?? warningIssues[0]
+                const canPublishRow = blockingIssues.length === 0
 
                 return (
                   <div
@@ -379,8 +390,17 @@ export function PropertyBulkPublish() {
                         {r.public_code ? r.public_code : `ID: ${r.id.slice(0, 8)}`}
                       </div>
                       {hasIssues ? (
-                        <div className="truncate text-xs text-amber-800">
-                          Pendências: {issues.map((issue) => issue.label).join(" · ")}
+                        <div className="space-y-1 pt-1 text-xs">
+                          {blockingIssues.length > 0 ? (
+                            <div className="truncate text-red-700">
+                              Bloqueios: {blockingIssues.map((issue) => issue.label).join(" · ")}
+                            </div>
+                          ) : null}
+                          {warningIssues.length > 0 ? (
+                            <div className="truncate text-amber-800">
+                              Avisos: {warningIssues.map((issue) => issue.label).join(" · ")}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="truncate text-xs text-emerald-700">Pronto para site/feed</div>
@@ -396,12 +416,28 @@ export function PropertyBulkPublish() {
                       >
                         {r.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
                       </Badge>
+                      {blockingIssues.length > 0 ? (
+                        <Badge variant="destructive" className="text-xs">
+                          Bloqueado
+                        </Badge>
+                      ) : warningIssues.length > 0 ? (
+                        <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+                          Aviso
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
+                          Publicável
+                        </Badge>
+                      )}
                       <Link
                         href={hasIssues && firstIssue ? buildPropertyFixHref(r.id, firstIssue.focusFieldId) : `/properties/${r.id}`}
                         className="text-xs underline inline-flex items-center gap-1"
                       >
                         {hasIssues ? "Corrigir" : "Editar"} <ExternalLink className="h-3 w-3" />
                       </Link>
+                      {r.hide_from_site && !canPublishRow ? (
+                        <span className="text-[11px] text-red-700">Não publica até corrigir bloqueios</span>
+                      ) : null}
                     </div>
                   </div>
                 )

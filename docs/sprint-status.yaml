@@ -1,0 +1,350 @@
+# BMAD Sprint Status - VivaCRM
+# Phase 4 implementation tracking
+
+project: "VivaCRM"
+project_level: 2
+current_sprint: 8
+
+sprint_config:
+  duration_weeks: 2
+  team_size: 1
+  points_per_dev_day: 2.0
+
+velocity_history:
+  - sprint: 1
+    planned: 16
+    completed: 16
+    completion_rate: 100
+    notes: "Follow-up automation delivered and QA passed."
+  - sprint: 2
+    planned: 18
+    completed: 18
+    completion_rate: 100
+    notes: "Lead distribution + SLA delivered and QA passed."
+  - sprint: 3
+    planned: 20
+    completed: 20
+    completion_rate: 100
+    notes: "Goals dashboard + per-metric toggles delivered."
+  - sprint: 4
+    planned: 18
+    completed: 18
+    completion_rate: 100
+    notes: "WhatsApp add-on commercial readiness delivered."
+  - sprint: 5
+    planned: 13
+    completed: 13
+    completion_rate: 100
+    notes: "E5 Sprint 5 delivered and QA Go: seat plan, hard limit, team module MVP, and concurrency guard validated."
+  - sprint: 6
+    planned: 8
+    completed: 8
+    completion_rate: 100
+    notes: "E5 Sprint 6 delivered: upgrade with proration, scheduled downgrade, billing API/UI and apply-due job."
+  - sprint: 7
+    planned: 8
+    completed: 8
+    completion_rate: 100
+    notes: "E5 Sprint 7 delivered: audit/permissions hardened, legacy migration validated, and pilot rollout (5 orgs) executed with no critical incidents."
+  - sprint: 8
+    planned: 2
+    completed: 2
+    completion_rate: 100
+    notes: "E5 Sprint 8 delivered: seat-capacity alerts in Team and Billing with direct upgrade CTA and threshold-based visibility."
+
+velocity_metrics:
+  three_sprint_average: 6.0
+  trend: "stable"
+  recommended_capacity: 6
+
+sprints:
+  - number: 4
+    status: "completed"
+    start_date: "2026-02-24"
+    end_date: "2026-03-10"
+    sprint_goal: "Commercial readiness for WhatsApp Official add-on with safe tenant controls and usage visibility."
+    capacity: 18
+    stories:
+      - id: "STORY-E003-S001"
+        title: "Modelar pricing do add-on WhatsApp por organização"
+        epic: "E3 - Conversão via site público e WhatsApp"
+        priority: "Must Have"
+        points: 5
+        status: "completed"
+        dependencies: []
+        blocked_by: null
+      - id: "STORY-E003-S002"
+        title: "Configuração do canal WhatsApp oficial por tenant"
+        epic: "E3 - Conversão via site público e WhatsApp"
+        priority: "Must Have"
+        points: 5
+        status: "completed"
+        dependencies: ["STORY-E003-S001"]
+        blocked_by: null
+      - id: "STORY-E003-S003"
+        title: "Medição de consumo e painel de uso do add-on"
+        epic: "E3 - Conversão via site público e WhatsApp"
+        priority: "Should Have"
+        points: 3
+        status: "completed"
+        dependencies: ["STORY-E003-S002"]
+        blocked_by: null
+      - id: "STORY-E003-S004"
+        title: "Regras de envio e bloqueio por plano/quota"
+        epic: "E3 - Conversão via site público e WhatsApp"
+        priority: "Must Have"
+        points: 3
+        status: "completed"
+        dependencies: ["STORY-E003-S003"]
+        blocked_by: null
+      - id: "STORY-E003-S005"
+        title: "Onboarding guiado para ativar WhatsApp add-on"
+        epic: "E3 - Conversão via site público e WhatsApp"
+        priority: "Should Have"
+        points: 2
+        status: "completed"
+        dependencies: ["STORY-E003-S002"]
+        blocked_by: null
+    metrics:
+      total_stories: 5
+      total_points: 18
+      completed_stories: 5
+      completed_points: 18
+      in_progress_stories: 0
+      in_progress_points: 0
+      remaining_stories: 0
+      remaining_points: 0
+      completion_percentage: 100
+  - number: 5
+    status: "completed"
+    start_date: "2026-03-11"
+    end_date: "2026-03-24"
+    sprint_goal: "Fundação comercial de assentos por corretor e bloqueio operacional no limite."
+    capacity: 18
+    stories:
+      - id: "STORY-E005-S001"
+        title: "Catálogo comercial de planos por organização com assentos de corretor"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Must Have"
+        points: 5
+        status: "completed"
+      - id: "STORY-E005-S002"
+        title: "Hard limit de corretores na gestão de equipe"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Must Have"
+        points: 5
+        status: "completed"
+      - id: "STORY-E005-S003"
+        title: "Tela Equipe com contador de assentos e CTA de upgrade"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Must Have"
+        points: 3
+        status: "completed"
+    metrics:
+      total_stories: 3
+      total_points: 13
+      completed_stories: 3
+      completed_points: 13
+      in_progress_stories: 0
+      in_progress_points: 0
+      remaining_stories: 0
+      remaining_points: 0
+      completion_percentage: 100
+  - number: 6
+    status: "completed"
+    start_date: "2026-03-25"
+    end_date: "2026-04-07"
+    sprint_goal: "Cobrança operacional de assentos com upgrade imediato e downgrade agendado."
+    capacity: 18
+    stories:
+      - id: "STORY-E005-S004"
+        title: "Upgrade de assentos com pró-rata imediato"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Must Have"
+        points: 5
+        status: "completed"
+      - id: "STORY-E005-S005"
+        title: "Downgrade de assentos agendado para próximo ciclo"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Must Have"
+        points: 3
+        status: "completed"
+    metrics:
+      total_stories: 2
+      total_points: 8
+      completed_stories: 2
+      completed_points: 8
+      in_progress_stories: 0
+      in_progress_points: 0
+      remaining_stories: 0
+      remaining_points: 0
+      completion_percentage: 100
+  - number: 7
+    status: "completed"
+    start_date: "2026-04-08"
+    end_date: "2026-04-21"
+    sprint_goal: "Governança de permissões/auditoria e rollout controlado com migração da base."
+    capacity: 18
+    stories:
+      - id: "STORY-E005-S006"
+        title: "Auditoria e permissões para plano e equipe"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Must Have"
+        points: 3
+        status: "completed"
+      - id: "STORY-E005-S007"
+        title: "Migração da base atual e piloto de rollout"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Should Have"
+        points: 5
+        status: "completed"
+    metrics:
+      total_stories: 2
+      total_points: 8
+      completed_stories: 2
+      completed_points: 8
+      in_progress_stories: 0
+      in_progress_points: 0
+      remaining_stories: 0
+      remaining_points: 0
+      completion_percentage: 100
+  - number: 8
+    status: "completed"
+    start_date: "2026-04-22"
+    end_date: "2026-05-05"
+    sprint_goal: "Otimização comercial com alertas preditivos de capacidade."
+    capacity: 18
+    stories:
+      - id: "STORY-E005-S008"
+        title: "Alertas comerciais de capacidade e pré-upgrade"
+        epic: "E5 - Planos e assentos de corretores"
+        priority: "Could Have"
+        points: 2
+        status: "completed"
+    metrics:
+      total_stories: 1
+      total_points: 2
+      completed_stories: 1
+      completed_points: 2
+      in_progress_stories: 0
+      in_progress_points: 0
+      remaining_stories: 0
+      remaining_points: 0
+      completion_percentage: 100
+
+planned_sprints:
+  []
+
+backlog:
+  - id: "STORY-E003-S006"
+    title: "Normalização de webhooks inbound de provedores WhatsApp"
+    epic: "E3 - Conversão via site público e WhatsApp"
+    priority: "Should Have"
+    points: 5
+    status: "completed"
+    sprint_planned: 5
+  - id: "STORY-E002-S002"
+    title: "Relatório simples de metas por corretor para gestor"
+    epic: "E2 - Metas e gestão de performance"
+    priority: "Should Have"
+    points: 3
+    status: "completed"
+    sprint_planned: 5
+  - id: "STORY-E004-S001"
+    title: "Regras extras de qualidade para publicação em massa"
+    epic: "E4 - Qualidade de publicação"
+    priority: "Could Have"
+    points: 5
+    status: "completed"
+    sprint_planned: 5
+  - id: "STORY-E005-S001"
+    title: "Catálogo comercial de planos por organização com assentos de corretor"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Must Have"
+    points: 5
+    status: "completed"
+    sprint_planned: 5
+  - id: "STORY-E005-S002"
+    title: "Hard limit de corretores na gestão de equipe"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Must Have"
+    points: 5
+    status: "completed"
+    sprint_planned: 5
+  - id: "STORY-E005-S003"
+    title: "Tela Equipe com contador de assentos e CTA de upgrade"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Must Have"
+    points: 3
+    status: "completed"
+    sprint_planned: 5
+  - id: "STORY-E005-S004"
+    title: "Upgrade de assentos com pró-rata imediato"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Must Have"
+    points: 5
+    status: "completed"
+    sprint_planned: 6
+  - id: "STORY-E005-S005"
+    title: "Downgrade de assentos agendado para próximo ciclo"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Must Have"
+    points: 3
+    status: "completed"
+    sprint_planned: 6
+  - id: "STORY-E005-S006"
+    title: "Auditoria e permissões para plano e equipe"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Must Have"
+    points: 3
+    status: "completed"
+    sprint_planned: 7
+  - id: "STORY-E005-S007"
+    title: "Migração da base atual e piloto de rollout"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Should Have"
+    points: 5
+    status: "completed"
+    sprint_planned: 7
+  - id: "STORY-E005-S008"
+    title: "Alertas comerciais de capacidade e pré-upgrade"
+    epic: "E5 - Planos e assentos de corretores"
+    priority: "Could Have"
+    points: 2
+    status: "completed"
+    sprint_planned: 8
+
+epics:
+  - name: "E1 - Operação de Leads e Follow-up"
+    total_stories: 3
+    completed_stories: 3
+    progress_percentage: 100
+  - name: "E2 - Metas e gestão de performance"
+    total_stories: 3
+    completed_stories: 2
+    progress_percentage: 67
+  - name: "E3 - Conversão via site público e WhatsApp"
+    total_stories: 6
+    completed_stories: 6
+    progress_percentage: 100
+  - name: "E4 - Qualidade de publicação"
+    total_stories: 2
+    completed_stories: 1
+    progress_percentage: 50
+  - name: "E5 - Planos e assentos de corretores"
+    total_stories: 8
+    completed_stories: 8
+    progress_percentage: 100
+
+project_progress:
+  total_epics: 5
+  completed_epics: 3
+  total_stories: 22
+  completed_stories: 20
+  progress_percentage: 91
+  sprints_completed: 8
+  sprints_remaining: 0
+  estimated_completion_date: "2026-05-05"
+
+last_updated: "2026-02-26T23:42:00Z"
+updated_by: "codex"

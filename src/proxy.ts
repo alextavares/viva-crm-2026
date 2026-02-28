@@ -57,7 +57,7 @@ function slugFromPreviewHost(host: string) {
     return null
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const forwardedHost = request.headers.get("x-forwarded-host")
     const hostHeader = request.headers.get("host")
     const host = normalizeHost(forwardedHost || hostHeader || "")
