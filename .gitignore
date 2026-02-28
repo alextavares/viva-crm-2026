@@ -42,6 +42,10 @@ lint*.txt
 test-out.txt
 test-output.txt
 test-*.log
+scripts/qa_*_log.txt
+test-redis.mjs
+tmp_code49_*
+supabase/.temp/
 
 # env files (can opt-in for committing if needed)
 .env*
