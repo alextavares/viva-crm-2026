@@ -74,9 +74,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 try {
                     setSession(session)
                     setUser(session?.user ?? null)
-                    if (session?.user) {
+                    // Avoid unnecessary profile queries on high-frequency events like TOKEN_REFRESHED.
+                    const shouldRefreshProfile =
+                        event === 'INITIAL_SESSION' ||
+                        event === 'SIGNED_IN' ||
+                        event === 'USER_UPDATED'
+
+                    if (session?.user && shouldRefreshProfile) {
                         await fetchProfile(session.user.id)
-                    } else {
+                    } else if (!session?.user) {
                         setRole(null)
                         setOrganizationId(null)
                     }

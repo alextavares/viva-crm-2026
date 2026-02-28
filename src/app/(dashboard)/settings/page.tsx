@@ -151,13 +151,75 @@ export default async function SettingsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="h-full">
           <CardHeader>
+            <CardTitle>Metas do Corretor</CardTitle>
+            <CardDescription>
+              Metas semanais/mensais de captação e resposta rápida, com exceções por corretor.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/goals" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin}>Configurar metas</Button>
+            </Link>
+            <div className="text-xs text-muted-foreground">
+              Owner/manager escolhe o padrão e pode ativar/desativar por corretor.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>WhatsApp Add-on</CardTitle>
+            <CardDescription>
+              Defina o modelo comercial por organização: ativa/desativa, quota mensal e excedente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/whatsapp-addon" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin}>Configurar add-on</Button>
+            </Link>
+            <div className="text-xs text-muted-foreground">
+              Separa CRM base do custo de WhatsApp oficial sem forçar aumento para todos os clientes.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>Canal WhatsApp Oficial</CardTitle>
+            <CardDescription>
+              Conecte Meta WhatsApp por tenant, teste conexão e acompanhe status do canal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/whatsapp-channel" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin}>Configurar canal</Button>
+            </Link>
+            <div className="text-xs text-muted-foreground">
+              Exige add-on ativo. Segredos não são exibidos no painel.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="h-full">
+          <CardHeader>
             <CardTitle>Equipe</CardTitle>
             <CardDescription>Usuários, permissões e corretores.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button disabled variant="outline">
-              Em breve
-            </Button>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/team" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin} variant="outline">
+                Gerenciar equipe
+              </Button>
+            </Link>
+            {!isAdmin ? (
+              <div className="text-xs text-muted-foreground">
+                Apenas <span className="font-medium">owner/manager</span> podem alterar equipe.
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -166,10 +228,17 @@ export default async function SettingsPage() {
             <CardTitle>Cobrança</CardTitle>
             <CardDescription>Plano, assinaturas e notas.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button disabled variant="outline">
-              Em breve
-            </Button>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Link href="/settings/billing" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
+              <Button disabled={!isAdmin} variant="outline">
+                Gerenciar cobrança
+              </Button>
+            </Link>
+            {!isAdmin ? (
+              <div className="text-xs text-muted-foreground">
+                Apenas <span className="font-medium">owner/manager</span> podem alterar cobrança.
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>

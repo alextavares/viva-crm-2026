@@ -1,8 +1,30 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Building, Users, Calendar, Globe } from "lucide-react"
+import { Building, Users, Calendar, Globe, Target } from "lucide-react"
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
+import { WhatsAppOnboardingChecklist } from "@/components/dashboard/whatsapp-onboarding-checklist"
+import { getWhatsAppOnboardingSnapshot } from "@/lib/whatsapp-onboarding"
+
+type GoalsSnapshot = {
+    ok: boolean
+    role: string
+    enabled: boolean
+    period_type: "weekly" | "monthly"
+    metric_captacoes_enabled?: boolean
+    metric_respostas_enabled?: boolean
+    metric_visitas_enabled?: boolean
+    response_sla_minutes: number
+    target_captacoes: number
+    target_respostas: number
+    target_visitas?: number
+    current_captacoes: number
+    current_respostas: number
+    current_visitas?: number
+    progress_captacoes_pct: number
+    progress_respostas_pct: number
+    progress_visitas_pct?: number
+}
 
 export default async function DashboardPage() {
     const supabase = await createClient()
@@ -33,7 +55,7 @@ export default async function DashboardPage() {
     // eslint-disable-next-line react-hooks/purity -- Server-side snapshot for dashboard metric window.
     const siteLeadsSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d, siteLeadsAllTime, customDomain] = await Promise.all([
+    const [propertiesResult, contactsResult, appointmentsResult, propertiesAll, contactsAll, siteSettings, publishedCount, siteLeads7d, siteLeadsAllTime, customDomain, goalsSnapshotResult, whatsappAddonSettings, whatsappChannelSettings] = await Promise.all([
         supabase.from('properties').select('*', { count: 'exact', head: true }).eq('status', 'available'),
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('type', 'lead'),
         supabase.from('appointments').select('*', { count: 'exact', head: true }).gte('date', new Date().toISOString()),
@@ -71,6 +93,23 @@ export default async function DashboardPage() {
                   .eq("organization_id", orgId)
                   .maybeSingle()
             : Promise.resolve({ data: null }),
+        orgId && user?.id
+            ? supabase.rpc("goals_dashboard_snapshot", { p_org_id: orgId, p_profile_id: user.id })
+            : Promise.resolve({ data: null, error: null }),
+        orgId
+            ? supabase
+                  .from("whatsapp_addon_pricing_settings")
+                  .select("addon_enabled")
+                  .eq("organization_id", orgId)
+                  .maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
+        orgId
+            ? supabase
+                  .from("whatsapp_channel_settings")
+                  .select("status, last_tested_at")
+                  .eq("organization_id", orgId)
+                  .maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
     ])
 
     const activeProperties = propertiesResult.count || 0
@@ -90,6 +129,21 @@ export default async function DashboardPage() {
     const hasPreviewReady = Boolean(siteSlug)
     const hasDomainReady = hasDomainVerified || hasPreviewReady
     const onboardingCollapsed = Boolean(siteSettings?.data?.onboarding_collapsed)
+    const goalsErrorCode = goalsSnapshotResult.error?.code
+    if (goalsSnapshotResult.error && goalsErrorCode !== "42883" && goalsErrorCode !== "42P01") {
+        console.error("Error fetching goals snapshot:", {
+            message: goalsSnapshotResult.error.message,
+            details: goalsSnapshotResult.error.details,
+            hint: goalsSnapshotResult.error.hint,
+            code: goalsSnapshotResult.error.code,
+        })
+    }
+    const goalsSnapshot = (goalsSnapshotResult.data as GoalsSnapshot | null) ?? null
+    const whatsappOnboarding = getWhatsAppOnboardingSnapshot({
+        addonEnabled: Boolean(whatsappAddonSettings.data?.addon_enabled),
+        channelStatus: (whatsappChannelSettings.data?.status as "disconnected" | "connected" | "error" | null) ?? null,
+        lastTestedAt: (whatsappChannelSettings.data?.last_tested_at as string | null) ?? null,
+    })
 
     // Aggregate data for charts
     const propertyStatusCounts = (propertiesAll.data || []).reduce((acc, curr) => {
@@ -131,6 +185,8 @@ export default async function DashboardPage() {
                 hasDomainReady={hasDomainReady}
                 initialCollapsed={onboardingCollapsed}
             />
+
+            {isAdmin ? <WhatsAppOnboardingChecklist snapshot={whatsappOnboarding} /> : null}
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
@@ -182,6 +238,86 @@ export default async function DashboardPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {goalsSnapshot?.ok ? (
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Suas Metas ({goalsSnapshot.period_type === "monthly" ? "mensal" : "semanal"})</CardTitle>
+                        <Target className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {!goalsSnapshot.enabled ? (
+                            <p className="text-sm text-muted-foreground">
+                                Metas desativadas para seu perfil. Peça ao owner/manager para ativar em Configurações &gt; Metas.
+                            </p>
+                        ) : (
+                            <>
+                                {goalsSnapshot.metric_captacoes_enabled !== false ? (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span>Captações</span>
+                                            <span className="font-medium">
+                                                {goalsSnapshot.current_captacoes}/{goalsSnapshot.target_captacoes}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full rounded-full bg-primary transition-all"
+                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_captacoes_pct || 0))}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {goalsSnapshot.metric_respostas_enabled !== false ? (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span>Respostas rápidas</span>
+                                            <span className="font-medium">
+                                                {goalsSnapshot.current_respostas}/{goalsSnapshot.target_respostas}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full rounded-full bg-emerald-500 transition-all"
+                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_respostas_pct || 0))}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            SLA da resposta rápida: {goalsSnapshot.response_sla_minutes} min.
+                                        </p>
+                                    </div>
+                                ) : null}
+
+                                {goalsSnapshot.metric_visitas_enabled !== false ? (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span>Visitas agendadas</span>
+                                            <span className="font-medium">
+                                                {goalsSnapshot.current_visitas ?? 0}/{goalsSnapshot.target_visitas ?? 0}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full rounded-full bg-sky-500 transition-all"
+                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_visitas_pct || 0))}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {goalsSnapshot.metric_captacoes_enabled === false &&
+                                goalsSnapshot.metric_respostas_enabled === false &&
+                                goalsSnapshot.metric_visitas_enabled === false ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        Todas as métricas estão desativadas para seu perfil.
+                                    </p>
+                                ) : null}
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+            ) : null}
             <DashboardCharts propertiesByStatus={propertiesByStatus} leadsByType={leadsByType} />
         </div>
     )

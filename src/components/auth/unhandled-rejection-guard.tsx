@@ -2,7 +2,15 @@
 
 import { useEffect } from "react"
 
+function isSupabaseLockTimeoutMessage(text: string) {
+  return text.includes('Lock "lock:sb-') && text.includes("acquisition timed out")
+}
+
 function isSupabaseAbortLikeError(reason: unknown) {
+  if (typeof reason === "string") {
+    return reason.includes("signal is aborted") || isSupabaseLockTimeoutMessage(reason)
+  }
+
   if (!reason || typeof reason !== "object") return false
   const r = reason as { name?: unknown; message?: unknown; stack?: unknown; cause?: unknown }
   const name = typeof r.name === "string" ? r.name : ""
@@ -17,17 +25,29 @@ function isSupabaseAbortLikeError(reason: unknown) {
 
   const abortHint =
     msg.includes("signal is aborted") ||
+    msg.includes("Request timeout") ||
+    isSupabaseLockTimeoutMessage(msg) ||
     stack.includes("@supabase/auth-js") ||
     stack.includes("auth-js") ||
     stack.includes("@supabase/storage-js") ||
     causeMsg.includes("signal is aborted") ||
+    causeMsg.includes("Request timeout") ||
+    isSupabaseLockTimeoutMessage(causeMsg) ||
     causeStack.includes("@supabase/auth-js") ||
     causeStack.includes("@supabase/storage-js")
 
   if (!abortHint) return false
 
   // Only ignore abort-related noise.
-  return name === "AbortError" || causeName === "AbortError" || name === "StorageUnknownError" || name === "AuthRetryableFetchError"
+  return (
+    name === "AbortError" ||
+    causeName === "AbortError" ||
+    name === "StorageUnknownError" ||
+    name === "AuthRetryableFetchError" ||
+    name === "TimeoutError" ||
+    isSupabaseLockTimeoutMessage(msg) ||
+    isSupabaseLockTimeoutMessage(causeMsg)
+  )
 }
 
 export function UnhandledRejectionGuard() {
@@ -55,12 +75,22 @@ export function UnhandledRejectionGuard() {
     // Some dev overlays are triggered by `console.error(...)`. Keep this extremely narrow
     // to avoid hiding real problems.
     const originalConsoleError = console.error.bind(console)
+    const originalConsoleWarn = console.warn.bind(console)
     console.error = (...args: unknown[]) => {
       for (const a of args) {
         if (isSupabaseAbortLikeError(a)) return
         if (typeof a === "string" && a.includes("signal is aborted")) return
+        if (typeof a === "string" && isSupabaseLockTimeoutMessage(a)) return
       }
       originalConsoleError(...args)
+    }
+    console.warn = (...args: unknown[]) => {
+      for (const a of args) {
+        if (isSupabaseAbortLikeError(a)) return
+        if (typeof a === "string" && a.includes("signal is aborted")) return
+        if (typeof a === "string" && isSupabaseLockTimeoutMessage(a)) return
+      }
+      originalConsoleWarn(...args)
     }
 
     window.addEventListener("unhandledrejection", rejectionHandler)
@@ -71,6 +101,7 @@ export function UnhandledRejectionGuard() {
       window.removeEventListener("unhandledrejection", rejectionHandler)
       window.removeEventListener("error", errorHandler, true)
       console.error = originalConsoleError
+      console.warn = originalConsoleWarn
     }
   }, [])
 
