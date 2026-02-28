@@ -1,4 +1,6 @@
 import { ContactForm } from "@/components/contacts/contact-form"
+import { ContactActivityPanel } from "@/components/contacts/contact-activity-panel"
+import { ContactWhatsAppActions } from "@/components/contacts/contact-whatsapp-actions"
 import { ContactFollowupPanel } from "@/components/followups/contact-followup-panel"
 import { createClient } from "@/lib/supabase/server"
 import { buildWhatsAppUrl } from "@/lib/whatsapp"
@@ -37,6 +39,7 @@ export default async function ContactEditPage({ params }: PageProps) {
 
     const role = (profile?.role as string | null) ?? null
     const canManageFollowup = role === "owner" || role === "manager"
+    const canSendOfficial = role === "owner" || role === "manager"
 
     let followupJobs: Array<{
         id: string
@@ -46,15 +49,51 @@ export default async function ContactEditPage({ params }: PageProps) {
         processed_at: string | null
         error: string | null
     }> = []
+    let recentMessages: Array<{
+        id: string
+        direction: "in" | "out"
+        channel: string
+        body: string
+        created_at: string
+    }> = []
+    let recentEvents: Array<{
+        id: string
+        type: string
+        source: string
+        payload: Record<string, unknown> | null
+        created_at: string
+    }> = []
 
-    const { data: jobsData, error: jobsError } = await supabase
-        .from("followup_jobs")
-        .select("id, step, status, scheduled_at, processed_at, error")
-        .eq("contact_id", id)
-        .order("scheduled_at", { ascending: true })
+    const [jobsResult, messagesResult, eventsResult] = await Promise.all([
+        supabase
+            .from("followup_jobs")
+            .select("id, step, status, scheduled_at, processed_at, error")
+            .eq("contact_id", id)
+            .order("scheduled_at", { ascending: true }),
+        supabase
+            .from("messages")
+            .select("id, direction, channel, body, created_at")
+            .eq("contact_id", id)
+            .order("created_at", { ascending: false })
+            .limit(10),
+        supabase
+            .from("contact_events")
+            .select("id, type, source, payload, created_at")
+            .eq("contact_id", id)
+            .order("created_at", { ascending: false })
+            .limit(10),
+    ])
 
-    if (!jobsError) {
-        followupJobs = (jobsData as typeof followupJobs) || []
+    if (!jobsResult.error) {
+        followupJobs = (jobsResult.data as typeof followupJobs) || []
+    }
+
+    if (!messagesResult.error) {
+        recentMessages = (messagesResult.data as typeof recentMessages) || []
+    }
+
+    if (!eventsResult.error) {
+        recentEvents = (eventsResult.data as typeof recentEvents) || []
     }
 
     const waHref = contact.phone
@@ -71,21 +110,19 @@ export default async function ContactEditPage({ params }: PageProps) {
                     <h1 className="text-lg font-semibold md:text-2xl">Editar Contato</h1>
                     <p className="text-muted-foreground">Atualize as informações do contato.</p>
                 </div>
-                {waHref ? (
-                    <a
-                        className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                        href={waHref}
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        Chamar no WhatsApp
-                    </a>
-                ) : null}
+                <ContactWhatsAppActions
+                    contactId={id}
+                    canSendOfficial={canSendOfficial}
+                    waHref={waHref}
+                    defaultMessage={contact.name ? `Olá ${contact.name}, tudo bem?` : "Olá, tudo bem?"}
+                />
             </div>
 
             <div className="border rounded-lg p-4 bg-muted/10">
                 <ContactForm initialData={contact} />
             </div>
+
+            <ContactActivityPanel messages={recentMessages} events={recentEvents} />
 
             <ContactFollowupPanel contactId={id} canManage={canManageFollowup} jobs={followupJobs} />
         </div>

@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useState, type MouseEvent } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, MessageCircle } from "lucide-react"
@@ -61,24 +60,20 @@ export function SiteContactQuickActions({ contactId, phone, status }: Props) {
     await updateStatus(event, "qualified", "Lead marcado como qualificado.")
   }
 
-  const handleStopClick = (event: MouseEvent<HTMLAnchorElement>) => {
+  const handleOpenWhatsApp = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
     event.stopPropagation()
+    if (!canWhatsapp) return
+    window.open(`https://wa.me/${phoneDigits}`, "_blank", "noopener,noreferrer")
   }
 
   return (
     <div className="mt-3 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
       {canWhatsapp && (
-        <Link
-          href={`https://wa.me/${phoneDigits}`}
-          target="_blank"
-          rel="noreferrer"
-          onClick={handleStopClick}
-        >
-          <Button type="button" size="sm" variant="outline" className="h-8 text-xs">
-            <MessageCircle className="mr-1 h-3.5 w-3.5" />
-            WhatsApp
-          </Button>
-        </Link>
+        <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={handleOpenWhatsApp}>
+          <MessageCircle className="mr-1 h-3.5 w-3.5" />
+          WhatsApp
+        </Button>
       )}
 
       <Button

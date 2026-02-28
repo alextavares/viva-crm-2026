@@ -22,6 +22,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { contactSchema, type ContactFormValues } from "@/lib/types"
 
+const SAVE_TIMEOUT_MS = 20_000
+
 interface ContactFormProps {
     initialData?: {
         id: string
@@ -52,34 +54,55 @@ export function ContactForm({ initialData }: ContactFormProps) {
         },
     })
 
+    async function withTimeout<T>(promise: Promise<T>, ms = SAVE_TIMEOUT_MS): Promise<T> {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+                const err = new Error("RequestTimeout")
+                err.name = "TimeoutError"
+                reject(err)
+            }, ms)
+        })
+
+        try {
+            return await Promise.race([promise, timeoutPromise])
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId)
+        }
+    }
+
     async function onSubmit(data: ContactFormValues) {
         if (!user || !organizationId) return
 
         setIsLoading(true)
         try {
-            // Prepare payload (org is already known from AuthProvider profile fetch).
-            const payload = {
-                ...data,
-                organization_id: organizationId,
-                assigned_to: user.id, // Assign to creator by default
-            }
-
             let error
 
             if (initialData?.id) {
                 // UPDATE
-                const result = await supabase
-                    .from('contacts')
-                    .update(payload)
-                    .eq('id', initialData.id)
+                const result = (await withTimeout(
+                    supabase
+                        .from('contacts')
+                        .update({
+                            ...data,
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq('id', initialData.id)
+                )) as { error: { message?: string } | null }
                 error = result.error
             } else {
                 // INSERT
-                const result = await supabase
-                    .from('contacts')
-                    .insert(payload)
-                    .select("id, type")
-                    .single()
+                const result = (await withTimeout(
+                    supabase
+                        .from('contacts')
+                        .insert({
+                            ...data,
+                            organization_id: organizationId,
+                            assigned_to: user.id,
+                        })
+                        .select("id, type")
+                        .single()
+                )) as { error: { message?: string } | null; data?: { id?: string; type?: string } | null }
                 error = result.error
 
                 if (!error && result.data?.id && (result.data.type || data.type) === "lead") {
@@ -103,7 +126,18 @@ export function ContactForm({ initialData }: ContactFormProps) {
             router.refresh()
         } catch (error) {
             console.error('Error saving contact:', error)
-            toast.error("Erro ao salvar contato. Tente novamente.")
+            const isTimeout =
+                typeof error === "object" &&
+                error !== null &&
+                "name" in error &&
+                ((error as { name?: unknown }).name === "TimeoutError" ||
+                    (error as { name?: unknown }).name === "AbortError")
+
+            toast.error(
+                isTimeout
+                    ? "Salvar contato demorou demais. Tente novamente."
+                    : "Erro ao salvar contato. Tente novamente."
+            )
         } finally {
             setIsLoading(false)
         }
