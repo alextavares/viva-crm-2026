@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { WhatsAppFab } from "@/components/marketing/whatsapp-fab"
+import { MarketingHeader } from "@/components/marketing/marketing-header"
+import { MarketingFooter } from "@/components/marketing/marketing-footer"
 import { getDemoSiteHref } from "@/lib/demo-site"
 
 export default function Home() {
@@ -20,47 +22,7 @@ export default function Home() {
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
         </div>
 
-        <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
-          <Link href="/" className="group inline-flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 ring-1 ring-white/10">
-              <span className="text-[13px] font-semibold tracking-wide">VC</span>
-            </span>
-            <span className="leading-tight">
-              <span className="block text-sm font-semibold">VivaCRM</span>
-              <span className="block text-xs text-white/60">CRM + Site para imobiliárias</span>
-            </span>
-          </Link>
-
-          <nav className="hidden items-center gap-6 text-sm text-white/80 md:flex">
-            <a href="#recursos" className="hover:text-white">
-              Recursos
-            </a>
-            <a href="#templates" className="hover:text-white">
-              Templates
-            </a>
-            <Link href="/precos" className="hover:text-white">
-              Preços
-            </Link>
-            <Link href="/login" className="hover:text-white">
-              Entrar
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/login"
-              className="hidden rounded-xl px-3 py-2 text-sm text-white/80 ring-1 ring-white/10 hover:bg-white/5 md:inline-flex"
-            >
-              Entrar
-            </Link>
-            <Link
-              href="/register"
-              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-white to-white/90 px-4 py-2 text-sm font-semibold text-black shadow-sm shadow-white/10 ring-1 ring-white/10 hover:from-white hover:to-white"
-            >
-              Testar gratis
-            </Link>
-          </div>
-        </header>
+        <MarketingHeader active="home" />
 
         <section className="relative z-10 mx-auto grid max-w-6xl gap-10 px-5 pb-14 pt-6 md:grid-cols-[1.2fr_0.8fr] md:pb-20 md:pt-10">
           <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-700">
@@ -286,134 +248,155 @@ export default function Home() {
 
       <section className="border-t border-white/10 bg-[#070910]">
         <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 md:pb-24">
-          <div className="grid gap-10 md:grid-cols-[1fr_1fr]">
+          <div className="flex items-end justify-between gap-6">
             <div>
-              <h2 className="font-serif text-2xl text-white md:text-3xl">Feito para vender, sem enrolacao</h2>
-              <p className="mt-2 max-w-xl text-sm text-white/65 md:text-base">
-                O VivaCRM foi desenhado para quem vive de lead: resposta rapida, organizacao simples e um site que passa
-                confianca.
+              <h2 className="font-serif text-2xl text-white md:text-3xl">Planos para cada fase da operação</h2>
+              <p className="mt-2 max-w-2xl text-sm text-white/65 md:text-base">
+                Comece leve e evolua sem trocar de sistema. WhatsApp Oficial entra como add-on, sem esmagar sua margem.
               </p>
+            </div>
+            <Link
+              href="/precos"
+              className="hidden rounded-xl bg-white/5 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10 md:inline-flex"
+            >
+              Ver tabela completa
+            </Link>
+          </div>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
-                  <div className="text-xs text-white/50">Setup</div>
-                  <div className="mt-2 text-lg font-semibold">Rápido</div>
-                  <div className="mt-1 text-sm text-white/65">Conta, site e primeiro lead em minutos.</div>
-                </div>
-                <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
-                  <div className="text-xs text-white/50">Time</div>
-                  <div className="mt-2 text-lg font-semibold">Sem perda</div>
-                  <div className="mt-1 text-sm text-white/65">Nada fica no WhatsApp sem virar lead.</div>
-                </div>
-                <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
-                  <div className="text-xs text-white/50">Custo</div>
-                  <div className="mt-2 text-lg font-semibold">Baixo</div>
-                  <div className="mt-1 text-sm text-white/65">Preco acessivel para crescer em volume.</div>
-                </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10">
+              <div className="text-xs text-white/50">Start</div>
+              <div className="mt-2 text-2xl font-semibold text-white">
+                R$ 89<span className="text-sm font-medium text-white/60">/mês</span>
               </div>
+              <p className="mt-2 text-sm text-white/65">Para corretor autônomo.</p>
+              <ul className="mt-4 grid gap-2 text-sm text-white/75">
+                <li>CRM + site imobiliário</li>
+                <li>Imóveis e clientes ilimitados</li>
+                <li>Integração com portais</li>
+                <li>Domínio próprio</li>
+              </ul>
+              <Link
+                href="/register"
+                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black hover:bg-emerald-300"
+              >
+                Começar no Start
+              </Link>
+            </div>
 
-              <div className="mt-6 rounded-3xl bg-gradient-to-r from-emerald-400/15 via-white/5 to-amber-300/10 p-6 ring-1 ring-white/10">
-                <div className="text-xs text-white/60">Depoimento</div>
-                <div className="mt-2 text-sm text-white/75">
-                  “Eu precisava de um site bonito e um jeito simples de organizar meus leads. O VivaCRM virou minha base
-                  do dia a dia.”
+            <div className="rounded-3xl bg-gradient-to-b from-white/10 to-white/5 p-6 ring-1 ring-emerald-300/25">
+              <div className="text-xs text-emerald-300">Equipe</div>
+              <div className="mt-2 text-2xl font-semibold text-white">
+                R$ 129<span className="text-sm font-medium text-white/60">/mês</span>
+              </div>
+              <p className="mt-2 text-sm text-white/65">Para imobiliária pequena.</p>
+              <ul className="mt-4 grid gap-2 text-sm text-white/75">
+                <li>Tudo do Start</li>
+                <li>Até 5 usuários</li>
+                <li>Distribuição de leads + SLA</li>
+                <li>Metas no dashboard</li>
+              </ul>
+              <Link
+                href="/register"
+                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black hover:bg-white/90"
+              >
+                Escolher Equipe
+              </Link>
+            </div>
+
+            <div className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10">
+              <div className="text-xs text-white/50">Pro</div>
+              <div className="mt-2 text-2xl font-semibold text-white">
+                R$ 179<span className="text-sm font-medium text-white/60">/mês</span>
+              </div>
+              <p className="mt-2 text-sm text-white/65">Para operação em crescimento.</p>
+              <ul className="mt-4 grid gap-2 text-sm text-white/75">
+                <li>Tudo do Equipe</li>
+                <li>Mais usuários e volume</li>
+                <li>Relatórios avançados</li>
+                <li>Suporte prioritário</li>
+              </ul>
+              <Link
+                href="/precos"
+                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
+              >
+                Ver Pro detalhado
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 md:p-8">
+            <div className="text-sm font-semibold text-white">Add-ons</div>
+            <div className="mt-4 grid gap-3 text-sm text-white/75 md:grid-cols-3">
+              <div className="rounded-2xl bg-black/20 p-4 ring-1 ring-white/10">
+                <div className="font-semibold text-white">WhatsApp Oficial</div>
+                <div className="mt-1 text-white/70">+R$ 49/mês por número</div>
+              </div>
+              <div className="rounded-2xl bg-black/20 p-4 ring-1 ring-white/10">
+                <div className="font-semibold text-white">Usuário extra</div>
+                <div className="mt-1 text-white/70">+R$ 19/mês</div>
+              </div>
+              <div className="rounded-2xl bg-black/20 p-4 ring-1 ring-white/10">
+                <div className="font-semibold text-white">Número extra WhatsApp</div>
+                <div className="mt-1 text-white/70">+R$ 39/mês</div>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-white/55">
+              Consumo de mensagens WhatsApp é cobrado no provedor oficial da conta do cliente (Meta/BSP).
+            </p>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10">
+              <div className="text-sm font-semibold text-white">FAQ rápido</div>
+              <div className="mt-4 grid gap-4 text-sm text-white/70">
+                <div>
+                  <div className="font-semibold text-white">O WhatsApp Oficial está incluído?</div>
+                  <div className="mt-1 text-white/60">Não. É um add-on opcional por número.</div>
                 </div>
-                <div className="mt-3 text-xs text-white/50">Corretor autonomo, litoral SP</div>
+                <div>
+                  <div className="font-semibold text-white">Posso usar meu próprio número e conta?</div>
+                  <div className="mt-1 text-white/60">Sim. A conexão é feita na conta oficial do cliente.</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-white">Quem paga as mensagens enviadas?</div>
+                  <div className="mt-1 text-white/60">O consumo é do cliente, direto no provedor oficial.</div>
+                </div>
+                <div>
+                  <div className="font-semibold text-white">Tem fidelidade?</div>
+                  <div className="mt-1 text-white/60">Não. Cancelamento simples.</div>
+                </div>
               </div>
             </div>
 
-            <div>
-              <div className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10">
-                <div className="text-sm font-semibold">FAQ rapido</div>
-                <div className="mt-4 grid gap-4 text-sm text-white/70">
-                  <div>
-                    <div className="font-semibold text-white">Preciso ter dominio proprio agora?</div>
-                    <div className="mt-1 text-white/60">
-                      Nao. Voce comeca com subdominio e ativa dominio proprio depois, com passo a passo.
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-white">Tenho dados de outro CRM. Consigo importar?</div>
-                    <div className="mt-1 text-white/60">
-                      Sim. O objetivo e importar imoveis e contatos sem dor. Vamos deixar isso guiado no onboarding.
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-white">Os leads do site entram onde?</div>
-                    <div className="mt-1 text-white/60">Entram direto no CRM como contato/lead com historico.</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-white">Tem fidelidade?</div>
-                    <div className="mt-1 text-white/60">Nao. Cancelamento simples.</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-white">Portais (ZAP, VivaReal, OLX, ImovelWeb) estao inclusos?</div>
-                    <div className="mt-1 text-white/60">
-                      Integracoes com portais sao essenciais e entram como proxima fase. Hoje voce ja tem site + captura
-                      de lead.
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-white">Preciso instalar app?</div>
-                    <div className="mt-1 text-white/60">Nao. Funciona no navegador, perfeito no celular.</div>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                  <Link
-                    href="/register"
-                    className="inline-flex flex-1 items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black hover:bg-emerald-300"
-                  >
-                    Testar gratis
-                  </Link>
-                  <Link
-                    href={demoSiteHref}
-                    className="inline-flex flex-1 items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
-                  >
-                    Ver demo
-                  </Link>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-3xl bg-white/5 p-6 ring-1 ring-white/10">
-                <div className="text-sm font-semibold">Quer falar com a gente?</div>
-                <div className="mt-2 text-sm text-white/65">
-                  Se voce ja tem operacao rodando e quer migrar rapido, chama no WhatsApp. A gente ajuda a decidir o
-                  melhor caminho.
-                </div>
-                <div className="mt-4 text-xs text-white/50">
-                  Dica: use o botao do WhatsApp no canto inferior direito.
-                </div>
+            <div className="rounded-3xl bg-gradient-to-r from-emerald-400/15 via-white/5 to-amber-300/10 p-6 ring-1 ring-white/10">
+              <div className="text-sm font-semibold text-white">Política de cobrança</div>
+              <ol className="mt-4 grid gap-3 text-sm text-white/70">
+                <li>1. O plano cobre o uso da plataforma conforme recursos contratados.</li>
+                <li>2. Add-on de WhatsApp Oficial é cobrado por número conectado.</li>
+                <li>3. Tráfego de mensagens é cobrado separadamente no provedor oficial.</li>
+                <li>4. Cliente mantém sua conta oficial ativa e regularizada.</li>
+              </ol>
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+                <Link
+                  href="/register"
+                  className="inline-flex flex-1 items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black hover:bg-emerald-300"
+                >
+                  Criar conta
+                </Link>
+                <Link
+                  href={demoSiteHref}
+                  className="inline-flex flex-1 items-center justify-center rounded-2xl bg-white/5 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 hover:bg-white/10"
+                >
+                  Ver demo
+                </Link>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-white/10 bg-[#070910]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-10 text-sm text-white/70 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 ring-1 ring-white/10">
-              <span className="text-[12px] font-semibold">VC</span>
-            </span>
-            <span>VivaCRM</span>
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/precos" className="hover:text-white">
-              Precos
-            </Link>
-            <Link href="/login" className="hover:text-white">
-              Entrar
-            </Link>
-            <Link href="/register" className="hover:text-white">
-              Criar conta
-            </Link>
-            <Link href={demoSiteHref} className="hover:text-white">
-              Demo
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter showHomeLink={false} />
     </main>
   )
 }
