@@ -346,7 +346,17 @@ export default async function PublicSiteHome({
 
       <section className="mt-10">
         <div className="flex items-end justify-between gap-4">
-          <h2 className="text-2xl font-semibold">{isPremium ? "Portfolio de imoveis" : "Imoveis"}</h2>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {isPremium ? "Curadoria ativa" : "Busca objetiva"}
+            </div>
+            <h2 className="mt-1 text-2xl font-semibold">{isPremium ? "Portfolio de imoveis" : "Imoveis"}</h2>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {isPremium
+                ? "Cards mais amplos para comparar contexto, preco e qualidade de apresentacao."
+                : "Leitura rapida para encontrar opcoes e entrar em contato com menos friccao."}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Link
               href={prevHref}
@@ -392,11 +402,26 @@ export default async function PublicSiteHome({
                   <div className="mt-1 text-xs text-muted-foreground">
                     Ref: {p.public_code || p.id.slice(0, 8)}
                   </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                    <span className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}>
+                      {p.type || "Tipo a informar"}
+                    </span>
+                    <span className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}>
+                      {isPremium ? "Atendimento consultivo" : "Contato rapido"}
+                    </span>
+                  </div>
                   <div className={`flex items-end justify-between gap-3 ${isPremium ? "mt-6" : "mt-4"}`}>
                     <div className="text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
                       {formatMoneyBRL(p.price)}
                     </div>
-                    <div className="text-xs text-muted-foreground">{p.type || ""}</div>
+                    <div className="text-xs font-medium text-muted-foreground">
+                      {isPremium ? "Ver detalhes" : "Abrir imovel"}
+                    </div>
+                  </div>
+                  <div className={`mt-4 border-t pt-4 text-xs text-muted-foreground ${isPremium ? "border-muted/70" : "border-muted/60"}`}>
+                    {isPremium
+                      ? "Veja imagens, contexto do imovel e solicite atendimento personalizado."
+                      : "Abra o imovel e envie seu interesse direto para a equipe."}
                   </div>
                 </div>
               </Link>
