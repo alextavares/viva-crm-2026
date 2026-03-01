@@ -27,8 +27,8 @@ export function WhatsAppFab({
         left: "auto",
       }}
     >
-      <WhatsAppWave />
       <span className="relative z-10 grid h-7 w-7 place-items-center rounded-full bg-black/10">
+        <WhatsAppWave />
         <WhatsAppIcon />
       </span>
       <span className="relative z-10">WhatsApp</span>
