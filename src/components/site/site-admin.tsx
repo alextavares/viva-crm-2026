@@ -343,6 +343,21 @@ async function uploadSiteAsset(
   return { publicUrl, path }
 }
 
+function validateSiteAssetFile(file: File, kind: "logo" | "banner") {
+  if (!file.type.startsWith("image/")) {
+    return "Envie um arquivo de imagem valido."
+  }
+
+  const maxBytes = kind === "logo" ? 2 * 1024 * 1024 : 5 * 1024 * 1024
+  if (file.size > maxBytes) {
+    return kind === "logo"
+      ? "A logo deve ter no maximo 2 MB. Tente uma imagem menor."
+      : "A imagem deve ter no maximo 5 MB. Tente uma imagem menor."
+  }
+
+  return null
+}
+
 export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const [inFlight, setInFlight] = useState(0)
@@ -357,7 +372,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const runPlain = async (
     fn: () => Promise<void>,
     errorMessage: string,
-    opts?: { busy?: string; timeoutMs?: number }
+    opts?: { busy?: string; timeoutMs?: number; timeoutMessage?: string }
   ) => {
     setInFlight((c) => c + 1)
     if (opts?.busy) setBusyMsg(opts.busy)
@@ -371,7 +386,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
       await Promise.race([fn(), timeoutPromise])
     } catch (err) {
       if (err instanceof Error && err.message === "timeout") {
-        toast.error("Demorou demais para salvar. Tente novamente.")
+        toast.error(opts?.timeoutMessage ?? "Demorou demais para salvar. Tente novamente.")
         return
       }
       if (isSupabaseAbortNoise(err) || isAbortLikeError(err)) {
@@ -694,11 +709,21 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   }
 
   const uploadLogo = async (file: File) => {
+    const validationError = validateSiteAssetFile(file, "logo")
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
+
     await runPlain(async () => {
       const { publicUrl, path } = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "logo" })
       setSettings((s) => ({ ...s, logo_url: publicUrl, logo_path: path }))
       toast.success("Logo enviado. Clique em Salvar para aplicar.")
-    }, "Logo upload failed:", { busy: "Enviando logo...", timeoutMs: 180000 })
+    }, "Logo upload failed:", {
+      busy: "Enviando logo...",
+      timeoutMs: 20000,
+      timeoutMessage: "Upload da logo demorou demais. Tente uma imagem menor ou tente novamente.",
+    })
   }
 
   const savePages = () => {
@@ -839,19 +864,39 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   }
 
   const uploadEditBannerImage = async (file: File) => {
+    const validationError = validateSiteAssetFile(file, "banner")
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
+
     await runPlain(async () => {
       const { publicUrl, path } = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "banner" })
       setEditBanner((b) => (b ? { ...b, image_url: publicUrl, image_path: path } : b))
       toast.success("Imagem enviada. Salve o banner para aplicar.")
-    }, "Edit banner upload failed:", { busy: "Enviando imagem...", timeoutMs: 180000 })
+    }, "Edit banner upload failed:", {
+      busy: "Enviando imagem...",
+      timeoutMs: 30000,
+      timeoutMessage: "Upload da imagem demorou demais. Tente uma imagem menor ou tente novamente.",
+    })
   }
 
   const uploadBannerImage = async (file: File) => {
+    const validationError = validateSiteAssetFile(file, "banner")
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
+
     await runPlain(async () => {
       const { publicUrl, path } = await uploadSiteAsset(supabase, { orgId: org.id, file, kind: "banner" })
       setNewBanner((b) => ({ ...b, image_url: publicUrl, image_path: path }))
       toast.success("Imagem enviada. Salve o banner para aplicar.")
-    }, "Banner upload failed:", { busy: "Enviando imagem...", timeoutMs: 180000 })
+    }, "Banner upload failed:", {
+      busy: "Enviando imagem...",
+      timeoutMs: 30000,
+      timeoutMessage: "Upload da imagem demorou demais. Tente uma imagem menor ou tente novamente.",
+    })
   }
 
   const copyText = async (value: string, label: string) => {
