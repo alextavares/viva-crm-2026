@@ -21,6 +21,7 @@ export function WhatsAppFab({
       className="wa-wave-btn fixed z-50 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-emerald-400/20 hover:bg-emerald-300"
       style={{
         ["--wa-wave-color" as string]: "rgb(52 211 153)",
+        position: "fixed",
         right: "1.25rem",
         bottom: "1.25rem",
         left: "auto",
