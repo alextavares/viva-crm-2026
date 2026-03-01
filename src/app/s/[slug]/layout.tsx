@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import Script from "next/script"
 import { PopupBanner, TopbarBanner } from "@/components/public/site-banners"
+import { WhatsAppFab } from "@/components/marketing/whatsapp-fab"
 import { WhatsAppIcon } from "@/components/ui/whatsapp-icon"
 import { WhatsAppWave } from "@/components/ui/whatsapp-wave"
 import { withBase, ogImages, truncate } from "@/lib/public-site/seo"
@@ -235,6 +236,13 @@ export default async function PublicSiteLayout({
       </header>
 
       {children}
+
+      {whatsapp ? (
+        <WhatsAppFab
+          phoneE164={whatsapp}
+          text={`Olá! Vim pelo site da ${brandName} e quero falar sobre um imóvel.`}
+        />
+      ) : null}
 
       <footer className={`border-t ${isPremium ? "bg-white/85" : "bg-white/70"}`}>
         <div className="mx-auto max-w-6xl px-4 py-10">
