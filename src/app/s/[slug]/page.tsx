@@ -115,6 +115,7 @@ export default async function PublicSiteHome({
 
   const brandName = site.settings?.brand_name || site.slug
   const heroBanner = site.banners.find((b) => b.placement === "hero") ?? null
+  const isPremium = site.settings?.theme === "premium"
 
   const host = await getRequestHost()
   const base = publicBasePath(site.slug, host)
@@ -128,37 +129,48 @@ export default async function PublicSiteHome({
     <main className="mx-auto max-w-6xl px-4 py-10">
       {heroBanner ? <HeroBanner banner={heroBanner} /> : null}
 
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl border bg-white/80 p-7 shadow-sm">
+      <section className={`grid gap-6 ${isPremium ? "lg:grid-cols-[1.2fr_0.8fr]" : "lg:grid-cols-[1.1fr_0.9fr]"}`}>
+        <div className={`border bg-white/80 shadow-sm ${isPremium ? "rounded-[2rem] p-8 md:p-10" : "rounded-3xl p-7"}`}>
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            {brandName}
+            {isPremium ? "Curadoria imobiliária" : brandName}
           </p>
-          <h1 className="mt-3 text-4xl font-semibold leading-tight">
-            Encontre seu imóvel com{" "}
-            <span style={{ color: "var(--site-secondary)" }}>busca rápida</span> e atendimento humano.
+          <h1 className={`mt-3 leading-tight ${isPremium ? "max-w-xl text-4xl font-serif md:text-5xl" : "text-4xl font-semibold"}`}>
+            {isPremium ? (
+              <>
+                Imóveis com apresentação{" "}
+                <span style={{ color: "var(--site-secondary)" }}>mais elegante</span> e atendimento consultivo.
+              </>
+            ) : (
+              <>
+                Encontre seu imóvel com{" "}
+                <span style={{ color: "var(--site-secondary)" }}>busca rápida</span> e atendimento humano.
+              </>
+            )}
           </h1>
           <p className="mt-3 max-w-prose text-muted-foreground">
-            Filtre por cidade, bairro e faixa de preço. Se preferir, fale direto no WhatsApp.
+            {isPremium
+              ? "Seleção visual de imóveis com destaque para imagem, contexto e experiência de marca."
+              : "Filtre por cidade, bairro e faixa de preço. Se preferir, fale direto no WhatsApp."}
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <a
               href="#buscar"
-              className="rounded-2xl px-4 py-2 text-sm font-medium text-white"
+              className={`px-4 py-2 text-sm font-medium text-white ${isPremium ? "rounded-full" : "rounded-2xl"}`}
               style={{ backgroundColor: "var(--site-primary)" }}
             >
-              Buscar imóveis
+              {isPremium ? "Explorar imóveis" : "Buscar imóveis"}
             </a>
             <Link
               href={`${homeHref === "/" ? "" : homeHref}/contact`}
-              className="rounded-2xl border px-4 py-2 text-sm font-medium"
+              className={`${isPremium ? "rounded-full" : "rounded-2xl"} border px-4 py-2 text-sm font-medium`}
             >
-              Contato
+              {isPremium ? "Fale com um especialista" : "Contato"}
             </Link>
           </div>
         </div>
 
-        <div id="buscar" className="rounded-3xl border bg-white/80 p-7 shadow-sm">
-          <div className="text-sm font-medium">Busca</div>
+        <div id="buscar" className={`border bg-white/80 shadow-sm ${isPremium ? "rounded-[2rem] p-8" : "rounded-3xl p-7"}`}>
+          <div className="text-sm font-medium">{isPremium ? "Curadoria guiada" : "Busca"}</div>
           <PublicSearchFiltersInstant
             actionPath={homeHref}
             resultCount={list.length}
@@ -190,7 +202,7 @@ export default async function PublicSiteHome({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={`mt-6 grid gap-4 ${isPremium ? "lg:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           {list.map((p) => {
             const thumbnailSrc =
               resolveMediaPathUrl("properties", p.thumbnail_path) ??
@@ -202,9 +214,9 @@ export default async function PublicSiteHome({
               <Link
                 key={p.id}
                 href={`${homeHref === "/" ? "" : homeHref}/imovel/${p.id}`}
-                className="group overflow-hidden rounded-3xl border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
+                className={`group overflow-hidden border bg-white/85 shadow-sm transition-shadow hover:shadow-md ${isPremium ? "rounded-[2rem]" : "rounded-3xl"}`}
               >
-                <div className="aspect-[4/3] bg-muted">
+                <div className={`bg-muted ${isPremium ? "aspect-[16/10]" : "aspect-[4/3]"}`}>
                   {thumbnailSrc ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -214,15 +226,15 @@ export default async function PublicSiteHome({
                     />
                   ) : null}
                 </div>
-                <div className="p-5">
-                  <div className="text-sm font-medium line-clamp-1">{p.title}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Ref: {p.public_code || p.id.slice(0, 8)}
-                  </div>
+                <div className={isPremium ? "p-6" : "p-5"}>
+                  <div className={`line-clamp-1 ${isPremium ? "text-lg font-semibold" : "text-sm font-medium"}`}>{p.title}</div>
                   <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
                     {p.neighborhood || p.city ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}` : "Localização a informar"}
                   </div>
-                  <div className="mt-4 flex items-end justify-between gap-3">
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Ref: {p.public_code || p.id.slice(0, 8)}
+                  </div>
+                  <div className={`flex items-end justify-between gap-3 ${isPremium ? "mt-6" : "mt-4"}`}>
                     <div className="text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
                       {formatMoneyBRL(p.price)}
                     </div>
@@ -283,7 +295,7 @@ export default async function PublicSiteHome({
               Ver todos
             </Link>
           </div>
-          <div className="rounded-3xl border bg-white/85 p-5 shadow-sm">
+          <div className={`border bg-white/85 p-5 shadow-sm ${isPremium ? "rounded-[2rem]" : "rounded-3xl"}`}>
             <div className="grid gap-3 md:grid-cols-2">
               {links.slice(0, 6).map((item) => (
                 <a
@@ -291,7 +303,7 @@ export default async function PublicSiteHome({
                   href={item.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-2xl border bg-white px-4 py-3 transition-colors hover:bg-muted/30"
+                  className={`border bg-white px-4 py-3 transition-colors hover:bg-muted/30 ${isPremium ? "rounded-3xl" : "rounded-2xl"}`}
                 >
                   <div className="text-sm font-medium">{item.title}</div>
                   {item.description ? (

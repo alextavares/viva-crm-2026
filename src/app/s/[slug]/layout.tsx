@@ -91,6 +91,7 @@ export default async function PublicSiteLayout({
   const isPreview = isPreviewHost(host)
   const base = publicBasePath(site.slug, host)
   const homeHref = base || "/"
+  const isPremium = site.settings?.theme === "premium"
 
   const topbar = site.banners.find((b) => b.placement === "topbar") ?? null
   const popup = site.banners.find((b) => b.placement === "popup") ?? null
@@ -163,11 +164,11 @@ export default async function PublicSiteLayout({
       {topbar ? <TopbarBanner banner={topbar} /> : null}
       {popup ? <PopupBanner banner={popup} /> : null}
 
-      <header className="sticky top-0 z-30 border-b bg-white/80 backdrop-blur">
+      <header className={`sticky top-0 z-30 border-b backdrop-blur ${isPremium ? "bg-white/90" : "bg-white/80"}`}>
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <Link href={homeHref} className="flex items-center gap-2">
             <span
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-white"
+              className={`inline-flex h-9 w-9 items-center justify-center text-white ${isPremium ? "rounded-2xl" : "rounded-xl"}`}
               style={{ backgroundColor: "var(--site-primary)" }}
               aria-hidden
             >
@@ -181,7 +182,7 @@ export default async function PublicSiteLayout({
             ) : null}
           </Link>
 
-          <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex">
+          <nav className={`hidden items-center gap-5 text-sm md:flex ${isPremium ? "text-foreground/70" : "text-muted-foreground"}`}>
             <Link href={homeHref} className="hover:text-foreground">
               Imóveis
             </Link>
@@ -224,10 +225,10 @@ export default async function PublicSiteLayout({
               </a>
             ) : null}
             <Link
-              className="rounded-xl border px-3 py-2 text-sm font-medium"
+              className={`${isPremium ? "rounded-2xl bg-white shadow-sm" : "rounded-xl"} border px-3 py-2 text-sm font-medium`}
               href={`${homeHref}#buscar`}
             >
-              Buscar
+              {isPremium ? "Explorar" : "Buscar"}
             </Link>
           </div>
         </div>
@@ -235,11 +236,23 @@ export default async function PublicSiteLayout({
 
       {children}
 
-      <footer className="border-t bg-white/70">
+      <footer className={`border-t ${isPremium ? "bg-white/85" : "bg-white/70"}`}>
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="text-sm font-medium">{brandName}</div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            {whatsapp ? `WhatsApp: ${whatsapp}` : "WhatsApp não configurado."}
+          <div className={`grid gap-6 ${isPremium ? "md:grid-cols-[1.2fr_0.8fr]" : "md:grid-cols-[1fr_auto]"}`}>
+            <div>
+              <div className="text-sm font-medium">{brandName}</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {isPremium
+                  ? "Curadoria imobiliária com apresentação profissional e atendimento consultivo."
+                  : "Busca rápida, lead direto no CRM e atendimento humano via WhatsApp."}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Contato</div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                {whatsapp ? `WhatsApp: ${whatsapp}` : "WhatsApp não configurado."}
+              </div>
+            </div>
           </div>
           <div className="mt-4 text-xs text-muted-foreground">
             © {new Date().getFullYear()} {brandName}. Todos os direitos reservados.

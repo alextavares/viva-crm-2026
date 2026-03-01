@@ -980,7 +980,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Tema</Label>
+                  <Label>Template do site</Label>
                   <Select
                     value={settings.theme}
                     onValueChange={(v) => setSettings((s) => ({ ...s, theme: v as SiteSettingsRow["theme"] }))}
@@ -989,10 +989,43 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="search_first">search_first</SelectItem>
-                      <SelectItem value="premium">premium</SelectItem>
+                      <SelectItem value="search_first">Conversao</SelectItem>
+                      <SelectItem value="premium">Premium</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Escolha a apresentacao do site publico. O template Conversao prioriza busca e lead rapido; o
+                    Premium destaca imagem, curadoria e percepcao de valor.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div
+                  className={`rounded-2xl border p-4 ${
+                    settings.theme === "search_first" ? "border-foreground bg-muted/20" : "bg-background"
+                  }`}
+                >
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Conversao
+                  </div>
+                  <div className="mt-2 text-sm font-semibold">Busca forte e CTA direto</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Hero orientado a captacao, leitura rapida dos cards e foco em gerar contato com menos friccao.
+                  </div>
+                </div>
+                <div
+                  className={`rounded-2xl border p-4 ${
+                    settings.theme === "premium" ? "border-foreground bg-muted/20" : "bg-background"
+                  }`}
+                >
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Premium
+                  </div>
+                  <div className="mt-2 text-sm font-semibold">Vitrine mais elegante e consultiva</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Hero editorial, cards mais amplos e ficha do imovel com apresentacao mais sofisticada.
+                  </div>
                 </div>
               </div>
 

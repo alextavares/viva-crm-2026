@@ -45,6 +45,7 @@ export default async function PublicPropertyPage({
   const primaryImageUrl = prop.images?.[0] ?? null
   const primaryImagePath = prop.image_paths?.[0] ?? null
   const galleryItems = (prop.images ?? prop.image_paths ?? []).slice(0, 5)
+  const isPremium = site.settings?.theme === "premium"
 
   const addressLine =
     prop.address?.neighborhood || prop.address?.city || prop.address?.state
@@ -63,9 +64,9 @@ export default async function PublicPropertyPage({
         </div>
       </div>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="overflow-hidden rounded-3xl border bg-white/85 shadow-sm">
-          <div className="aspect-[16/10] bg-muted">
+      <section className={`mt-6 grid gap-6 ${isPremium ? "lg:grid-cols-[1.28fr_0.72fr]" : "lg:grid-cols-[1.2fr_0.8fr]"}`}>
+        <div className={`overflow-hidden border bg-white/85 shadow-sm ${isPremium ? "rounded-[2rem]" : "rounded-3xl"}`}>
+          <div className={`bg-muted ${isPremium ? "aspect-[16/9]" : "aspect-[16/10]"}`}>
             {(prop.images?.[0] || prop.image_paths?.[0]) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -81,9 +82,9 @@ export default async function PublicPropertyPage({
             ) : null}
           </div>
           {((prop.images && prop.images.length > 1) || (prop.image_paths && prop.image_paths.length > 1)) ? (
-            <div className="grid grid-cols-5 gap-2 p-3">
+            <div className={`grid grid-cols-5 gap-2 ${isPremium ? "p-4" : "p-3"}`}>
               {galleryItems.map((src, index) => (
-                <div key={`${src}-${index}`} className="aspect-square overflow-hidden rounded-xl bg-muted">
+                <div key={`${src}-${index}`} className={`aspect-square overflow-hidden bg-muted ${isPremium ? "rounded-2xl" : "rounded-xl"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={resolveMediaPathUrl("properties", prop.image_paths?.[index]) ?? resolveMediaUrl(src) ?? src}
@@ -96,8 +97,8 @@ export default async function PublicPropertyPage({
           ) : null}
         </div>
 
-        <aside className="rounded-3xl border bg-white/85 p-6 shadow-sm">
-          <div className="text-2xl font-semibold leading-tight">{prop.title}</div>
+        <aside className={`border bg-white/85 shadow-sm ${isPremium ? "rounded-[2rem] p-8" : "rounded-3xl p-6"}`}>
+          <div className={isPremium ? "text-3xl font-serif leading-tight" : "text-2xl font-semibold leading-tight"}>{prop.title}</div>
           <div className="mt-2 text-xs text-muted-foreground">
             Ref: {prop.public_code || prop.id.slice(0, 8)}
           </div>
@@ -107,24 +108,26 @@ export default async function PublicPropertyPage({
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-2 text-sm">
-            <div className="rounded-2xl border bg-white px-3 py-2">
+            <div className={`${isPremium ? "rounded-3xl" : "rounded-2xl"} border bg-white px-3 py-2`}>
               <div className="text-xs text-muted-foreground">Quartos</div>
               <div className="font-medium">{bedrooms ?? "-"}</div>
             </div>
-            <div className="rounded-2xl border bg-white px-3 py-2">
+            <div className={`${isPremium ? "rounded-3xl" : "rounded-2xl"} border bg-white px-3 py-2`}>
               <div className="text-xs text-muted-foreground">Banheiros</div>
               <div className="font-medium">{bathrooms ?? "-"}</div>
             </div>
-            <div className="rounded-2xl border bg-white px-3 py-2">
+            <div className={`${isPremium ? "rounded-3xl" : "rounded-2xl"} border bg-white px-3 py-2`}>
               <div className="text-xs text-muted-foreground">Área</div>
               <div className="font-medium">{area != null ? `${area} m²` : "-"}</div>
             </div>
           </div>
 
           <div className="mt-6">
-            <div className="text-sm font-medium">Pedir informações</div>
+            <div className="text-sm font-medium">{isPremium ? "Solicite atendimento" : "Pedir informações"}</div>
             <div className="mt-2 text-xs text-muted-foreground">
-              Seu contato vai para a inbox e o atendimento responde pelo WhatsApp.
+              {isPremium
+                ? "Seu contato entra no CRM e a equipe retorna com atendimento consultivo pelo WhatsApp."
+                : "Seu contato vai para a inbox e o atendimento responde pelo WhatsApp."}
             </div>
             <div className="mt-4">
               <SiteLeadForm siteSlug={site.slug} propertyId={prop.id} propertyTitle={prop.title} />
@@ -133,7 +136,7 @@ export default async function PublicPropertyPage({
         </aside>
       </section>
 
-      <section className="mt-8 rounded-3xl border bg-white/85 p-7 shadow-sm">
+      <section className={`mt-8 border bg-white/85 shadow-sm ${isPremium ? "rounded-[2rem] p-8" : "rounded-3xl p-7"}`}>
         <h2 className="text-lg font-semibold">Descrição</h2>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
           {prop.description || "Descrição não informada."}
