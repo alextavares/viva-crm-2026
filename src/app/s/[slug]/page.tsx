@@ -124,6 +124,7 @@ export default async function PublicSiteHome({
   const queryBase = { q, city, neighborhood, type, min_price: minPrice, max_price: maxPrice }
   const prevHref = buildHref(homeHref, { ...queryBase, page: page > 1 ? page - 1 : null })
   const nextHref = buildHref(homeHref, { ...queryBase, page: page + 1 })
+  const featuredSelection = list.slice(0, 3)
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
@@ -186,9 +187,166 @@ export default async function PublicSiteHome({
         </div>
       </section>
 
+      {isPremium ? (
+        <>
+          <section className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-[2rem] border bg-white/85 p-8 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Posicionamento
+              </p>
+              <h2 className="mt-3 text-3xl font-serif leading-tight">
+                Uma vitrine pensada para valorizar o imovel antes do primeiro atendimento.
+              </h2>
+              <p className="mt-3 max-w-prose text-sm text-muted-foreground">
+                O template Premium reforca imagem, contexto e percepcao de exclusividade para operacoes com ticket
+                maior ou marca mais consultiva.
+              </p>
+            </div>
+            <div className="rounded-[2rem] border bg-white/85 p-8 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Atendimento
+              </p>
+              <div className="mt-3 text-lg font-semibold">Fale com a equipe e receba uma selecao alinhada ao seu perfil.</div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                O contato entra no CRM e o time retorna com abordagem consultiva via WhatsApp, telefone ou e-mail.
+              </p>
+              <Link
+                href={`${homeHref === "/" ? "" : homeHref}/contact`}
+                className="mt-5 inline-flex rounded-full border px-4 py-2 text-sm font-medium"
+              >
+                Solicitar atendimento
+              </Link>
+            </div>
+          </section>
+
+          {featuredSelection.length > 0 ? (
+            <section className="mt-10">
+              <div className="mb-5 flex items-end justify-between gap-4">
+                <h2 className="text-2xl font-semibold">Selecao da semana</h2>
+                <a href="#buscar" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+                  Refinar busca
+                </a>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                <Link
+                  href={`${homeHref === "/" ? "" : homeHref}/imovel/${featuredSelection[0].id}`}
+                  className="group overflow-hidden rounded-[2rem] border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className="aspect-[16/9] bg-muted">
+                    {(() => {
+                      const heroSrc =
+                        resolveMediaPathUrl("properties", featuredSelection[0].thumbnail_path) ??
+                        resolveMediaUrl(featuredSelection[0].thumbnail_url) ??
+                        featuredSelection[0].thumbnail_url ??
+                        undefined
+                      return heroSrc ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={heroSrc}
+                          alt={featuredSelection[0].title}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        />
+                      ) : null
+                    })()}
+                  </div>
+                  <div className="p-6">
+                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Destaque Premium
+                    </div>
+                    <div className="mt-2 text-2xl font-serif">{featuredSelection[0].title}</div>
+                    <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                      {featuredSelection[0].neighborhood || featuredSelection[0].city
+                        ? `${featuredSelection[0].neighborhood || ""}${featuredSelection[0].city ? ` - ${featuredSelection[0].city}` : ""}`
+                        : "Localizacao a informar"}
+                    </div>
+                    <div className="mt-5 text-xl font-semibold" style={{ color: "var(--site-primary)" }}>
+                      {formatMoneyBRL(featuredSelection[0].price)}
+                    </div>
+                  </div>
+                </Link>
+                <div className="grid gap-4">
+                  {featuredSelection.slice(1).map((p) => {
+                    const thumbnailSrc =
+                      resolveMediaPathUrl("properties", p.thumbnail_path) ??
+                      resolveMediaUrl(p.thumbnail_url) ??
+                      p.thumbnail_url ??
+                      undefined
+
+                    return (
+                      <Link
+                        key={p.id}
+                        href={`${homeHref === "/" ? "" : homeHref}/imovel/${p.id}`}
+                        className="group overflow-hidden rounded-[2rem] border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
+                      >
+                        <div className="grid md:grid-cols-[0.46fr_0.54fr]">
+                          <div className="aspect-[4/3] bg-muted">
+                            {thumbnailSrc ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={thumbnailSrc}
+                                alt={p.title}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="p-5">
+                            <div className="line-clamp-2 text-base font-semibold">{p.title}</div>
+                            <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
+                              {p.neighborhood || p.city
+                                ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}`
+                                : "Localizacao a informar"}
+                            </div>
+                            <div className="mt-4 text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
+                              {formatMoneyBRL(p.price)}
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            </section>
+          ) : null}
+        </>
+      ) : (
+        <section className="mt-10 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-3xl border bg-white/85 p-6 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                "Atendimento rapido pelo WhatsApp",
+                "Busca objetiva por cidade e bairro",
+                "Lead entra direto no CRM da equipe",
+              ].map((item) => (
+                <div key={item} className="rounded-2xl border bg-muted/10 p-4 text-sm font-medium">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-3xl border bg-white/85 p-6 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Atalhos</div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <a href="#buscar" className="rounded-2xl border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30">
+                Comprar
+              </a>
+              <a href="#buscar" className="rounded-2xl border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30">
+                Alugar
+              </a>
+              <Link
+                href={`${homeHref === "/" ? "" : homeHref}/contact`}
+                className="rounded-2xl border px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/30"
+              >
+                Anunciar meu imovel
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="mt-10">
         <div className="flex items-end justify-between gap-4">
-          <h2 className="text-2xl font-semibold">Imóveis</h2>
+          <h2 className="text-2xl font-semibold">{isPremium ? "Portfolio de imoveis" : "Imoveis"}</h2>
           <div className="flex items-center gap-2">
             <Link
               href={prevHref}
