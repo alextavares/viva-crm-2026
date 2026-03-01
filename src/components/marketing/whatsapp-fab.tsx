@@ -18,16 +18,18 @@ export function WhatsAppFab({
       href={wa}
       target="_blank"
       rel="noopener noreferrer"
-      className="wa-wave-btn fixed z-50 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-emerald-400/20 hover:bg-emerald-300"
+      className="wa-wave-btn fixed z-50 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 hover:bg-emerald-400"
       style={{
-        ["--wa-wave-color" as string]: "rgb(52 211 153)",
+        ["--wa-wave-color" as string]: "rgba(255,255,255,0.98)",
+        ["--wa-wave-size" as string]: "28px",
+        ["--wa-wave-border-width" as string]: "2.5px",
         position: "fixed",
         right: "1.25rem",
         bottom: "1.25rem",
         left: "auto",
       }}
     >
-      <span className="relative z-10 grid h-7 w-7 place-items-center rounded-full bg-black/10">
+      <span className="relative z-10 grid h-8 w-8 place-items-center rounded-full bg-white text-emerald-600 shadow-sm">
         <WhatsAppWave />
         <WhatsAppIcon />
       </span>
