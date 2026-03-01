@@ -98,6 +98,14 @@ export default async function PublicPropertyPage({
         </div>
 
         <aside className={`border bg-white/85 shadow-sm ${isPremium ? "rounded-[2rem] p-8" : "rounded-3xl p-6"}`}>
+          <div
+            className={`inline-flex items-center border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+              isPremium ? "rounded-full" : "rounded-2xl"
+            }`}
+            style={{ borderColor: "color-mix(in srgb, var(--site-primary) 18%, transparent)", color: "var(--site-primary)" }}
+          >
+            {isPremium ? "Atendimento consultivo" : "Resposta rapida"}
+          </div>
           <div className={isPremium ? "text-3xl font-serif leading-tight" : "text-2xl font-semibold leading-tight"}>{prop.title}</div>
           <div className="mt-2 text-xs text-muted-foreground">
             Ref: {prop.public_code || prop.id.slice(0, 8)}
@@ -122,15 +130,37 @@ export default async function PublicPropertyPage({
             </div>
           </div>
 
-          <div className="mt-6">
-            <div className="text-sm font-medium">{isPremium ? "Solicite atendimento" : "Pedir informações"}</div>
+          <div className={`mt-6 border bg-muted/10 ${isPremium ? "rounded-3xl p-5" : "rounded-2xl p-4"}`}>
+            <div className="text-sm font-semibold">{isPremium ? "Solicite atendimento" : "Pedir informacoes"}</div>
             <div className="mt-2 text-xs text-muted-foreground">
               {isPremium
                 ? "Seu contato entra no CRM e a equipe retorna com atendimento consultivo pelo WhatsApp."
                 : "Seu contato vai para a inbox e o atendimento responde pelo WhatsApp."}
             </div>
+            <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
+              {isPremium ? (
+                <>
+                  <div className="rounded-2xl border bg-white px-3 py-2">Retorno consultivo com contexto do imovel e proximos passos.</div>
+                  <div className="rounded-2xl border bg-white px-3 py-2">Contato centralizado no CRM para nao perder nenhum lead.</div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-2xl border bg-white px-3 py-2">WhatsApp como canal principal para acelerar o primeiro contato.</div>
+                  <div className="rounded-2xl border bg-white px-3 py-2">Lead cai direto no CRM para resposta rapida da equipe.</div>
+                </>
+              )}
+            </div>
             <div className="mt-4">
               <SiteLeadForm siteSlug={site.slug} propertyId={prop.id} propertyTitle={prop.title} />
+            </div>
+          </div>
+
+          <div className={`mt-4 border bg-white ${isPremium ? "rounded-3xl p-4" : "rounded-2xl p-3"}`}>
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">O que acontece depois</div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              {isPremium
+                ? "A equipe recebe seu interesse, revisa o contexto no CRM e retorna com atendimento personalizado."
+                : "Seu contato entra na fila do CRM e a equipe responde com mais agilidade pelo canal informado."}
             </div>
           </div>
         </aside>
