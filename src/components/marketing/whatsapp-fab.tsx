@@ -18,7 +18,7 @@ export function WhatsAppFab({
       href={wa}
       target="_blank"
       rel="noopener noreferrer"
-      className="wa-wave-btn fixed z-50 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-3 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 md:px-4"
+      className="wa-wave-btn fixed z-50 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-3 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 lg:px-4"
       style={{
         ["--wa-wave-color" as string]: "rgba(255,255,255,0.98)",
         ["--wa-wave-size" as string]: "28px",
@@ -33,7 +33,7 @@ export function WhatsAppFab({
         <WhatsAppWave />
         <WhatsAppIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
       </span>
-      <span className="relative z-10 hidden md:inline">WhatsApp</span>
+      <span className="relative z-10 hidden lg:inline">WhatsApp</span>
     </Link>
   )
 }
