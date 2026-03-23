@@ -49,7 +49,8 @@ async function main() {
     }
 
     // Generate XML
-    const xml = generateImovelwebXml(properties as CRMProperty[]);
+    const publisher = { name: 'Imobiliária Teste', email: 'contato@teste.com' };
+    const xml = generateImovelwebXml(properties as CRMProperty[], publisher);
 
     // Save to file
     const outputPath = path.resolve(process.cwd(), 'imovelweb-prod-test.xml');

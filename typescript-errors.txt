@@ -1,9 +1,43 @@
-src/components/settings/templates/template-form.tsx(33,9): error TS2322: Type 'Resolver<{ title: string; content: string; channel?: "email" | "whatsapp" | undefined; variables?: string[] | undefined; }, any, { title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }>' is not assignable to type 'Resolver<{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }, any, { title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }>'.
-  Types of parameters 'options' and 'options' are incompatible.
-    Type 'ResolverOptions<{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }>' is not assignable to type 'ResolverOptions<{ title: string; content: string; channel?: "email" | "whatsapp" | undefined; variables?: string[] | undefined; }>'.
-      Type '"email" | "whatsapp" | undefined' is not assignable to type '"email" | "whatsapp"'.
-        Type 'undefined' is not assignable to type '"email" | "whatsapp"'.
-src/components/settings/templates/template-form.tsx(103,51): error TS2345: Argument of type '(data: MessageTemplateFormValues) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues>'.
-  Types of parameters 'data' and 'data' are incompatible.
-    Type 'TFieldValues' is not assignable to type '{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }'.
-      Type 'FieldValues' is missing the following properties from type '{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }': title, content, channel, variables
+src/__tests__/contact-form.test.tsx(44,48): error TS2339: Property 'toBeInTheDocument' does not exist on type 'JestMatchers<HTMLElement>'.
+src/app/actions/contracts.ts(4,10): error TS2724: '"@/lib/types"' has no exported member named 'contractSchema'. Did you mean 'contactSchema'?
+src/app/actions/contracts.ts(4,31): error TS2305: Module '"@/lib/types"' has no exported member 'DealContract'.
+src/app/actions/proposals.ts(5,10): error TS2305: Module '"@/lib/types"' has no exported member 'proposalSchema'.
+src/components/contacts/contact-proposals.tsx(7,10): error TS2305: Module '"@/lib/types"' has no exported member 'DealProposal'.
+src/components/contacts/contacts-grid.tsx(244,33): error TS2322: Type '{ contactId: string; phone: string | null; status: string; onOptimisticUpdate: (newStatus: any) => void; onRevertUpdate: () => void; }' is not assignable to type 'IntrinsicAttributes & Props'.
+  Property 'onOptimisticUpdate' does not exist on type 'IntrinsicAttributes & Props'.
+src/components/contacts/contacts-grid.tsx(244,54): error TS7006: Parameter 'newStatus' implicitly has an 'any' type.
+src/components/contacts/contacts-grid.tsx(253,17): error TS2322: Type '{ contactId: string; onOptimisticDelete: () => void; onRevertDelete: () => void; }' is not assignable to type 'IntrinsicAttributes & ContactActionsProps'.
+  Property 'onOptimisticDelete' does not exist on type 'IntrinsicAttributes & ContactActionsProps'.
+src/components/contacts/contacts-list.tsx(174,17): error TS2322: Type '{ contactId: string; onOptimisticDelete: () => void; onRevertDelete: () => void; }' is not assignable to type 'IntrinsicAttributes & ContactActionsProps'.
+  Property 'onOptimisticDelete' does not exist on type 'IntrinsicAttributes & ContactActionsProps'.
+src/components/contacts/deal-stage-badge.tsx(3,10): error TS2305: Module '"@/lib/types"' has no exported member 'DEAL_STAGES'.
+src/components/contacts/deal-stage-badge.tsx(3,23): error TS2305: Module '"@/lib/types"' has no exported member 'DEAL_STAGE_LABELS'.
+src/components/contacts/deal-stage-badge.tsx(3,47): error TS2305: Module '"@/lib/types"' has no exported member 'DealStage'.
+src/components/contacts/kanban-actions-menu.tsx(13,10): error TS2305: Module '"@/lib/types"' has no exported member 'MessageTemplate'.
+src/components/contacts/proposal-form.tsx(33,10): error TS2305: Module '"@/lib/types"' has no exported member 'DealProposal'.
+src/components/contacts/proposal-form.tsx(33,24): error TS2305: Module '"@/lib/types"' has no exported member 'proposalSchema'.
+src/components/contacts/proposal-form.tsx(33,40): error TS2305: Module '"@/lib/types"' has no exported member 'ProposalFormValues'.
+src/components/contracts/contract-form.tsx(36,10): error TS2724: '"@/lib/types"' has no exported member named 'contractSchema'. Did you mean 'contactSchema'?
+src/components/contracts/contract-form.tsx(36,31): error TS2305: Module '"@/lib/types"' has no exported member 'DealContract'.
+src/components/dashboard/sales-funnel.tsx(3,10): error TS2305: Module '"@/lib/types"' has no exported member 'DEAL_STAGE_LABELS'.
+src/components/dashboard/sales-funnel.tsx(3,34): error TS2305: Module '"@/lib/types"' has no exported member 'DealStage'.
+src/components/properties/properties-grid.tsx(250,25): error TS2322: Type '{ propertyId: string; hideFromSite: boolean | null; onOptimisticToggle: (newState: any) => void; onRevertToggle: () => void; }' is not assignable to type 'IntrinsicAttributes & Props'.
+  Property 'onOptimisticToggle' does not exist on type 'IntrinsicAttributes & Props'.
+src/components/properties/properties-grid.tsx(250,46): error TS7006: Parameter 'newState' implicitly has an 'any' type.
+src/components/properties/properties-list.tsx(164,33): error TS2322: Type '{ propertyId: string; hideFromSite: boolean | null; onOptimisticToggle: (newState: any) => void; onRevertToggle: () => void; }' is not assignable to type 'IntrinsicAttributes & Props'.
+  Property 'onOptimisticToggle' does not exist on type 'IntrinsicAttributes & Props'.
+src/components/properties/properties-list.tsx(164,54): error TS7006: Parameter 'newState' implicitly has an 'any' type.
+src/components/public/public-home-hero.tsx(26,24): error TS2367: This comparison appears to be unintentional because the types 'SiteTheme | null | undefined' and '"trust_first"' have no overlap.
+src/components/public/public-home-hero.tsx(27,21): error TS2367: This comparison appears to be unintentional because the types 'SiteTheme | null | undefined' and '"compact_mobile"' have no overlap.
+src/components/public/public-trust-strip.tsx(13,40): error TS2322: Type '"trust_first"' is not assignable to type 'SiteTheme | null | undefined'.
+src/components/settings/templates/template-form.tsx(13,10): error TS2305: Module '"@/lib/types"' has no exported member 'messageTemplateSchema'.
+src/components/settings/templates/template-form.tsx(13,33): error TS2305: Module '"@/lib/types"' has no exported member 'MessageTemplateFormValues'.
+src/components/settings/templates/template-form.tsx(13,60): error TS2305: Module '"@/lib/types"' has no exported member 'MessageTemplate'.
+src/components/settings/templates/templates-client.tsx(9,10): error TS2305: Module '"@/lib/types"' has no exported member 'MessageTemplate'.
+src/lib/public-site/templates.ts(27,5): error TS2322: Type '"search_highlights"' is not assignable to type 'SiteTheme'.
+src/lib/public-site/templates.ts(51,5): error TS2322: Type '"trust_first"' is not assignable to type 'SiteTheme'.
+src/lib/public-site/templates.ts(63,5): error TS2322: Type '"compact_mobile"' is not assignable to type 'SiteTheme'.
+src/lib/public-site/theme.ts(9,19): error TS2367: This comparison appears to be unintentional because the types 'SiteTheme' and '"trust_first"' have no overlap.
+src/lib/public-site/theme.ts(10,16): error TS2367: This comparison appears to be unintentional because the types 'SiteTheme' and '"compact_mobile"' have no overlap.
+src/lib/public-site/theme.ts(11,25): error TS2367: This comparison appears to be unintentional because the types 'SiteTheme' and '"search_highlights"' have no overlap.
+src/lib/templates.ts(1,10): error TS2305: Module '"./types"' has no exported member 'MessageTemplate'.

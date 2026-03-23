@@ -19,6 +19,7 @@ Rooftop com vista panorâmica única para a serra do mar e natureza circundante.
       <QtdDormitorios>3</QtdDormitorios>
       <QtdBanheiros>4</QtdBanheiros>
       <AreaUtil>206</AreaUtil>
+      <AreaTotal>206</AreaTotal>
       <Cidade>sao sebastiao</Cidade>
       <Bairro>camburi</Bairro>
       <Endereco>Rua Papoula</Endereco>
@@ -126,6 +127,10 @@ Rooftop com vista panorâmica única para a serra do mar e natureza circundante.
           <Principal>0</Principal>
         </Foto>
       </Fotos>
+      <Publicador>
+        <Nome>Imobiliária Teste</Nome>
+        <Email>contato@teste.com</Email>
+      </Publicador>
     </Imovel>
     <Imovel>
       <CodigoImovel>V-598</CodigoImovel>
@@ -139,6 +144,7 @@ valor capa compra na obra abaixo do valor de mercado somente 3 unidades serão v
       <QtdDormitorios>3</QtdDormitorios>
       <QtdBanheiros>2</QtdBanheiros>
       <AreaUtil>93</AreaUtil>
+      <AreaTotal>93</AreaTotal>
       <Cidade>sao sebastiao</Cidade>
       <Bairro>boiçucanga</Bairro>
       <Endereco>cascalho</Endereco>
@@ -234,6 +240,10 @@ valor capa compra na obra abaixo do valor de mercado somente 3 unidades serão v
           <Principal>0</Principal>
         </Foto>
       </Fotos>
+      <Publicador>
+        <Nome>Imobiliária Teste</Nome>
+        <Email>contato@teste.com</Email>
+      </Publicador>
     </Imovel>
   </Imoveis>
 </Carga>

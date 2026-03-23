@@ -23,7 +23,7 @@ export async function GET(
     // 1. Get Organization
     const { data: org, error: orgError } = await supabase
         .from('organizations')
-        .select('id, name')
+        .select('id, name, slug')
         .eq('slug', slug)
         .single();
 
@@ -75,7 +75,11 @@ export async function GET(
         });
 
     // 5. Build XML
-    const xmlString = generateImovelwebXml(properties as CRMProperty[]);
+    const publisher = {
+        name: org.name,
+        email: `contato@${org.slug}.com.br` // Default generic email if none available
+    };
+    const xmlString = generateImovelwebXml(properties as CRMProperty[], publisher);
 
     return new Response(xmlString, {
         status: 200,

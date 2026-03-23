@@ -8,6 +8,8 @@ export type CRMProperty = {
     title: string;
     description: string | null;
     price: number | null;
+    condo_fee?: number | null;
+    iptu?: number | null;
     type: string | null; // apartment, house, land, commercial
     transaction_type?: string | null; // sale, rent, seasonal
     status: string | null; // available, sold, rented

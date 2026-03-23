@@ -44,7 +44,7 @@ function normalizeZip(zip?: string | null): string | null {
  * This is an approximation of their DataWeb/XML format which focuses
  * on Portuguese tags.
  */
-export function generateImovelwebXml(properties: CRMProperty[]): string {
+export function generateImovelwebXml(properties: CRMProperty[], publisher?: { name: string, email?: string, phone?: string }): string {
     const root = create({ version: '1.0', encoding: 'UTF-8' })
         .ele('Carga')
         .ele('Imoveis');
@@ -67,6 +67,9 @@ export function generateImovelwebXml(properties: CRMProperty[]): string {
             imovel.ele(isRental ? 'PrecoLocacao' : 'PrecoVenda').txt(prop.price.toString()).up();
         }
 
+        if (prop.condo_fee) imovel.ele('PrecoCondominio').txt(prop.condo_fee.toString()).up();
+        if (prop.iptu) imovel.ele('ValorIPTU').txt(prop.iptu.toString()).up();
+
         imovel.ele('SubTipoImovel').txt('Padrão').up(); // Generic default
         imovel.ele('TituloImovel').txt(prop.title).up();
         imovel.ele('Observacao').txt(prop.description || '').up();
@@ -77,7 +80,10 @@ export function generateImovelwebXml(properties: CRMProperty[]): string {
         if (features.suites) imovel.ele('QtdSuites').txt(features.suites.toString()).up();
         if (features.bathrooms) imovel.ele('QtdBanheiros').txt(features.bathrooms.toString()).up();
         if (features.garage) imovel.ele('QtdVagas').txt(features.garage.toString()).up();
-        if (features.area) imovel.ele('AreaUtil').txt(features.area.toString()).up();
+        if (features.area) {
+            imovel.ele('AreaUtil').txt(features.area.toString()).up();
+            imovel.ele('AreaTotal').txt(features.area.toString()).up(); // Imovelweb uses AreaTotal and AreaUtil
+        }
 
         // Location
         const address = prop.address || {};
@@ -99,6 +105,14 @@ export function generateImovelwebXml(properties: CRMProperty[]): string {
                 foto.up();
             });
             fotos.up(); // end Fotos
+        }
+
+        if (publisher) {
+            const pub = imovel.ele('Publicador');
+            pub.ele('Nome').txt(publisher.name).up();
+            if (publisher.email) pub.ele('Email').txt(publisher.email).up();
+            if (publisher.phone) pub.ele('Telefone').txt(publisher.phone).up();
+            pub.up(); // end Publicador
         }
 
         imovel.up(); // end Imovel
