@@ -215,6 +215,50 @@ export interface TeamAuditEvent {
     created_at: string
 }
 
+// ─── Contracts & Templates ───────────────────────────────────────────────────
+export interface DealContract {
+    id: string
+    organization_id: string
+    property_id?: string | null
+    contact_id?: string | null
+    amount: number
+    status: string
+    type: string
+    start_date?: string | null
+    end_date?: string | null
+    notes?: string | null
+    created_at?: string
+    updated_at?: string
+}
+
+export const contractSchema = z.object({
+    property_id: z.string().optional().or(z.literal("")),
+    contact_id: z.string().optional().or(z.literal("")),
+    amount: z.coerce.number().min(0).default(0),
+    type: z.string().default("sale"),
+    status: z.string().default("draft"),
+    start_date: z.string().optional().or(z.literal("")),
+    end_date: z.string().optional().or(z.literal("")),
+    notes: z.string().optional(),
+})
+
+export interface MessageTemplate {
+    id: string
+    organization_id: string
+    name: string
+    content: string
+    type: string
+    created_at?: string
+    updated_at?: string
+}
+
+export const messageTemplateSchema = z.object({
+    name: z.string().min(3),
+    content: z.string().min(5),
+    type: z.string().default("whatsapp"),
+})
+export type MessageTemplateFormValues = z.infer<typeof messageTemplateSchema>
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 /** Dropdown option used in appointment form selects */
 export interface SelectOption {
