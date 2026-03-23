@@ -1,0 +1,2 @@
+src/components/contracts/contract-form.tsx(164,72): error TS2322: Type '"sale" | "rent" | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { SeatCapacityAlert } from "@/components/team/seat-capacity-alert"
 import { getSeatCapacityAlert } from "@/lib/team/billing"
+import { displayEmptyForZero } from "@/lib/utils"
 
 type BillingResponse = {
   ok: boolean
@@ -154,7 +155,7 @@ export function BillingSeatsForm({ canManage }: { canManage: boolean }) {
               id="upgrade-limit"
               type="number"
               min={0}
-              value={upgradeLimit}
+              value={displayEmptyForZero(upgradeLimit)}
               onChange={(e) => setUpgradeLimit(e.target.value)}
               disabled={!canManage || submitting || loading}
             />
@@ -165,7 +166,7 @@ export function BillingSeatsForm({ canManage }: { canManage: boolean }) {
               id="unit-price-cents"
               type="number"
               min={0}
-              value={unitPriceCents}
+              value={displayEmptyForZero(unitPriceCents)}
               onChange={(e) => setUnitPriceCents(e.target.value)}
               disabled={!canManage || submitting || loading}
             />
@@ -196,7 +197,7 @@ export function BillingSeatsForm({ canManage }: { canManage: boolean }) {
               id="downgrade-limit"
               type="number"
               min={0}
-              value={downgradeLimit}
+              value={displayEmptyForZero(downgradeLimit)}
               onChange={(e) => setDowngradeLimit(e.target.value)}
               disabled={!canManage || submitting || loading}
             />

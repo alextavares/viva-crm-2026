@@ -38,7 +38,7 @@ const sidebarItems = [
         icon: Globe,
     },
     {
-        title: 'Agendamentos',
+        title: 'Agenda',
         href: '/appointments',
         icon: Calendar,
     },

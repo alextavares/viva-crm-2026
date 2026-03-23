@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { WhatsAppAddonUsageSnapshot } from "@/lib/types"
+import { displayEmptyForZero } from "@/lib/utils"
 
 type AddonSettings = {
   organization_id: string
@@ -350,7 +351,7 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
             type="number"
             min={0}
             max={1000000}
-            value={includedQuota}
+            value={displayEmptyForZero(includedQuota)}
             onChange={(e) => setIncludedQuota(toInt(e.target.value, 0, 0, 1000000))}
             disabled={!canManage || !tableReady || isSaving}
           />
@@ -363,7 +364,7 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
             min={0}
             max={999999}
             step="0.01"
-            value={overagePrice}
+            value={displayEmptyForZero(overagePrice)}
             onChange={(e) => setOveragePrice(toDecimal(e.target.value, 0, 0, 999999))}
             disabled={!canManage || !tableReady || isSaving}
           />

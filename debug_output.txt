@@ -1,0 +1,15 @@
+[dotenv@17.2.4] injecting env (3) from .env.local -- tip: ­ƒæÑ sync secrets across teammates & machines: https://dotenvx.com/ops
+Checking ALL organizations and site_settings for duplicates...
+Found 12 organizations.
+org bb9c5e0d-5d06-4d75-bfc7-16f49693a76b has 0 site_settings rows.
+org e6c74475-c144-4df6-8f47-231cc42fb2d8 has 1 site_settings rows.
+org demo-vivacrm has 1 site_settings rows.
+org 31ae997b-b938-404f-82a4-a0e1b1675e60 has 0 site_settings rows.
+org race-seat-1772135591559-4067 has 0 site_settings rows.
+org 30e65566-ec5c-4079-9736-e784a39051fc has 0 site_settings rows.
+org a2be644e-63b4-4e9b-8775-28108506c17d has 0 site_settings rows.
+org billing-apply-370e61a4 has 0 site_settings rows.
+org billing-block-1772136413337-b929 has 0 site_settings rows.
+org bc8a2753-3f89-475f-b4fa-d0efeab321fc has 0 site_settings rows.
+org e6f9a5b7-ecbe-42fd-a488-36366bc51300 has 0 site_settings rows.
+org d345e08e-bff2-4817-a58e-ae6694058c2f has 0 site_settings rows.

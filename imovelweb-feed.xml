@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Carga>
+  <Imoveis>
+    <Imovel>
+      <CodigoImovel>ZAP-001</CodigoImovel>
+      <TipoImovel>Casa</TipoImovel>
+      <Finalidade>Venda</Finalidade>
+      <PrecoVenda>1500000</PrecoVenda>
+      <SubTipoImovel>Padrão</SubTipoImovel>
+      <TituloImovel>Casa Espetacular Vista Mar</TituloImovel>
+      <Observacao>Linda casa com 3 suites e piscina com borda infinita. Ótima oportunidade de investimento.</Observacao>
+      <QtdDormitorios>3</QtdDormitorios>
+      <QtdSuites>3</QtdSuites>
+      <QtdBanheiros>4</QtdBanheiros>
+      <QtdVagas>2</QtdVagas>
+      <AreaUtil>350</AreaUtil>
+      <Fotos>
+        <Foto>
+          <URLArquivo>https://example.com/image1.jpg</URLArquivo>
+          <Principal>1</Principal>
+        </Foto>
+        <Foto>
+          <URLArquivo>https://example.com/image2.jpg</URLArquivo>
+          <Principal>0</Principal>
+        </Foto>
+      </Fotos>
+    </Imovel>
+  </Imoveis>
+</Carga>

@@ -1,0 +1,10 @@
+e2e/smoke-visual.spec.ts(4,33): error TS7006: Parameter 'page' implicitly has an 'any' type.
+e2e/smoke-visual.spec.ts(11,28): error TS7006: Parameter 'page' implicitly has an 'any' type.
+e2e/smoke-visual.spec.ts(11,34): error TS7006: Parameter 'templateName' implicitly has an 'any' type.
+scripts/run-test-webhooks.ts(1,16): error TS2300: Duplicate identifier 'test'.
+scripts/run-test-webhooks.ts(31,45): error TS18046: 'e' is of type 'unknown'.
+scripts/run-test-webhooks.ts(42,46): error TS18046: 'e' is of type 'unknown'.
+src/__tests__/contact-form.test.tsx(44,48): error TS2339: Property 'toBeInTheDocument' does not exist on type 'JestMatchers<HTMLElement>'.
+src/app/(dashboard)/reports/page.tsx(195,56): error TS2339: Property 'broker_id' does not exist on type '{ id: any; title: any; code: any; type: any; transaction_type: any; status: any; sale_price: any; rent_price: any; city: any; neighborhood: any; created_at: any; profiles: { full_name: any; }[]; }'.
+src/app/(dashboard)/reports/page.tsx(251,56): error TS2339: Property 'broker_id' does not exist on type '{ id: any; name: any; email: any; phone: any; type: any; status: any; deal_stage: any; city: any; created_at: any; profiles: { full_name: any; }[]; }'.
+src/components/appointments/appointments-grid.tsx(98,45): error TS2322: Type '{}' is not assignable to type 'ReactNode'.

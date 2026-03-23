@@ -29,6 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { type Contact, KANBAN_COLUMNS } from '@/lib/types'
+import { GripVertical } from 'lucide-react'
 
 interface LeadsKanbanProps {
     initialData: Contact[]
@@ -204,6 +205,8 @@ function KanbanCard({ contact, isOverlay }: { contact: Contact; isOverlay?: bool
         },
     })
 
+    const router = useRouter()
+
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
@@ -215,23 +218,38 @@ function KanbanCard({ contact, isOverlay }: { contact: Contact; isOverlay?: bool
             ref={setNodeRef}
             style={style}
             {...attributes}
-            {...listeners}
             data-testid={`kanban-card-${contact.id}`}
-            className={`touch-none ${isOverlay ? 'cursor-grabbing scale-105 rotate-2 shadow-xl' : 'cursor-grab'}`}
+            className={isOverlay ? 'cursor-grabbing scale-105 rotate-2 shadow-xl' : ''}
         >
-            <Card className="bg-background border shadow-sm hover:shadow-md transition-all">
+            <Card
+                className="bg-background border shadow-sm hover:shadow-md transition-all cursor-pointer"
+                onClick={() => {
+                    if (!isDragging) {
+                        router.push(`/contacts/${contact.id}`)
+                    }
+                }}
+            >
                 <CardContent className="p-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <Avatar className="h-8 w-8 shrink-0">
                                 <AvatarImage src={`https://ui-avatars.com/api/?name=${contact.name}&background=random`} />
                                 <AvatarFallback className="text-xs">{contact.name.slice(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
-                            <div>
+                            <div className="min-w-0">
                                 <h4 className="font-medium text-sm line-clamp-1">{contact.name}</h4>
                                 <p className="text-xs text-muted-foreground capitalize">{contact.type}</p>
                             </div>
                         </div>
+                        {/* Drag handle — only this area triggers drag */}
+                        <button
+                            {...listeners}
+                            className="touch-none cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted text-muted-foreground shrink-0"
+                            aria-label="Arrastar contato"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <GripVertical className="h-4 w-4" />
+                        </button>
                     </div>
 
                     {(contact.email || contact.phone) && (

@@ -163,6 +163,8 @@ export default async function ContactsPage({
   const domainFilter = domainFilterRaw.trim().toLowerCase()
   const baseRoute = scope === "site" ? "/contacts/site" : "/contacts"
 
+  const hasFilters = q !== "" || statusFilter !== "all" || originFilter !== "all" || domainFilterRaw !== "" || domainStateFilter !== "all" || withPhoneFilter !== "all"
+
   const start = (page - 1) * pageSize
   const end = start + pageSize - 1
 
@@ -452,7 +454,7 @@ export default async function ContactsPage({
           <p className="text-sm text-muted-foreground max-w-sm mb-4">
             Ajuste os filtros ou comece adicionando leads, proprietários ou clientes.
           </p>
-          {count === 0 && (
+          {count === 0 && !hasFilters && (
             <Link href="/contacts/new">
               <Button variant="outline">Cadastrar Primeiro Contato</Button>
             </Link>

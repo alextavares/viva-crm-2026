@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListingDataFeed>
+  <Header>
+    <Provider>VivaCRM</Provider>
+    <Email>suporte@vivacrm.com.br</Email>
+    <ContactName>VivaCRM Support</ContactName>
+    <PublishDate>2026-03-02T01:36:16.179Z</PublishDate>
+  </Header>
+  <Listings>
+    <Listing>
+      <ListingID>ZAP-001</ListingID>
+      <Title>Casa Espetacular Vista Mar</Title>
+      <Description>Linda casa com 3 suites e piscina com borda infinita. Ótima oportunidade de investimento.</Description>
+      <TransactionType>For Sale</TransactionType>
+      <Details>
+        <PropertyType>Casa</PropertyType>
+        <Bedrooms>3</Bedrooms>
+        <Bathrooms>4</Bathrooms>
+        <Suites>3</Suites>
+        <Garage>2</Garage>
+        <LivingArea>350</LivingArea>
+        <ListPrice>1500000</ListPrice>
+      </Details>
+      <Location>
+        <displayAddress>All</displayAddress>
+        <Address>Av Beira Mar</Address>
+        <Neighborhood>Praia Mansa</Neighborhood>
+        <City>Florianópolis</City>
+        <State>SC</State>
+        <PostalCode>88000-000</PostalCode>
+      </Location>
+      <Media>
+        <Item medium="image" primary="true">https://example.com/image1.jpg</Item>
+        <Item medium="image">https://example.com/image2.jpg</Item>
+      </Media>
+      <ContactInfo>
+        <Name>Atendimento</Name>
+      </ContactInfo>
+    </Listing>
+  </Listings>
+</ListingDataFeed>

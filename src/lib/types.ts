@@ -43,6 +43,7 @@ export type ContactFormValues = z.infer<typeof contactSchema>
 // ─── Property ────────────────────────────────────────────────────────────────
 export const PROPERTY_TYPES = ["apartment", "house", "land", "commercial"] as const
 export const PROPERTY_STATUSES = ["available", "sold", "rented"] as const
+export const PROPERTY_TRANSACTION_TYPES = ["sale", "rent", "seasonal"] as const
 
 export interface PropertyFeatures {
     bedrooms: number
@@ -74,6 +75,7 @@ export interface Property {
     description?: string | null
     price: number
     type: string
+    transaction_type?: string | null
     status: string
     features: PropertyFeatures
     address: PropertyAddress
@@ -91,6 +93,7 @@ export const propertySchema = z.object({
     description: z.string().optional(),
     price: z.coerce.number().min(1, "Preço deve ser maior que zero"),
     type: z.string().min(1, "Selecione o tipo do imóvel"),
+    transaction_type: z.string().default("sale"),
     status: z.string().default("available"),
     hide_from_site: z.boolean().optional().default(false),
     bedrooms: z.coerce.number().min(0).default(0),

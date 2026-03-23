@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building, Users, Calendar, Globe, Target } from "lucide-react"
+import Link from "next/link"
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
 import { WhatsAppOnboardingChecklist } from "@/components/dashboard/whatsapp-onboarding-checklist"
@@ -189,18 +190,20 @@ export default async function DashboardPage() {
             {isAdmin ? <WhatsAppOnboardingChecklist snapshot={whatsappOnboarding} /> : null}
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Imóveis Disponíveis</CardTitle>
-                        <Building className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{activeProperties}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Ativos na carteira
-                        </p>
-                    </CardContent>
-                </Card>
+                <Link href="/properties?status=available" className="group">
+                    <Card className="transition-shadow group-hover:shadow-md group-hover:border-primary/30">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Imóveis Disponíveis</CardTitle>
+                            <Building className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{activeProperties}</div>
+                            <p className="text-xs text-muted-foreground">
+                                Ativos na carteira
+                            </p>
+                        </CardContent>
+                    </Card>
+                </Link>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Leads Ativos</CardTitle>
@@ -213,18 +216,20 @@ export default async function DashboardPage() {
                         </p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Visitas Agendadas</CardTitle>
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{upcomingAppointments}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Próximos compromissos
-                        </p>
-                    </CardContent>
-                </Card>
+                <Link href="/appointments" className="group">
+                    <Card className="transition-shadow group-hover:shadow-md group-hover:border-primary/30">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Visitas Agendadas</CardTitle>
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{upcomingAppointments}</div>
+                            <p className="text-xs text-muted-foreground">
+                                Próximos compromissos
+                            </p>
+                        </CardContent>
+                    </Card>
+                </Link>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Leads do Site (7 dias)</CardTitle>
@@ -257,13 +262,13 @@ export default async function DashboardPage() {
                                         <div className="flex items-center justify-between text-sm">
                                             <span>Captações</span>
                                             <span className="font-medium">
-                                                {goalsSnapshot.current_captacoes}/{goalsSnapshot.target_captacoes}
+                                                {goalsSnapshot.current_captacoes ?? 0}/{goalsSnapshot.target_captacoes ?? 0}
                                             </span>
                                         </div>
                                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                                             <div
                                                 className="h-full rounded-full bg-primary transition-all"
-                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_captacoes_pct || 0))}%` }}
+                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_captacoes_pct ?? 0))}%` }}
                                             />
                                         </div>
                                     </div>
@@ -274,17 +279,17 @@ export default async function DashboardPage() {
                                         <div className="flex items-center justify-between text-sm">
                                             <span>Respostas rápidas</span>
                                             <span className="font-medium">
-                                                {goalsSnapshot.current_respostas}/{goalsSnapshot.target_respostas}
+                                                {goalsSnapshot.current_respostas ?? 0}/{goalsSnapshot.target_respostas ?? 0}
                                             </span>
                                         </div>
                                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                                             <div
                                                 className="h-full rounded-full bg-emerald-500 transition-all"
-                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_respostas_pct || 0))}%` }}
+                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_respostas_pct ?? 0))}%` }}
                                             />
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            SLA da resposta rápida: {goalsSnapshot.response_sla_minutes} min.
+                                            SLA da resposta rápida: {goalsSnapshot.response_sla_minutes ?? 15} min.
                                         </p>
                                     </div>
                                 ) : null}
@@ -300,7 +305,7 @@ export default async function DashboardPage() {
                                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                                             <div
                                                 className="h-full rounded-full bg-sky-500 transition-all"
-                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_visitas_pct || 0))}%` }}
+                                                style={{ width: `${Math.max(0, Math.min(100, goalsSnapshot.progress_visitas_pct ?? 0))}%` }}
                                             />
                                         </div>
                                     </div>

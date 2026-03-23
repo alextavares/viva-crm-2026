@@ -1,0 +1,9 @@
+src/components/settings/templates/template-form.tsx(33,9): error TS2322: Type 'Resolver<{ title: string; content: string; channel?: "email" | "whatsapp" | undefined; variables?: string[] | undefined; }, any, { title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }>' is not assignable to type 'Resolver<{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }, any, { title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }>' is not assignable to type 'ResolverOptions<{ title: string; content: string; channel?: "email" | "whatsapp" | undefined; variables?: string[] | undefined; }>'.
+      Type '"email" | "whatsapp" | undefined' is not assignable to type '"email" | "whatsapp"'.
+        Type 'undefined' is not assignable to type '"email" | "whatsapp"'.
+src/components/settings/templates/template-form.tsx(103,51): error TS2345: Argument of type '(data: MessageTemplateFormValues) => Promise<void>' is not assignable to parameter of type 'SubmitHandler<TFieldValues>'.
+  Types of parameters 'data' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type '{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }'.
+      Type 'FieldValues' is missing the following properties from type '{ title: string; content: string; channel: "email" | "whatsapp"; variables: string[]; }': title, content, channel, variables

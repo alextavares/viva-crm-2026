@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { displayEmptyForZero, parseNumberInput } from "@/lib/utils"
 
 type SettingsRow = {
   organization_id: string
@@ -112,8 +113,8 @@ export function LeadDistributionSettingsForm({ organizationId, canManage, tableR
             type="number"
             min={1}
             max={1440}
-            value={slaMinutes}
-            onChange={(e) => setSlaMinutes(Number(e.target.value))}
+            value={displayEmptyForZero(slaMinutes)}
+            onChange={(e) => setSlaMinutes(parseNumberInput(e.target.value))}
             disabled={!canManage || !tableReady}
           />
           <p className="text-xs text-muted-foreground">

@@ -1,0 +1,205 @@
+
+C:\codigos\imobi-crm-code49\src\app\(dashboard)\dashboard\page.tsx
+   15:10  warning  'Skeleton' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+  101:37  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\codigos\imobi-crm-code49\src\app\(dashboard)\dashboard\page.tsx:101:37
+   99 |
+  100 |     // Fetch stats in parallel
+> 101 |     const siteLeadsSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      |                                     ^^^^^^^^^^ Cannot call impure function
+  102 |     const todayStart = new Date()
+  103 |     todayStart.setHours(0, 0, 0, 0)
+  104 |     const todayEnd = new Date()                                                 react-hooks/purity
+  173:36  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\codigos\imobi-crm-code49\src\app\(dashboard)\dashboard\page.tsx:173:36
+  171 |     let slaOverdueCount = 0
+  172 |     if (slaMinutes > 0) {
+> 173 |         const slaCutoff = new Date(Date.now() - slaMinutes * 60 * 1000).toISOString()
+      |                                    ^^^^^^^^^^ Cannot call impure function
+  174 |         const { count } = await supabase
+  175 |             .from("contacts")
+  176 |             .select("id", { count: "exact", head: true })  react-hooks/purity
+  274:11  warning  'onboardingCollapsed' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+  402:66  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\app\(dashboard)\reports\page.tsx
+  195:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  251:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\app\api\cron\check-inactivity\route.ts
+  68:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  94:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\app\api\public\webhooks\[slug]\imovelweb\route.ts
+  60:18  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\codigos\imobi-crm-code49\src\app\api\public\webhooks\[slug]\zap\route.ts
+  62:18  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\codigos\imobi-crm-code49\src\components\appointments\appointment-quick-actions.tsx
+  26:11  warning  'supabase' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\codigos\imobi-crm-code49\src\components\contacts\property-match-sheet.tsx
+  64:38  warning  'contactId' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  72:9   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\codigos\imobi-crm-code49\src\components\contacts\property-match-sheet.tsx:72:9
+  70 |     useEffect(() => {
+  71 |         if (!open) return
+> 72 |         setLoading(true)
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  73 |
+  74 |         const fetchMatches = async () => {
+  75 |             let query = supabase  react-hooks/set-state-in-effect
+  95:26  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-explicit-any
+  96:29  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-explicit-any
+  97:27  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-explicit-any
+  97:35  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\components\contacts\proposal-form.tsx
+  33:60  warning  'PROPOSAL_STATUSES' is defined but never used  @typescript-eslint/no-unused-vars
+  58:50  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\components\contracts\contract-form.tsx
+  34:10  warning  'Textarea' is defined but never used      @typescript-eslint/no-unused-vars
+  59:50  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:46  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  64:50  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\monthly-comparison-table.tsx
+   26:52  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+   44:9   error  'formattedData' is never reassigned. Use 'const' instead                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   prefer-const
+   99:60  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\monthly-comparison-table.tsx:99:60
+   97 |                 </thead>
+   98 |                 <tbody>
+>  99 |                     {formattedData.captacao.length > 0 && <TableGroup title="Capta├º├úo" items={formattedData.captacao} />}
+      |                                                            ^^^^^^^^^^ This component is created during render
+  100 |                     {formattedData.vendas.length > 0 && <TableGroup title="Vendas" items={formattedData.vendas} />}
+  101 |                 </tbody>
+  102 |             </table>
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\monthly-comparison-table.tsx:64:24
+  62 |     }
+  63 |
+> 64 |     const TableGroup = ({ title, items }: { title: string, items: MonthlyMetric[] }) => {
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 65 |         if (!items || items.length === 0) return null;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 66 |         return (
+     ÔÇª
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |         )
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 85 |     }
+     | ^^^^^^ The component is created during render here
+  86 |
+  87 |     return (
+  88 |         <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">  react-hooks/static-components
+  100:58  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\monthly-comparison-table.tsx:100:58
+   98 |                 <tbody>
+   99 |                     {formattedData.captacao.length > 0 && <TableGroup title="Capta├º├úo" items={formattedData.captacao} />}
+> 100 |                     {formattedData.vendas.length > 0 && <TableGroup title="Vendas" items={formattedData.vendas} />}
+      |                                                          ^^^^^^^^^^ This component is created during render
+  101 |                 </tbody>
+  102 |             </table>
+  103 |         </div>
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\monthly-comparison-table.tsx:64:24
+  62 |     }
+  63 |
+> 64 |     const TableGroup = ({ title, items }: { title: string, items: MonthlyMetric[] }) => {
+     |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 65 |         if (!items || items.length === 0) return null;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 66 |         return (
+     ÔÇª
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 84 |         )
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 85 |     }
+     | ^^^^^^ The component is created during render here
+  86 |
+  87 |     return (
+  88 |         <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">             react-hooks/static-components
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\quick-notes.tsx
+  15:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\quick-notes.tsx:15:9
+  13 |
+  14 |     useEffect(() => {
+> 15 |         setIsClient(true)
+     |         ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  16 |         const savedNote = localStorage.getItem("imobi_quick_note")
+  17 |         if (savedNote) {
+  18 |             setNote(savedNote)  react-hooks/set-state-in-effect
+
+C:\codigos\imobi-crm-code49\src\components\dashboard\user-performance-card.tsx
+  14:66  warning  'lastAccess' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\codigos\imobi-crm-code49\src\components\layout\notifications-menu.tsx
+  56:44  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-explicit-any
+  61:9   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\codigos\imobi-crm-code49\src\components\layout\notifications-menu.tsx:61:9
+  59 |
+  60 |     useEffect(() => {
+> 61 |         fetchNotifications()
+     |         ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  62 |
+  63 |         // Realtime subscription
+  64 |         const channel = supabase  react-hooks/set-state-in-effect
+
+C:\codigos\imobi-crm-code49\src\components\properties\property-filters.tsx
+    8:10  warning  'ChevronDown' is defined but never used                   @typescript-eslint/no-unused-vars
+    8:23  warning  'ChevronUp' is defined but never used                     @typescript-eslint/no-unused-vars
+   22:12  warning  'purpose' is assigned a value but never used              @typescript-eslint/no-unused-vars
+  117:11  warning  'handlePurposeChange' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\codigos\imobi-crm-code49\src\components\properties\property-form.tsx
+  64:10  warning  'PropertySection' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\codigos\imobi-crm-code49\src\components\settings\templates\template-form.tsx
+  85:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\components\settings\templates\templates-client.tsx
+  46:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\codigos\imobi-crm-code49\src\lib\templates.ts
+  1:10  warning  'MessageTemplate' is defined but never used  @typescript-eslint/no-unused-vars
+
+Ô£û 40 problems (25 errors, 15 warnings)
+  1 error and 0 warnings potentially fixable with the `--fix` option.
+

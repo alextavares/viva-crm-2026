@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { displayEmptyForZero } from "@/lib/utils"
 
 type GoalSettings = {
   organization_id: string
@@ -386,7 +387,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             type="number"
             min={0}
             max={100000}
-            value={targetCaptacoes}
+            value={displayEmptyForZero(targetCaptacoes)}
             onChange={(e) => setTargetCaptacoes(toSafeInt(e.target.value, 0, 0, 100000))}
             disabled={!canManage || !tableReady || isSavingAny}
           />
@@ -399,7 +400,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             type="number"
             min={0}
             max={100000}
-            value={targetRespostas}
+            value={displayEmptyForZero(targetRespostas)}
             onChange={(e) => setTargetRespostas(toSafeInt(e.target.value, 0, 0, 100000))}
             disabled={!canManage || !tableReady || isSavingAny}
           />
@@ -412,7 +413,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             type="number"
             min={0}
             max={100000}
-            value={targetVisitas}
+            value={displayEmptyForZero(targetVisitas)}
             onChange={(e) => setTargetVisitas(toSafeInt(e.target.value, 0, 0, 100000))}
             disabled={!canManage || !tableReady || isSavingAny}
           />
@@ -427,7 +428,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             type="number"
             min={1}
             max={1440}
-            value={responseSlaMinutes}
+            value={displayEmptyForZero(responseSlaMinutes)}
             onChange={(e) => setResponseSlaMinutes(toSafeInt(e.target.value, 15, 1, 1440))}
             disabled={!canManage || !tableReady || isSavingAny}
           />
@@ -559,7 +560,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
                     type="number"
                     min={0}
                     max={100000}
-                    value={row.target_captacoes}
+                    value={displayEmptyForZero(row.target_captacoes)}
                     onChange={(e) => setRow(row.profile_id, { target_captacoes: e.target.value })}
                     disabled={!canManage || !tableReady || isSavingAny}
                     placeholder="Global"
@@ -572,7 +573,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
                     type="number"
                     min={0}
                     max={100000}
-                    value={row.target_respostas}
+                    value={displayEmptyForZero(row.target_respostas)}
                     onChange={(e) => setRow(row.profile_id, { target_respostas: e.target.value })}
                     disabled={!canManage || !tableReady || isSavingAny}
                     placeholder="Global"
@@ -585,7 +586,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
                     type="number"
                     min={0}
                     max={100000}
-                    value={row.target_visitas}
+                    value={displayEmptyForZero(row.target_visitas)}
                     onChange={(e) => setRow(row.profile_id, { target_visitas: e.target.value })}
                     disabled={!canManage || !tableReady || isSavingAny}
                     placeholder="Global"
@@ -598,7 +599,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
                     type="number"
                     min={1}
                     max={1440}
-                    value={row.response_sla_minutes}
+                    value={displayEmptyForZero(row.response_sla_minutes)}
                     onChange={(e) => setRow(row.profile_id, { response_sla_minutes: e.target.value })}
                     disabled={!canManage || !tableReady || isSavingAny}
                     placeholder="Global"

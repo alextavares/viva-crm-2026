@@ -159,7 +159,7 @@ export default async function AppointmentDetailsPage({
                                         </div>
                                     </div>
                                     <div>
-                                        <Link href={`/contacts?search=${appointment.contacts.name}`} className="text-sm text-blue-600 hover:underline">
+                                        <Link href={`/contacts/${appointment.contact_id}`} className="text-sm text-blue-600 hover:underline">
                                             Ver contato
                                         </Link>
                                     </div>

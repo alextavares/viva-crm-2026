@@ -1,0 +1,14 @@
+--- ALL ORGS ---
+- E2E Org | SLUG: bb9c5e0d-5d06-4d75-bfc7-16f49693a76b | ID: 47190e69-3c1b-4a48-9131-6a608d9b0c34
+- E2E Org | SLUG: e6c74475-c144-4df6-8f47-231cc42fb2d8 | ID: 280c2886-d5a3-4131-a8ba-297b5de96c1a
+- Minha Imobiliaria | SLUG: 31ae997b-b938-404f-82a4-a0e1b1675e60 | ID: c89a2a27-9fa1-4259-b51b-74b10c65a043
+- Race Seat Org 1772135591559 | SLUG: race-seat-1772135591559-4067 | ID: fbcde414-42cf-46bb-888a-0668b9013085
+- Minha Imobiliária | SLUG: 30e65566-ec5c-4079-9736-e784a39051fc | ID: 606a6f9a-58d0-41f5-9872-5ace68aecd39
+- Minha Imobiliária | SLUG: a2be644e-63b4-4e9b-8775-28108506c17d | ID: 6518b8d1-49df-48d0-a165-9f039942d2a0
+- Billing Test Apply Org | SLUG: billing-apply-370e61a4 | ID: 7f27e72a-232e-40c2-8e5a-5d4565d3f371
+- Billing Test Block Org | SLUG: billing-block-1772136413337-b929 | ID: e900808e-32fe-4434-b8c5-c8efa5ad3fd3
+- Minha Imobiliária | SLUG: bc8a2753-3f89-475f-b4fa-d0efeab321fc | ID: b2d66c43-40c7-4512-9af7-460d3b1cf249
+- Minha Imobiliária | SLUG: e6f9a5b7-ecbe-42fd-a488-36366bc51300 | ID: 0a71c849-fc2b-4da0-9c4e-17bcf9c837f5
+- Minha Imobiliária | SLUG: d345e08e-bff2-4817-a58e-ae6694058c2f | ID: 4914d97d-bbe7-49f8-a4f5-6ebe7a8d1a61
+- Demo VivaCRM | SLUG: demo-vivacrm | ID: 47a9c756-0ae1-4993-928b-fe871a2133a5
+- Minha Imobiliária | SLUG: eb1e90c3-f676-42c6-9bd5-7779b9675e93 | ID: 5a3c1256-19a5-46f0-b361-d41ab1b14164

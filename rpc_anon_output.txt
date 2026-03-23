@@ -1,0 +1,83 @@
+[dotenv@17.2.4] injecting env (3) from .env.local -- tip: ­ƒöä add secrets lifecycle management: https://dotenvx.com/ops
+Calling site_get_settings with anon key for slug: demo-vivacrm...
+RPC Success (anon): {
+  "slug": "demo-vivacrm",
+  "pages": [
+    {
+      "key": "about",
+      "title": "melhor crm",
+      "content": "maresias crm",
+      "updated_at": "2026-02-16T22:22:40.591+00:00"
+    },
+    {
+      "key": "contact",
+      "title": "Contato",
+      "content": "fadsfdsfdssda",
+      "updated_at": "2026-02-16T22:22:40.591+00:00"
+    },
+    {
+      "key": "lgpd",
+      "title": "LGPD",
+      "content": "dsdfsfsd update",
+      "updated_at": "2026-02-16T22:22:40.591+00:00"
+    }
+  ],
+  "banners": [
+    {
+      "id": "5fe5b5de-9c1e-4db9-8272-2d1865086a14",
+      "body": "testes banner hero",
+      "title": "teste banner hero",
+      "ends_at": null,
+      "variant": "destaque",
+      "link_url": null,
+      "priority": 10,
+      "image_url": "https://jmulrpejxckgjngarlub.supabase.co/storage/v1/object/public/site-assets/org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/banner-8bf050e3-b320-4434-924b-4d11f9007233.jpg",
+      "placement": "hero",
+      "starts_at": null,
+      "image_path": "org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/banner-8bf050e3-b320-4434-924b-4d11f9007233.jpg"
+    },
+    {
+      "id": "04be1a55-ed66-44f0-a6fc-2521f5642b80",
+      "body": "Site demo do template search-first. Foco total em convers├úo de leads.",
+      "title": "topbar",
+      "ends_at": null,
+      "variant": "compact",
+      "link_url": null,
+      "priority": 10,
+      "image_url": "https://jmulrpejxckgjngarlub.supabase.co/storage/v1/object/public/site-assets/org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/banner-727af90e-3e47-428d-9f93-dfac03d5fa90.jpg",
+      "placement": "topbar",
+      "starts_at": "2026-02-13T18:36:03.274008+00:00",
+      "image_path": "org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/banner-727af90e-3e47-428d-9f93-dfac03d5fa90.jpg"
+    },
+    {
+      "id": "306995c3-55ec-4e36-b4e9-a3e974b7d432",
+      "body": "Envie seu WhatsApp e receba o link de demonstra├º├úo e valores.",
+      "title": "Quer ver na pr├ítica?",
+      "ends_at": null,
+      "variant": "compact",
+      "link_url": null,
+      "priority": 5,
+      "image_url": "https://jmulrpejxckgjngarlub.supabase.co/storage/v1/object/public/site-assets/org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/banner-02b00ec3-1e04-4ef6-97fe-ffbea7787208.jpg",
+      "placement": "popup",
+      "starts_at": "2026-02-13T18:36:03.274008+00:00",
+      "image_path": "org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/banner-02b00ec3-1e04-4ef6-97fe-ffbea7787208.jpg"
+    }
+  ],
+  "settings": {
+    "email": "co8888nsstadsfsto@vivacrm.com.br",
+    "phone": "452221118888",
+    "theme": "search_first",
+    "logo_url": "https://jmulrpejxckgjngarlub.supabase.co/storage/v1/object/public/site-assets/org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/logo-6dc4e4b4-516a-4cbb-8494-ae24a47d231f.jpg",
+    "whatsapp": "+55 (11) 8888888887",
+    "logo_path": "org/47a9c756-0ae1-4993-928b-fe871a2133a5/site/logo-6dc4e4b4-516a-4cbb-8494-ae24a47d231f.jpg",
+    "brand_name": "Riviera Imoveis Update",
+    "meta_pixel_id": "123456789012345",
+    "primary_color": "#8B008B",
+    "secondary_color": "#FFFF00",
+    "ga4_measurement_id": "G-TEST1234",
+    "google_ads_conversion_id": "AW-123456789",
+    "google_site_verification": "google-site-verification-token-demo",
+    "google_ads_conversion_label": "AbCdEfGhIjKlMnOpQr",
+    "facebook_domain_verification": "facebook-domain-verification-token-demo"
+  }
+}
