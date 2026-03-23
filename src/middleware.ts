@@ -58,6 +58,11 @@ function slugFromPreviewHost(host: string) {
 }
 
 export async function middleware(request: NextRequest) {
+    const debugResponse = (res: NextResponse) => {
+        res.headers.set('x-middleware-debug', 'v2026-03-23-v1')
+        return res
+    }
+
     const forwardedHost = request.headers.get("x-forwarded-host")
     const hostHeader = request.headers.get("host")
     const host = normalizeHost(forwardedHost || hostHeader || "")
@@ -72,7 +77,7 @@ export async function middleware(request: NextRequest) {
         const url = request.nextUrl.clone()
         url.protocol = "https"
         url.host = appAlt
-        return NextResponse.redirect(url, 308)
+        return debugResponse(NextResponse.redirect(url, 308))
     }
 
     // For preview subdomains and customer domains, serve the public site with clean URLs (no /s/[slug] in the browser).
@@ -88,21 +93,21 @@ export async function middleware(request: NextRequest) {
                 const rest = pathname.slice(prefix.length) || "/"
                 const url = request.nextUrl.clone()
                 url.pathname = rest
-                return NextResponse.redirect(url)
+                return debugResponse(NextResponse.redirect(url))
             }
 
             // Do not rewrite Next/static, API, or host-aware robots endpoint.
             if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname === "/robots.txt") {
-                return NextResponse.next()
+                return debugResponse(NextResponse.next())
             }
 
             const url = request.nextUrl.clone()
             url.pathname = pathname === "/" ? prefix : `${prefix}${pathname}`
-            return NextResponse.rewrite(url)
+            return debugResponse(NextResponse.rewrite(url))
         }
     }
 
-    return await updateSession(request)
+    return debugResponse(await updateSession(request))
 }
 
 export const config = {
