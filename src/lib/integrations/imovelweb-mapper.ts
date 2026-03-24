@@ -71,8 +71,8 @@ export function generateImovelwebXml(properties: CRMProperty[], publisher?: { na
         if (prop.iptu) imovel.ele('ValorIPTU').txt(prop.iptu.toString()).up();
 
         imovel.ele('SubTipoImovel').txt('Padrão').up(); // Generic default
-        imovel.ele('TituloImovel').txt(prop.title).up();
-        imovel.ele('Observacao').txt(prop.description || '').up();
+        imovel.ele('TituloImovel').txt(prop.title || 'Imóvel').up();
+        imovel.ele('Observacao').txt(prop.description || 'Sem descrição').up();
 
         // Details
         const features = prop.features || {};
@@ -100,7 +100,7 @@ export function generateImovelwebXml(properties: CRMProperty[], publisher?: { na
             const fotos = imovel.ele('Fotos');
             prop.images.forEach((imgUrl, index) => {
                 const foto = fotos.ele('Foto');
-                foto.ele('URLArquivo').txt(imgUrl).up();
+                foto.ele('URLArquivo').txt(imgUrl || '').up();
                 foto.ele('Principal').txt(index === 0 ? '1' : '0').up();
                 foto.up();
             });
@@ -109,7 +109,7 @@ export function generateImovelwebXml(properties: CRMProperty[], publisher?: { na
 
         if (publisher) {
             const pub = imovel.ele('Publicador');
-            pub.ele('Nome').txt(publisher.name).up();
+            pub.ele('Nome').txt(publisher.name || 'Anunciante').up();
             if (publisher.email) pub.ele('Email').txt(publisher.email).up();
             if (publisher.phone) pub.ele('Telefone').txt(publisher.phone).up();
             pub.up(); // end Publicador
