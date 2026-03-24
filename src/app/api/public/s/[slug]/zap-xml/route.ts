@@ -4,13 +4,15 @@ import { generateZapXml, CRMProperty } from '@/lib/integrations/zap-mapper';
 
 // We need to use the Service Role key here to fetch data securely from the backend,
 // skipping RLS for this specific public feed generation (which has its own token auth).
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+export const dynamic = 'force-dynamic';
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
     const { slug } = await params;
     const searchParams = request.nextUrl.searchParams;
     const token = searchParams.get('token');
