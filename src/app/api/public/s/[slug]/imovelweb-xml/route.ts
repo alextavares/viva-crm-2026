@@ -9,85 +9,100 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    const { slug } = await params;
-    const searchParams = request.nextUrl.searchParams;
-    const token = searchParams.get('token');
+        if (!supabaseUrl || !supabaseServiceKey) {
+            console.error('[imovelweb-xml] Missing env vars:', {
+                hasUrl: !!supabaseUrl,
+                hasKey: !!supabaseServiceKey,
+            });
+            return new Response('Server misconfiguration: missing environment variables.', { status: 500 });
+        }
 
-    if (!token) {
-        return new Response('Missing token parameter.', { status: 401 });
-    }
+        const { slug } = await params;
+        const searchParams = request.nextUrl.searchParams;
+        const token = searchParams.get('token');
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        if (!token) {
+            return new Response('Missing token parameter.', { status: 401 });
+        }
 
-    // 1. Get Organization
-    const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('id, name, slug')
-        .eq('slug', slug)
-        .single();
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (orgError || !org) {
-        return new Response('Organization not found.', { status: 404 });
-    }
+        // 1. Get Organization
+        const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .select('id, name, slug')
+            .eq('slug', slug)
+            .single();
 
-    // 2. Validate Token
-    const { data: configRows, error: configError } = await supabase
-        .from('portal_integrations')
-        .select('config')
-        .eq('organization_id', org.id)
-        .eq('portal', 'imovelweb')
-        .single();
+        if (orgError || !org) {
+            console.error('[imovelweb-xml] Org lookup error:', orgError?.message, 'slug:', slug);
+            return new Response('Organization not found.', { status: 404 });
+        }
 
-    if (configError || !configRows || !configRows.config) {
-        return new Response('Portal integration not configured.', { status: 403 });
-    }
+        // 2. Validate Token
+        const { data: configRows, error: configError } = await supabase
+            .from('portal_integrations')
+            .select('config')
+            .eq('organization_id', org.id)
+            .eq('portal', 'imovelweb')
+            .single();
 
-    const config = configRows.config as Record<string, unknown>;
-    if (config.feed_token !== token) {
-        return new Response('Invalid token.', { status: 403 });
-    }
+        if (configError || !configRows || !configRows.config) {
+            console.error('[imovelweb-xml] Config lookup error:', configError?.message, 'org:', org.id);
+            return new Response('Portal integration not configured.', { status: 403 });
+        }
 
-    // 3. Fetch Properties
-    // The feed only exports properties explicitly enabled for portal publication.
-    const { data: properties, error: propertiesError } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('organization_id', org.id)
-        .eq('status', 'available')
-        .eq('publish_to_portals', true)
-        .eq('publish_imovelweb', true)
-        .or('hide_from_site.is.null,hide_from_site.eq.false');
+        const config = configRows.config as Record<string, unknown>;
+        if (config.feed_token !== token) {
+            return new Response('Invalid token.', { status: 403 });
+        }
 
-    if (propertiesError) {
-        console.error('Error fetching properties:', propertiesError);
-        return new Response('Internal error.', { status: 500 });
-    }
+        // 3. Fetch Properties
+        const { data: properties, error: propertiesError } = await supabase
+            .from('properties')
+            .select('*')
+            .eq('organization_id', org.id)
+            .eq('status', 'available')
+            .eq('publish_to_portals', true)
+            .eq('publish_imovelweb', true)
+            .or('hide_from_site.is.null,hide_from_site.eq.false');
 
-    // 4. Update Sync Timestamp (Background)
-    supabase
-        .from('portal_integrations')
-        .update({ last_sync_at: new Date().toISOString() })
-        .eq('organization_id', org.id)
-        .eq('portal', 'imovelweb')
-        .then(({ error }) => {
-            if (error) console.error('Failed to update last_sync_at', error);
+        if (propertiesError) {
+            console.error('[imovelweb-xml] Properties fetch error:', propertiesError.message);
+            return new Response('Internal error fetching properties.', { status: 500 });
+        }
+
+        // 4. Update Sync Timestamp (Background - fire and forget)
+        supabase
+            .from('portal_integrations')
+            .update({ last_sync_at: new Date().toISOString() })
+            .eq('organization_id', org.id)
+            .eq('portal', 'imovelweb')
+            .then(({ error }) => {
+                if (error) console.error('[imovelweb-xml] Failed to update last_sync_at:', error.message);
+            });
+
+        // 5. Build XML
+        const publisher = {
+            name: org.name || 'Anunciante',
+            email: `contato@${org.slug}.com.br`,
+        };
+        const xmlString = generateImovelwebXml(properties as CRMProperty[], publisher);
+
+        return new Response(xmlString, {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/xml; charset=utf-8',
+                'Cache-Control': 'no-store',
+            },
         });
-
-    // 5. Build XML
-    const publisher = {
-        name: org.name,
-        email: `contato@${org.slug}.com.br` // Default generic email if none available
-    };
-    const xmlString = generateImovelwebXml(properties as CRMProperty[], publisher);
-
-    return new Response(xmlString, {
-        status: 200,
-        headers: {
-            'Content-Type': 'application/xml; charset=utf-8',
-            'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400',
-        },
-    });
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[imovelweb-xml] Unhandled exception:', msg);
+        return new Response(`Internal server error: ${msg}`, { status: 500 });
+    }
 }
