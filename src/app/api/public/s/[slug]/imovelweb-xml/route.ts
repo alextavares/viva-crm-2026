@@ -87,11 +87,20 @@ export async function GET(
             });
 
         // 5. Build XML
-        const publisher = {
-            name: org.name || 'Anunciante',
-            email: `contato@${org.slug}.com.br`,
-        };
-        const xmlString = generateImovelwebXml(properties as CRMProperty[], publisher);
+        const xmlString = generateImovelwebXml(properties as CRMProperty[], {
+            codigoImobiliaria: typeof config.codigo_imobiliaria === 'string' ? config.codigo_imobiliaria : '',
+            emailUsuario: typeof config.email_usuario === 'string' ? config.email_usuario : '',
+            emailContato: typeof config.email_contato === 'string' ? config.email_contato : `contato@${org.slug}.com.br`,
+            nomeContato: typeof config.nome_contato === 'string' ? config.nome_contato : org.name || 'Anunciante',
+            telefoneContato: typeof config.telefone_contato === 'string' ? config.telefone_contato : '',
+            tipoPublicacao: typeof config.tipo_publicacao_default === 'string' ? config.tipo_publicacao_default : 'SIMPLE',
+            mostrarMapa:
+                typeof config.mostrar_mapa === 'string' || typeof config.mostrar_mapa === 'boolean'
+                    ? config.mostrar_mapa
+                    : undefined,
+            defaultLocalidadeId: typeof config.default_localidade_id === 'string' ? config.default_localidade_id : '',
+            localidadeMappingsRaw: typeof config.localidade_mappings_raw === 'string' ? config.localidade_mappings_raw : '',
+        });
 
         return new Response(xmlString, {
             status: 200,

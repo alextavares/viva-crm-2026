@@ -8,7 +8,8 @@
     "start": "next start -p 3015",
     "lint": "eslint",
     "test": "jest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "catalog:opennavent": "ts-node scripts/fetch-open-navent-catalog.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

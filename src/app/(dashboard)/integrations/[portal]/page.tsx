@@ -6,6 +6,7 @@ import Link from "next/link"
 import { PORTALS, PORTAL_LABEL, type PortalIntegrationRow, type PortalKey } from "@/lib/integrations"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 import { FeedTester } from "./feed-tester"
@@ -23,6 +24,22 @@ function asBool(v: FormDataEntryValue | null) {
 
 function pickStr(v: FormDataEntryValue | null, fallback = "") {
     return typeof v === "string" ? v : fallback
+}
+
+function buildFeedUrl(origin: string, portal: PortalKey, organizationSlug: string | null, feedToken: string) {
+    if (!feedToken) return ""
+
+    if (organizationSlug) {
+        if (portal === "imovelweb") {
+            return `${origin}/api/public/s/${organizationSlug}/imovelweb-xml?token=${feedToken}`
+        }
+
+        if (portal === "zap_vivareal") {
+            return `${origin}/api/public/s/${organizationSlug}/zap-xml?token=${feedToken}`
+        }
+    }
+
+    return `${origin}/api/feeds/${portal}/${feedToken}`
 }
 
 export default async function IntegrationPortalPage({
@@ -48,9 +65,18 @@ export default async function IntegrationPortalPage({
     const role = (profile?.role as string | null) ?? null
     const canManage = role === "owner" || role === "manager"
     const organizationId = profile?.organization_id ?? null
+    let organizationSlug: string | null = null
 
     let integration: PortalIntegrationRow | null = null
     if (organizationId) {
+        const { data: organization } = await supabase
+            .from("organizations")
+            .select("slug")
+            .eq("id", organizationId)
+            .maybeSingle()
+
+        organizationSlug = organization?.slug ?? null
+
         const { data } = await supabase
             .from("portal_integrations")
             .select("*")
@@ -64,11 +90,28 @@ export default async function IntegrationPortalPage({
     const exportEnabled = Boolean(config["export_enabled"])
     const feedToken = typeof config["feed_token"] === "string" ? (config["feed_token"] as string) : ""
     const origin = await getOrigin()
-    const feedUrl = feedToken ? `${origin}/api/feeds/${portal}/${feedToken}` : ""
+    const feedUrl = buildFeedUrl(origin, portal as PortalKey, organizationSlug, feedToken)
 
     const assignment = (config["lead_assignment"] as string | undefined) ?? "by_property"
     const assignmentFallback = (config["lead_assignment_fallback"] as string | undefined) ?? "owner_manager"
     const slaMinutes = Number(config["sla_minutes"] ?? 15)
+    const codigoImobiliaria = typeof config["codigo_imobiliaria"] === "string" ? (config["codigo_imobiliaria"] as string) : ""
+    const tipoPublicacaoDefault = typeof config["tipo_publicacao_default"] === "string" ? (config["tipo_publicacao_default"] as string) : "SIMPLE"
+    const defaultLocalidadeId = typeof config["default_localidade_id"] === "string" ? (config["default_localidade_id"] as string) : ""
+    const nomeContato = typeof config["nome_contato"] === "string" ? (config["nome_contato"] as string) : ""
+    const emailContato = typeof config["email_contato"] === "string" ? (config["email_contato"] as string) : ""
+    const telefoneContato = typeof config["telefone_contato"] === "string" ? (config["telefone_contato"] as string) : ""
+    const mostrarMapaConfig = config["mostrar_mapa"]
+    const mostrarMapa =
+        typeof mostrarMapaConfig === "string"
+            ? mostrarMapaConfig.toUpperCase() === "EXATO"
+                ? "EXACTO"
+                : (mostrarMapaConfig as string)
+            : mostrarMapaConfig === true
+                ? "EXACTO"
+                : "NO"
+    const localidadeMappingsRaw =
+        typeof config["localidade_mappings_raw"] === "string" ? (config["localidade_mappings_raw"] as string) : ""
 
     async function saveAction(formData: FormData) {
         "use server"
@@ -100,6 +143,19 @@ export default async function IntegrationPortalPage({
         const leadAssignment = pickStr(formData.get("lead_assignment"), "by_property")
         const leadAssignmentFallback = pickStr(formData.get("lead_assignment_fallback"), "owner_manager")
         const slaMinutes = Number(pickStr(formData.get("sla_minutes"), "15"))
+        const codigoImobiliaria = pickStr(formData.get("codigo_imobiliaria"))
+        const tipoPublicacaoDefault = pickStr(formData.get("tipo_publicacao_default"), "SIMPLE").toUpperCase()
+        const defaultLocalidadeId = pickStr(formData.get("default_localidade_id"))
+        const nomeContato = pickStr(formData.get("nome_contato"))
+        const emailContato = pickStr(formData.get("email_contato"))
+        const telefoneContato = pickStr(formData.get("telefone_contato"))
+        const mostrarMapaRaw = pickStr(formData.get("mostrar_mapa"), "NO").toUpperCase()
+        const normalizedMostrarMapa = mostrarMapaRaw === "EXATO" ? "EXACTO" : mostrarMapaRaw
+        const mostrarMapa =
+            normalizedMostrarMapa === "EXACTO" || normalizedMostrarMapa === "APROXIMADO" || normalizedMostrarMapa === "NO"
+                ? normalizedMostrarMapa
+                : "NO"
+        const localidadeMappingsRaw = pickStr(formData.get("localidade_mappings_raw"))
 
         // Token used to serve a public feed URL for portals. Treat as secret-like.
         const existingFeedToken = pickStr(formData.get("existing_feed_token"))
@@ -116,6 +172,14 @@ export default async function IntegrationPortalPage({
             lead_assignment: leadAssignment,
             lead_assignment_fallback: leadAssignmentFallback,
             sla_minutes: Number.isFinite(slaMinutes) ? slaMinutes : 15,
+            codigo_imobiliaria: codigoImobiliaria,
+            tipo_publicacao_default: tipoPublicacaoDefault,
+            default_localidade_id: defaultLocalidadeId,
+            nome_contato: nomeContato,
+            email_contato: emailContato,
+            telefone_contato: telefoneContato,
+            mostrar_mapa: mostrarMapa,
+            localidade_mappings_raw: localidadeMappingsRaw,
         }
 
         const now = new Date().toISOString()
@@ -222,6 +286,92 @@ export default async function IntegrationPortalPage({
                                     </div>
                                 </div>
                             </div>
+
+                            {portal === "imovelweb" ? (
+                                <div className="space-y-3 rounded-md border p-3">
+                                    <div>
+                                        <div className="font-medium">Configuração OpenNavent</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Esses campos alimentam o XML oficial exigido pelo Imovelweb.
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="codigo_imobiliaria">Código da imobiliária</Label>
+                                            <Input id="codigo_imobiliaria" name="codigo_imobiliaria" defaultValue={codigoImobiliaria} disabled={!canManage} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="tipo_publicacao_default">Tipo de publicação padrão</Label>
+                                            <select
+                                                id="tipo_publicacao_default"
+                                                name="tipo_publicacao_default"
+                                                defaultValue={tipoPublicacaoDefault}
+                                                disabled={!canManage}
+                                                className="border-input bg-transparent w-full rounded-md border px-3 py-2 text-sm"
+                                            >
+                                                <option value="SIMPLE">Simple</option>
+                                                <option value="DESTACADO">Destacado</option>
+                                                <option value="HOME">Home</option>
+                                                <option value="GRATIS">Gratis</option>
+                                                <option value="ALQUILER_SIMPLE">Alquiler Simple</option>
+                                                <option value="EXCLUSIVE">Exclusive</option>
+                                                <option value="EXCLUSIVE_II">Exclusive II</option>
+                                                <option value="DESARROLLOS_HOME">Desarrollos Home</option>
+                                                <option value="DESARROLLOS_DESTACADO">Desarrollos Destacado</option>
+                                                <option value="DESARROLLOS_SIMPLE">Desarrollos Simple</option>
+                                                <option value="DESARROLLOS_GRATIS">Desarrollos Gratis</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="default_localidade_id">ID de localidade padrão</Label>
+                                            <Input id="default_localidade_id" name="default_localidade_id" defaultValue={defaultLocalidadeId} disabled={!canManage} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="mostrar_mapa">Mostrar mapa</Label>
+                                            <select
+                                                id="mostrar_mapa"
+                                                name="mostrar_mapa"
+                                                defaultValue={mostrarMapa}
+                                                disabled={!canManage}
+                                                className="border-input bg-transparent w-full rounded-md border px-3 py-2 text-sm"
+                                            >
+                                                <option value="NO">Não mostrar</option>
+                                                <option value="EXACTO">Exato</option>
+                                                <option value="APROXIMADO">Aproximado</option>
+                                            </select>
+                                            <div className="text-xs text-muted-foreground">
+                                                Valores oficiais do OpenNavent: <code>NO</code>, <code>EXACTO</code> e <code>APROXIMADO</code>. A documentação também cita <code>EXATO</code> como alias.
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="nome_contato">Nome do contato</Label>
+                                            <Input id="nome_contato" name="nome_contato" defaultValue={nomeContato} disabled={!canManage} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="email_contato">Email do contato</Label>
+                                            <Input id="email_contato" name="email_contato" type="email" defaultValue={emailContato} disabled={!canManage} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm" htmlFor="telefone_contato">Telefone do contato</Label>
+                                            <Input id="telefone_contato" name="telefone_contato" defaultValue={telefoneContato} disabled={!canManage} />
+                                        </div>
+                                        <div className="space-y-2 md:col-span-2">
+                                            <Label className="text-sm" htmlFor="localidade_mappings_raw">Mapa de localidade por cidade/UF</Label>
+                                            <Textarea
+                                                id="localidade_mappings_raw"
+                                                name="localidade_mappings_raw"
+                                                defaultValue={localidadeMappingsRaw}
+                                                disabled={!canManage}
+                                                className="min-h-[130px] font-mono text-xs"
+                                            />
+                                            <div className="text-xs text-muted-foreground">
+                                                Uma linha por cidade ou bairro no formato <code>UF|Cidade=ID</code> ou <code>UF|Cidade|Bairro=ID</code>. Exemplo: <code>SP|São Sebastião|Maresias=V1-D-499784</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
 
                             {canManage ? <FeedTester feedUrl={feedUrl} portal={portal} /> : null}
 

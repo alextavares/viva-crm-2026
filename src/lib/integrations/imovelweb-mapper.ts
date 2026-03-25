@@ -1,122 +1,218 @@
-import { create } from 'xmlbuilder2';
-import { CRMProperty } from './zap-mapper';
+import { create, type XMLBuilder } from "xmlbuilder2"
+import { CRMProperty } from "./zap-mapper"
+import {
+  buildImovelwebCharacteristics,
+  resolveImovelwebPropertyType,
+  type CharacteristicValue,
+} from "./imovelweb-catalog"
+import { getAddressLocalidadeName, resolveMappedLocalidadeId } from "./imovelweb-localidade"
 
-// Maps CRM internal property types to Imovelweb WSDL Types
-export function mapImovelwebPropertyType(crmType: string | null): string {
-    switch (crmType) {
-        case 'apartment':
-            return 'Apartamento';
-        case 'house':
-            return 'Casa';
-        case 'condominium_house':
-            return 'Casa de Condominio';
-        case 'land':
-            return 'Terreno'; // Imovelweb prefers Terreno over Lote/Terreno often
-        case 'commercial':
-            return 'Comercial';
-        case 'commercial_space':
-            return 'Comercial';
-        default:
-            return 'Outro'; // Fallback
-    }
+export type ImovelwebFeedConfig = {
+  codigoImobiliaria?: string
+  emailUsuario?: string
+  emailContato?: string
+  nomeContato?: string
+  telefoneContato?: string
+  tipoPublicacao?: string
+  mostrarMapa?: string | boolean
+  defaultLocalidadeId?: string
+  localidadeMappingsRaw?: string
 }
 
-function mapImovelwebFinalidade(transactionType?: string | null): string {
-    if (transactionType === 'rent' || transactionType === 'seasonal') {
-        return 'Aluguel';
-    }
-    return 'Venda';
-}
-
-function normalizeState(state?: string | null): string | null {
-    if (!state) return null;
-    return state.trim().toUpperCase();
+function formatDataModification(value: Date): string {
+  return String(value.getTime())
 }
 
 function normalizeZip(zip?: string | null): string | null {
-    if (!zip) return null;
-    const digits = zip.replace(/\D/g, '');
-    return digits || null;
+  if (!zip) return null
+  const digits = zip.replace(/\D/g, "")
+  if (digits.length === 8) return `${digits.slice(0, 5)}-${digits.slice(5)}`
+  return digits || null
 }
 
-/**
- * Generates the Imovelweb XML string for a list of properties.
- * This is an approximation of their DataWeb/XML format which focuses
- * on Portuguese tags.
- */
-export function generateImovelwebXml(properties: CRMProperty[], publisher?: { name: string, email?: string, phone?: string }): string {
-    const root = create({ version: '1.0', encoding: 'UTF-8' })
-        .ele('Carga')
-        .ele('Imoveis');
+function normalizePhone(phone?: string | null): string {
+  if (!phone) return ""
+  return phone.replace(/[^\d+]/g, "").trim()
+}
 
-    properties.forEach((prop) => {
-        const listingId = prop.public_code || prop.id;
-        const imovel = root.ele('Imovel');
+function resolveOperation(transactionType?: string | null): string {
+  if (transactionType === "rent" || transactionType === "seasonal") {
+    return "ALUGUEL"
+  }
+  return "VENTA"
+}
 
-        imovel.ele('CodigoImovel').txt(listingId).up();
-        imovel.ele('TipoImovel').txt(mapImovelwebPropertyType(prop.type)).up();
+function normalizePublicationType(value?: string | null): string {
+  const normalized = value?.trim().toUpperCase()
+  if (
+    normalized === "SIMPLE" ||
+    normalized === "DESTACADO" ||
+    normalized === "HOME" ||
+    normalized === "GRATIS" ||
+    normalized === "ALQUILER_SIMPLE" ||
+    normalized === "EXCLUSIVE" ||
+    normalized === "EXCLUSIVE_II" ||
+    normalized === "DESARROLLOS_HOME" ||
+    normalized === "DESARROLLOS_DESTACADO" ||
+    normalized === "DESARROLLOS_SIMPLE" ||
+    normalized === "DESARROLLOS_GRATIS"
+  ) {
+    return normalized
+  }
+  return "SIMPLE"
+}
 
-        // Most Imovelweb feeds use Finalidade: Venda ou Aluguel
-        imovel.ele('Finalidade').txt(mapImovelwebFinalidade(prop.transaction_type)).up();
+function resolveMapVisibility(config?: ImovelwebFeedConfig, property?: CRMProperty): string {
+  if (typeof config?.mostrarMapa === "string") {
+    const normalized = config.mostrarMapa.trim().toUpperCase()
+    if (normalized === "NO" || normalized === "APROXIMADO" || normalized === "EXACTO") {
+      return normalized
+    }
+    if (normalized === "EXATO") {
+      return "EXACTO"
+    }
+  }
 
-        const isRental = prop.transaction_type === 'rent' || prop.transaction_type === 'seasonal';
+  if (typeof config?.mostrarMapa === "boolean") {
+    return config.mostrarMapa ? "EXACTO" : "NO"
+  }
+  const lat = property?.address?.lat
+  const lng = property?.address?.lng
+  return lat != null && lng != null ? "EXACTO" : "NO"
+}
 
-        // The current CRM stores a single price field, so we map it to the
-        // correct tag based on the declared transaction type.
-        if (prop.price) {
-            imovel.ele(isRental ? 'PrecoLocacao' : 'PrecoVenda').txt(prop.price.toString()).up();
-        }
+function resolveLocalidadeId(property: CRMProperty, config?: ImovelwebFeedConfig): string {
+  const address = property.address ?? {}
+  const mappedLocalidadeId = resolveMappedLocalidadeId(address, config?.localidadeMappingsRaw)
+  if (mappedLocalidadeId) return mappedLocalidadeId
 
-        if (prop.condo_fee) imovel.ele('PrecoCondominio').txt(prop.condo_fee.toString()).up();
-        if (prop.iptu) imovel.ele('ValorIPTU').txt(prop.iptu.toString()).up();
+  return config?.defaultLocalidadeId?.trim() ?? ""
+}
 
-        imovel.ele('SubTipoImovel').txt('Padrão').up(); // Generic default
-        imovel.ele('TituloImovel').txt(prop.title || 'Imóvel').up();
-        imovel.ele('Observacao').txt(prop.description || 'Sem descrição').up();
+function resolveLocalidadeName(property: CRMProperty): string {
+  return getAddressLocalidadeName(property.address)
+}
 
-        // Details
-        const features = prop.features || {};
-        if (features.bedrooms) imovel.ele('QtdDormitorios').txt(features.bedrooms.toString()).up();
-        if (features.suites) imovel.ele('QtdSuites').txt(features.suites.toString()).up();
-        if (features.bathrooms) imovel.ele('QtdBanheiros').txt(features.bathrooms.toString()).up();
-        if (features.garage) imovel.ele('QtdVagas').txt(features.garage.toString()).up();
-        if (features.area) {
-            imovel.ele('AreaUtil').txt(features.area.toString()).up();
-            imovel.ele('AreaTotal').txt(features.area.toString()).up(); // Imovelweb uses AreaTotal and AreaUtil
-        }
+function buildAddressLine(property: CRMProperty): string {
+  const address = property.address ?? {}
+  const street = typeof address.street === "string" ? address.street.trim() : ""
+  const number = typeof address.number === "string" ? address.number.trim() : ""
 
-        // Location
-        const address = prop.address || {};
-        if (address.city) imovel.ele('Cidade').txt(address.city).up();
-        if (address.neighborhood) imovel.ele('Bairro').txt(address.neighborhood).up();
-        if (address.street) imovel.ele('Endereco').txt(address.street).up();
-        const normalizedZip = normalizeZip(address.zip);
-        const normalizedState = normalizeState(address.state);
-        if (normalizedZip) imovel.ele('CEP').txt(normalizedZip).up();
-        if (normalizedState) imovel.ele('UF').txt(normalizedState).up();
+  if (street && number) return `${street}, ${number}`
+  if (address.full_address && typeof address.full_address === "string") return address.full_address.trim()
+  return street
+}
 
-        // Media (Images) - Imovelweb standard typically expects <Fotos><Foto><URLFoto>
-        if (prop.images && prop.images.length > 0) {
-            const fotos = imovel.ele('Fotos');
-            prop.images.forEach((imgUrl, index) => {
-                const foto = fotos.ele('Foto');
-                foto.ele('URLArquivo').txt(imgUrl || '').up();
-                foto.ele('Principal').txt(index === 0 ? '1' : '0').up();
-                foto.up();
-            });
-            fotos.up(); // end Fotos
-        }
+function buildCharacteristics(property: CRMProperty): CharacteristicValue[] {
+  return buildImovelwebCharacteristics(property)
+}
 
-        if (publisher) {
-            const pub = imovel.ele('Publicador');
-            pub.ele('Nome').txt(publisher.name || 'Anunciante').up();
-            if (publisher.email) pub.ele('Email').txt(publisher.email).up();
-            if (publisher.phone) pub.ele('Telefone').txt(publisher.phone).up();
-            pub.up(); // end Publicador
-        }
+function appendCharacteristics(parent: XMLBuilder, property: CRMProperty) {
+  const characteristics = buildCharacteristics(property)
+  const node = parent.ele("caracteristicas")
 
-        imovel.up(); // end Imovel
-    });
+  characteristics.forEach((item) => {
+    const characteristic = node.ele("caracteristica")
+    characteristic.ele("id").txt(item.id).up()
+    characteristic.ele("nome").txt(item.nome).up()
+    if (item.valor) characteristic.ele("valor").txt(item.valor).up()
+    if (item.idValor) characteristic.ele("idValor").txt(item.idValor).up()
+    characteristic.up()
+  })
 
-    return root.end({ prettyPrint: true });
+  node.up()
+}
+
+function appendImages(parent: XMLBuilder, property: CRMProperty) {
+  const validImages = (property.images ?? []).filter((image): image is string => typeof image === "string" && image.trim().length > 0)
+  if (!validImages.length) return
+
+  const images = parent.ele("multimidia").ele("imagens")
+  validImages.forEach((url) => {
+    images.ele("imagem").ele("urlImagem").txt(url.trim()).up().up()
+  })
+  images.up().up()
+}
+
+function appendPublisher(parent: XMLBuilder, config?: ImovelwebFeedConfig) {
+  const publisher = parent.ele("publicador")
+  publisher.ele("codigoImobiliaria").txt(config?.codigoImobiliaria?.trim() ?? "").up()
+  publisher.ele("emailUsuario").txt(config?.emailUsuario?.trim() ?? "").up()
+  publisher.ele("emailContato").txt(config?.emailContato?.trim() ?? "").up()
+  publisher.ele("nomeContato").txt(config?.nomeContato?.trim() ?? "").up()
+  publisher.ele("telefoneContato").txt(normalizePhone(config?.telefoneContato)).up()
+  publisher.up()
+}
+
+function appendLocation(parent: XMLBuilder, property: CRMProperty, config?: ImovelwebFeedConfig) {
+  const address = property.address ?? {}
+  const location = parent.ele("localizacao")
+  const lat = address.lat
+  const lng = address.lng
+  const localidadeId = resolveLocalidadeId(property, config)
+  const localidadeName = resolveLocalidadeName(property)
+
+  location.ele("mostrarMapa").txt(resolveMapVisibility(config, property)).up()
+  location.ele("endereco").txt(buildAddressLine(property)).up()
+  location.ele("codigoPostal").txt(normalizeZip(address.zip) ?? "").up()
+  location.ele("latitude").txt(typeof lat === "number" && Number.isFinite(lat) ? String(lat) : "").up()
+  location.ele("longitude").txt(typeof lng === "number" && Number.isFinite(lng) ? String(lng) : "").up()
+  if (localidadeName) {
+    location.ele("localidade").txt(localidadeName).up()
+  }
+  if (localidadeId) {
+    location.ele("idLocalidade").txt(localidadeId).up()
+  }
+  location.up()
+}
+
+export function generateImovelwebXml(properties: CRMProperty[], config?: ImovelwebFeedConfig): string {
+  const publishedAt = new Date()
+  const root = create({ version: "1.0", encoding: "UTF-8" }).ele("OpenNavent")
+  root.ele("dataModificacao").dat(formatDataModification(publishedAt)).up()
+  const listings = root.ele("Imoveis")
+
+  properties.forEach((property) => {
+    const listingId = property.public_code?.trim() || property.id
+    const propertyType = resolveImovelwebPropertyType(property.type)
+    const listing = listings.ele("Imovel")
+
+    listing.ele("codigoAnuncio").txt(listingId).up()
+    listing.ele("codigoReferencia").txt(listingId).up()
+
+    const typeNode = listing.ele("tipoPropriedade")
+    typeNode.ele("idTipo").txt(propertyType.idTipo).up()
+    typeNode.ele("tipo").txt(propertyType.tipo).up()
+    typeNode.ele("idSubTipo").txt(propertyType.idSubTipo).up()
+    typeNode.ele("subTipo").txt(propertyType.subTipo).up()
+    typeNode.up()
+
+    appendCharacteristics(listing, property)
+
+    if (property.title?.trim()) {
+      listing.ele("titulo").txt(property.title.trim()).up()
+    }
+
+    const description = property.description?.trim() || "Sem descrição"
+    listing.ele("descricao").dat(description).up()
+
+    const prices = listing.ele("precos").ele("preco")
+    prices.ele("quantidade").txt(property.price != null ? String(property.price) : "").up()
+    prices.ele("moeda").txt("BRL").up()
+    prices.ele("operacao").txt(resolveOperation(property.transaction_type)).up()
+    prices.up().up()
+
+    appendImages(listing, property)
+    appendPublisher(listing, config)
+    appendLocation(listing, property, config)
+
+    const publication = listing.ele("publicacao")
+    publication.ele("tipoPublicacao").dat(normalizePublicationType(config?.tipoPublicacao)).up()
+    publication.up()
+
+    listing.up()
+  })
+
+  listings.up()
+  return root.end({ prettyPrint: true })
 }
