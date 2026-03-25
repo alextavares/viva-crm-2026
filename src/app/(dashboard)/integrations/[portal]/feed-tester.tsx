@@ -100,7 +100,9 @@ export function FeedTester({ feedUrl, portal }: { feedUrl: string; portal: strin
       const isXmlish =
         txt.trimStart().startsWith("<?xml") ||
         txt.trimStart().startsWith("<feed") ||
-        txt.includes("<properties>")
+        txt.includes("<properties>") ||
+        txt.includes("<OpenNavent>") ||
+        txt.includes("<Imoveis>")
 
       if (!isXmlish) {
         setState({
@@ -120,7 +122,34 @@ export function FeedTester({ feedUrl, portal }: { feedUrl: string; portal: strin
       }
 
       const propertiesCount =
-        countOccurrences(txt, "<property ") + countOccurrences(txt, "<property>")
+        countOccurrences(txt, "<property ") +
+        countOccurrences(txt, "<property>") +
+        countOccurrences(txt, "<Imovel>")
+
+      const isImovelweb = portal === "imovelweb"
+      if (isImovelweb) {
+        const hasOpenNaventRoot = txt.includes("<OpenNavent>")
+        const hasListingCode = txt.includes("<codigoAnuncio>")
+        const hasPropertyType = txt.includes("<tipoPropriedade>")
+        const hasPrices = txt.includes("<precos>")
+
+        if (!hasOpenNaventRoot || !hasListingCode || !hasPropertyType || !hasPrices) {
+          setState({
+            kind: "error",
+            message:
+              "O XML respondeu, mas não está no formato OpenNavent esperado pelo Imovelweb.",
+          })
+          await logRun({
+            portal,
+            status: "error",
+            properties_count: propertiesCount,
+            bytes,
+            content_type: contentType,
+            message: "XML não está no formato OpenNavent",
+          })
+          return
+        }
+      }
 
       const previewLines = txt.split(/\r?\n/).slice(0, 30).join("\n")
       setState({

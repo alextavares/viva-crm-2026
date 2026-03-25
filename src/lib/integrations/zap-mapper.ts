@@ -22,14 +22,20 @@ export type CRMProperty = {
         [key: string]: unknown;
     } | null;
     address: {
+        full_address?: string | null;
         street?: string | null;
+        number?: string | null;
         neighborhood?: string | null;
         city?: string | null;
         state?: string | null;
         zip?: string | null;
+        country?: string | null;
+        lat?: number | null;
+        lng?: number | null;
         [key: string]: unknown;
     } | null;
     images: string[];
+    image_paths?: string[] | null;
     created_at: string;
     updated_at: string;
 };

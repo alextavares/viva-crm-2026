@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { PORTALS, PORTAL_LABEL, type PortalIntegrationIssueRow, type PortalIntegrationRunRow, type PortalKey } from "@/lib/integrations"
 import { revalidatePath } from "next/cache"
+import { getImovelwebReadinessIssues } from "@/lib/integrations/imovelweb-readiness"
 
 type PropertyRowForIssues = {
     id: string
@@ -15,8 +16,109 @@ type PropertyRowForIssues = {
     status: string | null
     images: string[] | null
     image_paths: string[] | null
-    address: { city?: string | null; state?: string | null; zip?: string | null } | null
+    address: {
+        city?: string | null
+        state?: string | null
+        zip?: string | null
+        street?: string | null
+        full_address?: string | null
+        neighborhood?: string | null
+        lat?: number | null
+        lng?: number | null
+        [key: string]: unknown
+    } | null
     hide_from_site: boolean | null
+}
+
+function buildGenericPortalIssues(
+    properties: PropertyRowForIssues[],
+    organizationId: string,
+    portalKey: PortalKey,
+    options: {
+        sendOnlyAvailable: boolean
+        sendOnlyWithPhotos: boolean
+    }
+): Omit<PortalIntegrationIssueRow, "id" | "created_at" | "resolved_at" | "is_resolved">[] {
+    const nextIssues: Omit<PortalIntegrationIssueRow, "id" | "created_at" | "resolved_at" | "is_resolved">[] = []
+    const hiddenCount = properties.filter((property) => property.hide_from_site === true).length
+    const visibleRows = properties.filter((property) => property.hide_from_site !== true)
+
+    if (visibleRows.length === 0 && hiddenCount > 0) {
+        nextIssues.push({
+            organization_id: organizationId,
+            portal: portalKey,
+            property_id: null,
+            severity: "warning",
+            issue_key: "all_hidden",
+            message_human: "Nenhum imóvel entra no feed porque todos estão como “Oculto do site”. Publique em massa para liberar a exportação.",
+            message_technical: null,
+        })
+    }
+
+    for (const property of visibleRows) {
+        const title = String(property.title ?? "")
+        const description = property.description == null ? "" : String(property.description)
+        const price = Number(property.price ?? 0)
+        const type = String(property.type ?? "")
+        const status = String(property.status ?? "")
+        const images = Array.isArray(property.images) ? property.images : []
+        const imagePaths = Array.isArray(property.image_paths) ? property.image_paths : []
+        const photosCount = Math.max(images.length, imagePaths.length)
+        const city = property.address?.city ?? ""
+        const state = property.address?.state ?? ""
+        const zip = property.address?.zip ?? ""
+        const propertyLabel = title || "Sem título"
+
+        const add = (severity: "blocker" | "warning", key: string, message: string) => {
+            nextIssues.push({
+                organization_id: organizationId,
+                portal: portalKey,
+                property_id: String(property.id),
+                severity,
+                issue_key: key,
+                message_human: message,
+                message_technical: null,
+            })
+        }
+
+        if (options.sendOnlyAvailable && status !== "available") {
+            add("warning", "excluded_status", `O imóvel '${propertyLabel}' não entra no feed porque está com status '${status}'.`)
+        }
+
+        if (options.sendOnlyWithPhotos && photosCount === 0) {
+            add("blocker", "missing_photos", `O imóvel '${propertyLabel}' não pode ser publicado porque não tem fotos.`)
+        }
+
+        if (!Number.isFinite(price) || price <= 0) {
+            add("blocker", "missing_price", `O imóvel '${propertyLabel}' não pode ser publicado porque falta o preço.`)
+        }
+
+        if (!type || type.trim().length === 0) {
+            add("blocker", "missing_type", `O imóvel '${propertyLabel}' não pode ser publicado porque falta o tipo do imóvel.`)
+        }
+
+        if (!city || !state) {
+            add("blocker", "missing_city_state", `O imóvel '${propertyLabel}' não pode ser publicado porque falta Cidade e/ou UF no endereço.`)
+        }
+
+        if (!title || title.trim().length < 5) {
+            add("blocker", "short_title", `O imóvel '${propertyLabel}' não pode ser publicado porque o título é muito curto.`)
+        }
+
+        if (!description || description.trim().length === 0) {
+            add("warning", "missing_description", `O imóvel '${propertyLabel}' está sem descrição. Isso pode reduzir a performance no portal.`)
+        }
+
+        if (photosCount > 0 && photosCount < 3) {
+            add("warning", "few_photos", `O imóvel '${propertyLabel}' tem poucas fotos. Recomendado adicionar pelo menos 3.`)
+        }
+
+        if (!zip) {
+            add("warning", "missing_zip", `O imóvel '${propertyLabel}' está sem CEP. Isso pode reduzir a qualidade do anúncio.`)
+        }
+    }
+
+    return nextIssues
 }
 
 export default async function IntegrationPortalReportPage({
@@ -108,83 +210,24 @@ export default async function IntegrationPortalReportPage({
 
         const rows = (properties as PropertyRowForIssues[] | null) ?? []
 
-        const nextIssues: Omit<PortalIntegrationIssueRow, "id" | "created_at" | "resolved_at" | "is_resolved">[] = []
-
-        const hiddenCount = rows.filter((p) => p.hide_from_site === true).length
-        const visibleRows = rows.filter((p) => p.hide_from_site !== true)
-
-        if (visibleRows.length === 0 && hiddenCount > 0) {
-            nextIssues.push({
-                organization_id: organizationId,
-                portal: portalKey,
-                property_id: null,
-                severity: "warning",
-                issue_key: "all_hidden",
-                message_human: "Nenhum imóvel entra no feed porque todos estão como “Oculto do site”. Publique em massa para liberar a exportação.",
-                message_technical: null,
-            })
-        }
-
-        for (const p of visibleRows) {
-            const title = String(p.title ?? "")
-            const desc = p.description == null ? "" : String(p.description)
-            const price = Number(p.price ?? 0)
-            const type = String(p.type ?? "")
-            const status = String(p.status ?? "")
-            const images = Array.isArray(p.images) ? p.images : []
-            const imagePaths = Array.isArray(p.image_paths) ? p.image_paths : []
-            const photosCount = Math.max(images.length, imagePaths.length)
-            const city = p.address?.city ?? ""
-            const state = p.address?.state ?? ""
-            const zip = p.address?.zip ?? ""
-
-            const wouldBeExcludedByStatus = sendOnlyAvailable && status !== "available"
-            const wouldBeExcludedByPhotos = sendOnlyWithPhotos && photosCount === 0
-
-            const add = (severity: "blocker" | "warning", key: string, message: string) => {
-                nextIssues.push({
+        const nextIssues: Omit<PortalIntegrationIssueRow, "id" | "created_at" | "resolved_at" | "is_resolved">[] =
+            portalKey === "imovelweb"
+                ? getImovelwebReadinessIssues(rows, config, {
+                    sendOnlyAvailable,
+                    sendOnlyWithPhotos,
+                }).map((issue) => ({
                     organization_id: organizationId,
                     portal: portalKey,
-                    property_id: String(p.id),
-                    severity,
-                    issue_key: key,
-                    message_human: message,
+                    property_id: issue.propertyId,
+                    severity: issue.severity,
+                    issue_key: issue.issueKey,
+                    message_human: issue.messageHuman,
                     message_technical: null,
+                }))
+                : buildGenericPortalIssues(rows, organizationId, portalKey, {
+                    sendOnlyAvailable,
+                    sendOnlyWithPhotos,
                 })
-            }
-
-            if (wouldBeExcludedByStatus) {
-                add("warning", "excluded_status", `O imóvel '${title}' não entra no feed porque está com status '${status}'.`)
-            }
-            if (wouldBeExcludedByPhotos) {
-                add("blocker", "missing_photos", `O imóvel '${title}' não pode ser publicado porque não tem fotos.`)
-            }
-
-            if (!Number.isFinite(price) || price <= 0) {
-                add("blocker", "missing_price", `O imóvel '${title}' não pode ser publicado porque falta o preço.`)
-            }
-            if (!type || type.trim().length === 0) {
-                add("blocker", "missing_type", `O imóvel '${title}' não pode ser publicado porque falta o tipo do imóvel.`)
-            }
-            if (!city || !state) {
-                add("blocker", "missing_city_state", `O imóvel '${title}' não pode ser publicado porque falta Cidade e/ou UF no endereço.`)
-            }
-            if (!title || title.trim().length < 5) {
-                add("blocker", "short_title", `O imóvel '${title || "Sem título"}' não pode ser publicado porque o título é muito curto.`)
-            }
-
-            if (!desc || desc.trim().length === 0) {
-                add("warning", "missing_description", `O imóvel '${title}' está sem descrição. Isso pode reduzir a performance no portal.`)
-            }
-
-            if (photosCount > 0 && photosCount < 3) {
-                add("warning", "few_photos", `O imóvel '${title}' tem poucas fotos. Recomendado adicionar pelo menos 3.`)
-            }
-
-            if (!zip) {
-                add("warning", "missing_zip", `O imóvel '${title}' está sem CEP. Isso pode reduzir a qualidade do anúncio.`)
-            }
-        }
 
         // MVP: replace the set each time (simple + deterministic).
         await supabase
