@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AppointmentsCalendar } from '@/components/appointments/appointments-calendar'
 import { AppointmentsFiltersInstant } from '@/components/appointments/appointments-filters-instant'
+import { AppointmentsTabs, type AppointmentsTabValue } from '@/components/appointments/appointments-tabs'
 import { LayoutGrid, Calendar as CalendarIcon } from 'lucide-react'
 
 export default async function AppointmentsPage({
@@ -18,6 +19,25 @@ export default async function AppointmentsPage({
     const view = resolvedSearchParams?.view as string || 'list'
     const q = typeof resolvedSearchParams?.q === 'string' ? resolvedSearchParams.q.trim() : ''
     const statusFilter = typeof resolvedSearchParams?.status === 'string' ? resolvedSearchParams.status : 'all'
+    const rawTab = typeof resolvedSearchParams?.tab === 'string' ? resolvedSearchParams.tab : 'scheduled'
+    const tab: AppointmentsTabValue =
+        rawTab === 'scheduled' || rawTab === 'history' || rawTab === 'all' ? rawTab : 'scheduled'
+    const nowIso = new Date().toISOString()
+
+    const [scheduledCountResult, historyCountResult, allCountResult] = await Promise.all([
+        supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'scheduled')
+            .gte('date', nowIso),
+        supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true })
+            .or(`status.in.(completed,cancelled,no_show),date.lt.${nowIso}`),
+        supabase
+            .from('appointments')
+            .select('id', { count: 'exact', head: true }),
+    ])
 
     let query = supabase
         .from('appointments')
@@ -29,7 +49,15 @@ export default async function AppointmentsPage({
         `)
         .order('date', { ascending: true })
 
-    if (statusFilter !== 'all') {
+    if (statusFilter === 'all') {
+        if (tab === 'scheduled') {
+            query = query.eq('status', 'scheduled').gte('date', nowIso)
+        }
+
+        if (tab === 'history') {
+            query = query.or(`status.in.(completed,cancelled,no_show),date.lt.${nowIso}`)
+        }
+    } else {
         query = query.eq('status', statusFilter)
     }
 
@@ -62,6 +90,17 @@ export default async function AppointmentsPage({
         if (nextView !== 'list') params.set('view', nextView)
         if (q) params.set('q', q)
         if (statusFilter !== 'all') params.set('status', statusFilter)
+        if (tab !== 'scheduled') params.set('tab', tab)
+        const qs = params.toString()
+        return qs ? `/appointments?${qs}` : '/appointments'
+    }
+
+    const buildTabHref = (nextTab: AppointmentsTabValue) => {
+        const params = new URLSearchParams()
+        if (view !== 'list') params.set('view', view)
+        if (q) params.set('q', q)
+        if (statusFilter !== 'all') params.set('status', statusFilter)
+        if (nextTab !== 'scheduled') params.set('tab', nextTab)
         const qs = params.toString()
         return qs ? `/appointments?${qs}` : '/appointments'
     }
@@ -128,8 +167,18 @@ export default async function AppointmentsPage({
                 </div>
             </div>
 
+            <AppointmentsTabs
+                activeTab={tab}
+                counts={{
+                    scheduled: scheduledCountResult.count || 0,
+                    history: historyCountResult.count || 0,
+                    all: allCountResult.count || 0,
+                }}
+                buildHref={buildTabHref}
+            />
+
             <AppointmentsFiltersInstant
-                key={`${view}|${q}|${statusFilter}`}
+                key={`${view}|${q}|${statusFilter}|${tab}`}
                 baseRoute="/appointments"
                 view={view}
                 initialValues={{
