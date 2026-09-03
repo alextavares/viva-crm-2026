@@ -122,8 +122,13 @@ export function IntegrationPortalSettingsForm({
             Liga/desliga o conector e mantém as configurações salvas.
           </div>
         </div>
-        <input name="enabled" type="checkbox" defaultChecked={integrationStatus === "active" || integrationStatus === "enabled"} disabled={!canManage || isPending} />
+        <input name="enabled" type="checkbox" defaultChecked={integrationStatus === "active" || integrationStatus === "enabled"} disabled={!canManage || isPending || portal === "zap_vivareal"} />
       </div>
+      {portal === "zap_vivareal" ? (
+        <p className="text-xs font-medium text-amber-700">
+          Zap/VivaReal pausado: ativação indisponível até que um contrato de verificação seja autorizado.
+        </p>
+      ) : null}
       {rotatedSecrets ? (
         <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
           <p className="font-medium">Novas credenciais geradas — copie agora, elas não serão exibidas novamente.</p>

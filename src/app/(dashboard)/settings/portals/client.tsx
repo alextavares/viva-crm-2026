@@ -91,6 +91,7 @@ export default function PortalIntegrationsClient({
                 const isActive = isPortalIntegrationActive(integration?.status)
                 const isLoading = loadingId === portal.id
                 const rotated = lastSecrets[portal.id]
+                const isParked = portal.id === "zap_vivareal"
 
                 let feedUrl = ""
                 let webhookUrl = ""
@@ -112,6 +113,11 @@ export default function PortalIntegrationsClient({
                                         {portal.name}
                                     </CardTitle>
                                     <CardDescription className="pt-2">{portal.description}</CardDescription>
+                                    {isParked ? (
+                                        <p className="pt-1 text-xs font-medium text-amber-700">
+                                            Pausado: endpoints e ativação indisponíveis até que um contrato de verificação seja autorizado.
+                                        </p>
+                                    ) : null}
                                 </div>
                                 {isActive ? (
                                     <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700">Ativo</Badge>
@@ -207,7 +213,8 @@ export default function PortalIntegrationsClient({
                                     <Button
                                         variant="default"
                                         size="sm"
-                                        disabled={isLoading}
+                                        disabled={isLoading || isParked}
+                                        title={isParked ? "Zap/VivaReal pausado até que um contrato de verificação seja autorizado" : undefined}
                                         onClick={() => handleToggleStatus(portal.id, integration)}
                                     >
                                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}

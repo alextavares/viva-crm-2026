@@ -5,6 +5,7 @@ import { z } from "zod"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import {
+  canProvisionPortalCredentials,
   isPortalIntegrationActive,
   rotatePortalCredentials,
   stripSecretConfigKeys,
@@ -959,6 +960,14 @@ export async function togglePortalIntegration(input: {
 
         const isCurrentlyActive = isPortalIntegrationActive(existing?.status)
         const nextStatus = toCanonicalPortalStatus(!isCurrentlyActive)
+        // Zap parking: refuse enabling without a verifier contract; the
+        // existing row is left untouched.
+        if (nextStatus === "enabled" && !canProvisionPortalCredentials(parsed.data.portal)) {
+            return {
+                success: false,
+                error: "Zap/VivaReal está pausado até que um contrato canônico de verificação seja autorizado.",
+            }
+        }
         // Canonical credential boundary: enabling rotates distinct
         // feed/webhook secrets (returned once, never stored). Carried-over
         // config is stripped of any legacy secret keys.

@@ -128,3 +128,15 @@ views/RPCs incl. `claimed_job` composite). Private schema absent by design.
   bounded; no secrets; no PII logs).
 - P1: gaps 1–11 above (each needs a contract/product decision; slices left
   byte-identical except documented adapters).
+
+## Remediation 2 (final) — Zap safely parked
+
+- Zap XML feed + webhook → static 410 retired responses (no DB/secret
+  lookup, no PII logging).
+- `canProvisionPortalCredentials`: only `imovelweb` provisions/rotates;
+  Zap enable refused server-side (save + toggle leave rows untouched) and
+  disabled in both UIs with a visible parked note.
+- ImovelWeb still rotates/consumes distinct `feed_auth`/`webhook_auth`.
+- Residual `config.feed_token` reads: none (Zap bridge removed with the
+  endpoints). `CANONICAL CONTRACT GAP: zap feed/webhook verification RPC`
+  stands as the single missing decision for re-enabling Zap.

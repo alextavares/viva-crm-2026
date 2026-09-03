@@ -12,6 +12,7 @@ import {
 } from "@/lib/integrations"
 import { getImovelwebReadinessIssues } from "@/lib/integrations/imovelweb-readiness"
 import {
+  canProvisionPortalCredentials,
   rotatePortalCredentials,
   stripSecretConfigKeys,
   toCanonicalPortalStatus,
@@ -256,6 +257,15 @@ export async function savePortalIntegrationConfig(
     const normalizedMostrarMapaRaw = parsed.data.mostrarMapa.toUpperCase()
     const normalizedMostrarMapa = normalizedMostrarMapaRaw === "EXATO" ? "EXACTO" : normalizedMostrarMapaRaw
     const nextStatus = toCanonicalPortalStatus(parsed.data.enabled)
+
+    // Zap parking: no verifier contract exists, so enabling is refused
+    // instead of issuing secrets nothing consumes. Disabling still parks.
+    if (parsed.data.enabled && !canProvisionPortalCredentials(parsed.data.portal)) {
+      return {
+        success: false,
+        error: "Zap/VivaReal está pausado até que um contrato canônico de verificação seja autorizado.",
+      }
+    }
 
     // Canonical credential boundary: enabling (fresh or transition) rotates
     // distinct feed/webhook secrets via private.integration_credentials.

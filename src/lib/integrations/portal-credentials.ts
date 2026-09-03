@@ -20,6 +20,16 @@ export function portalCredentialProvider(portal: string): string {
   return portal === "zap_vivareal" ? "zap_vivareal" : portal
 }
 
+/**
+ * Provider gate: only portals with a canonical verifier may provision
+ * credentials. ImovelWeb verifies via api.imovelweb_feed/ingest; Zap has no
+ * verifier contract, so provisioning (and enabling) is refused — parking Zap
+ * instead of issuing secrets nothing consumes.
+ */
+export function canProvisionPortalCredentials(portal: string): boolean {
+  return portalCredentialProvider(portal) === "imovelweb"
+}
+
 const SECRET_CONFIG_KEYS = ["feed_token", "webhook_token", "access_token", "secret", "password"] as const
 
 /**
@@ -58,6 +68,12 @@ export async function rotatePortalCredentials(
   supabase: SupabaseClient,
   portal: string
 ): Promise<RotationResult> {
+  if (!canProvisionPortalCredentials(portal)) {
+    return {
+      ok: false,
+      error: "Zap/VivaReal está pausado até que um contrato canônico de verificação seja autorizado; nenhum segredo foi gerado.",
+    }
+  }
   const provider = portalCredentialProvider(portal)
 
   const { data: feed, error: feedError } = await supabase.rpc("rotate_integration_credential", {

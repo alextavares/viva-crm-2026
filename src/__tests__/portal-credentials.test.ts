@@ -1,4 +1,5 @@
 import {
+  canProvisionPortalCredentials,
   isPortalIntegrationActive,
   portalCredentialProvider,
   rotatePortalCredentials,
@@ -65,8 +66,20 @@ describe("canonical portal credential boundary", () => {
 
   it("surfaces rotation failures without persisting anything", async () => {
     const rpc = jest.fn().mockResolvedValue({ data: null, error: { message: "denied" } })
-    const result = await rotatePortalCredentials({ rpc } as never, "zap_vivareal")
+    const result = await rotatePortalCredentials({ rpc } as never, "imovelweb")
     expect(result).toEqual({ ok: false, error: "denied" })
     expect(rpc).toHaveBeenCalledTimes(1)
+  })
+
+  it("gates provisioning on a canonical verifier (imovelweb yes, zap parked)", () => {
+    expect(canProvisionPortalCredentials("imovelweb")).toBe(true)
+    expect(canProvisionPortalCredentials("zap_vivareal")).toBe(false)
+  })
+
+  it("refuses zap rotation before any RPC call", async () => {
+    const rpc = jest.fn()
+    const result = await rotatePortalCredentials({ rpc } as never, "zap_vivareal")
+    expect(result.ok).toBe(false)
+    expect(rpc).not.toHaveBeenCalled()
   })
 })
