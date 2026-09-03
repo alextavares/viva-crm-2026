@@ -78,7 +78,7 @@ export default async function AppointmentDetailsPage({
                     <CardContent className="space-y-4">
                         <div>
                             <span className="text-sm font-medium text-muted-foreground">Data e Hora</span>
-                            <p className="text-lg">{formatDate(appointment.date)}</p>
+                            <p className="text-lg">{formatDate(appointment.starts_at)}</p>
                         </div>
                         <div>
                             <span className="text-sm font-medium text-muted-foreground">Status</span>

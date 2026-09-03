@@ -35,8 +35,8 @@ export function AppointmentForm({ properties, contacts, initialData, defaultValu
     const defaultPropertyId = initialData?.property_id ?? defaultValues?.property_id ?? ""
     const defaultContactId = initialData?.contact_id ?? defaultValues?.contact_id ?? ""
     const defaultDate = initialData
-        ? new Date(initialData.date).toISOString().slice(0, 16)
-        : defaultValues?.date ?? ""
+        ? new Date(initialData.starts_at).toISOString().slice(0, 16)
+        : defaultValues?.starts_at ?? ""
     const defaultNotes = initialData?.notes ?? defaultValues?.notes ?? ""
     const defaultStatus = initialData?.status ?? defaultValues?.status ?? "scheduled"
     const resolvedDefaultValues = useMemo(
@@ -44,7 +44,7 @@ export function AppointmentForm({ properties, contacts, initialData, defaultValu
             ({
                 property_id: defaultPropertyId,
                 contact_id: defaultContactId,
-                date: defaultDate,
+                starts_at: defaultDate,
                 notes: defaultNotes,
                 status: defaultStatus,
             }) satisfies AppointmentFormValues,
@@ -148,7 +148,7 @@ export function AppointmentForm({ properties, contacts, initialData, defaultValu
 
                     <FormField
                         control={form.control}
-                        name="date"
+                        name="starts_at"
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Data e Hora</FormLabel>

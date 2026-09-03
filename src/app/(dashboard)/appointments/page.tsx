@@ -39,11 +39,11 @@ export default async function AppointmentsPage({
         .from('appointments')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'scheduled')
-        .gte('date', nowIso)
+        .gte('starts_at', nowIso)
     const historyCountQuery = supabase
         .from('appointments')
         .select('id', { count: 'exact', head: true })
-        .or(`status.in.(completed,cancelled,no_show),date.lt.${nowIso}`)
+        .or(`status.in.(completed,cancelled,no_show),starts_at.lt.${nowIso}`)
     const allCountQuery = supabase
         .from('appointments')
         .select('id', { count: 'exact', head: true })
@@ -62,7 +62,7 @@ export default async function AppointmentsPage({
             contacts (name, phone, email),
             profiles (full_name)
         `)
-        .order('date', { ascending: true })
+        .order('starts_at', { ascending: true })
 
     if (isBroker && user?.id) {
         query = query.eq('assigned_to', user.id)
@@ -70,7 +70,7 @@ export default async function AppointmentsPage({
 
     if (statusFilter === 'all') {
         if (tab === 'scheduled') {
-            query = query.eq('status', 'scheduled').gte('date', nowIso)
+            query = query.eq('status', 'scheduled').gte('starts_at', nowIso)
         }
 
         if (tab === 'history') {
@@ -109,12 +109,12 @@ export default async function AppointmentsPage({
     const next48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
 
     const visitsTodayCount = filteredAppointments.filter((appointment) => {
-        const date = new Date(appointment.date)
+        const date = new Date(appointment.starts_at)
         return appointment.status === 'scheduled' && date >= now && date <= endOfToday
     }).length
 
     const visits48hCount = filteredAppointments.filter((appointment) => {
-        const date = new Date(appointment.date)
+        const date = new Date(appointment.starts_at)
         return appointment.status === 'scheduled' && date > endOfToday && date <= next48h
     }).length
 
@@ -272,7 +272,7 @@ export default async function AppointmentsPage({
                             <Card key={appointment.id} className="hover:shadow-md transition-shadow">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">
-                                        {formatDate(appointment.date)}
+                                        {formatDate(appointment.starts_at)}
                                     </CardTitle>
                                     <Badge variant={getStatusColor(appointment.status) as "default" | "secondary" | "destructive" | "outline"}>
                                         {getStatusLabel(appointment.status)}
@@ -301,7 +301,7 @@ export default async function AppointmentsPage({
 
                                         <div className="flex flex-wrap gap-2">
                                             {(() => {
-                                                const appointmentDate = new Date(appointment.date)
+                                                const appointmentDate = new Date(appointment.starts_at)
                                                 const isToday = appointment.status === 'scheduled' && appointmentDate >= now && appointmentDate <= endOfToday
                                                 const isNext48 = appointment.status === 'scheduled' && appointmentDate > endOfToday && appointmentDate <= next48h
                                                 if (!isToday && !isNext48) return null

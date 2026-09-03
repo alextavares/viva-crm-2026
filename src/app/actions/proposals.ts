@@ -7,9 +7,7 @@ import {
     canCreateProposalForContact,
     canDeleteProposalRecord,
     canEditProposalRecord,
-    isTerminalDealStage,
     proposalSchema,
-    type DealStage,
 } from "@/lib/types"
 
 function formatDbError(prefix: string, error: unknown) {
@@ -74,7 +72,7 @@ export async function saveProposal(formData: FormData): Promise<ActionResult<{ i
     // Validate contact belongs to the same organization
     const { data: contactCheck } = await supabase
         .from("contacts")
-        .select("id, assigned_to, deal_stage")
+        .select("id, assigned_to")
         .eq("id", contactId)
         .eq("organization_id", orgId)
         .single()
@@ -218,28 +216,6 @@ export async function saveProposal(formData: FormData): Promise<ActionResult<{ i
             } else {
                 linkedContractStatus = createdContract?.status ?? "draft"
             }
-        }
-    }
-
-    let nextDealStage: DealStage | null = null
-    if (parsed.data.status === "pending" || parsed.data.status === "counter_offer") {
-        nextDealStage = "negotiation"
-    } else if (parsed.data.status === "accepted" && linkedContractStatus) {
-        nextDealStage = "closing"
-    }
-
-    if (nextDealStage && !isTerminalDealStage(contactCheck.deal_stage)) {
-        const { error: contactStageError } = await supabase
-            .from("contacts")
-            .update({
-                deal_stage: nextDealStage,
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", contactId)
-            .eq("organization_id", orgId)
-
-        if (contactStageError) {
-            console.error("Erro ao atualizar estágio da negociação:", contactStageError)
         }
     }
 

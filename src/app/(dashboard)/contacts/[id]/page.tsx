@@ -3,10 +3,12 @@ import { ContactActivityPanel } from "@/components/contacts/contact-activity-pan
 import { ContactAiPanel } from "@/components/contacts/contact-ai-panel"
 import { ContactWhatsAppActions } from "@/components/contacts/contact-whatsapp-actions"
 import { ContactRecordSummary } from "@/components/contacts/contact-record-summary"
+import { OpportunityCreateForm } from "@/components/contacts/opportunity-create-form"
 import { ContactProposals } from "@/components/contacts/contact-proposals"
 import { InterestProfileForm } from "@/components/contacts/interest-profile-form"
 import { PropertyMatchSheet } from "@/components/contacts/property-match-sheet"
 import { ContactFollowupPanel } from "@/components/followups/contact-followup-panel"
+import { ManualFollowupPanel } from "@/components/followups/manual-followup-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/server"
@@ -120,7 +122,7 @@ export default async function ContactEditPage({ params }: PageProps) {
     }> = []
 
     let linkedPropertiesCount = 0
-    let appointments: Array<Pick<Appointment, "id" | "date" | "status"> & { properties?: { title: string | null } | null }> = []
+    let appointments: Array<Pick<Appointment, "id" | "starts_at" | "status"> & { date: string, properties?: { title: string | null } | null }> = []
     let proposals: DealProposal[] = []
     let proposalContracts: Record<string, DealContract> = {}
     let leadDistributionSettings = {
@@ -226,7 +228,7 @@ export default async function ContactEditPage({ params }: PageProps) {
         }
     }
 
-    const [jobsResult, messagesResult, eventsResult, interactionsResult, leadSettingsResult, propertiesResult, appointmentsResult, proposalsResult] = await Promise.all([
+    const [jobsResult, messagesResult, eventsResult, interactionsResult, leadSettingsResult, propertiesResult, appointmentsResult, proposalsResult, manualFollowupsResult] = await Promise.all([
         supabase
             .from("followup_jobs")
             .select("id, step, status, scheduled_at, processed_at, error")
@@ -269,6 +271,12 @@ export default async function ContactEditPage({ params }: PageProps) {
             .select("id, organization_id, contact_id, assigned_to, property_id, proposed_value, payment_conditions, valid_until, status, notes, created_at, updated_at, properties(title, public_code)")
             .eq("contact_id", id)
             .order("created_at", { ascending: false }),
+        supabase
+            .from("contact_followups")
+            .select("id, due_at, status, source, step")
+            .eq("contact_id", id)
+            .is("template_id", null)
+            .order("due_at", { ascending: true }),
     ])
 
     const aiLeadSnapshot = await loadAiLeadSnapshot()
@@ -311,8 +319,8 @@ export default async function ContactEditPage({ params }: PageProps) {
         appointments =
             (((appointmentsResult.data ?? []) as Array<Record<string, unknown>>).map((a) => ({
                 ...a,
-                date: a.starts_at ?? null,
-            })) as unknown as Array<Pick<Appointment, "id" | "date" | "status"> & { properties?: { title: string | null } | null }>) || []
+                date: (a.starts_at as string | null) ?? "",
+            })) as unknown as Array<Pick<Appointment, "id" | "starts_at" | "status"> & { date: string, properties?: { title: string | null } | null }>) || []
     }
 
     if (!proposalsResult.error) {
@@ -324,11 +332,13 @@ export default async function ContactEditPage({ params }: PageProps) {
     // contract gap (opportunity lifecycle decision).
     const { data: contactOpps } = await supabase
         .from("opportunities")
-        .select("stage")
+        .select("id, stage, closed_at")
         .eq("contact_id", id)
         .order("updated_at", { ascending: false })
-        .limit(1)
-    const contactDealStage = ((contactOpps ?? []) as Array<{ stage: string | null }>)[0]?.stage ?? null
+        .limit(5)
+    const contactOppRows = ((contactOpps ?? []) as Array<{ id: string, stage: string | null, closed_at: string | null }>)
+    const contactDealStage = contactOppRows[0]?.stage ?? null
+    const openOpportunityId = contactOppRows.find((opp) => !opp.closed_at)?.id ?? null
 
     if (proposals.length > 0) {
         const proposalIds = proposals.map((proposal) => proposal.id)
@@ -552,7 +562,7 @@ export default async function ContactEditPage({ params }: PageProps) {
     return (
         <div className="flex flex-col gap-6">
             <ContactRecordSummary
-                contactId={contact.id}
+                opportunityId={openOpportunityId}
                 name={contact.name || "Sem Nome"}
                 type={contact.type}
                 status={contact.status}
@@ -585,6 +595,14 @@ export default async function ContactEditPage({ params }: PageProps) {
                     }}
                 />
             </ContactRecordSummary>
+
+            {openOpportunityId ? null : (
+                <OpportunityCreateForm
+                    contactId={contact.id}
+                    propertyId={leadPropertyId}
+                    propertyTitle={leadPropertyContext?.title ?? null}
+                />
+            )}
 
             <div className="rounded-xl border bg-card p-4 shadow-sm">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -696,6 +714,19 @@ export default async function ContactEditPage({ params }: PageProps) {
                     />
 
                     <ContactFollowupPanel contactId={id} canManage={canManageFollowup} jobs={followupJobs} />
+
+                    <ManualFollowupPanel
+                        contactId={id}
+                        canManage={canManageFollowup}
+                        now={new Date().getTime()}
+                        followups={((manualFollowupsResult.data ?? []) as Array<{
+                            id: string
+                            due_at: string
+                            status: string
+                            source: string | null
+                            step: number
+                        }>)}
+                    />
 
                     <details className="border rounded-xl bg-card p-4 shadow-sm">
                         <summary className="cursor-pointer text-sm font-semibold">

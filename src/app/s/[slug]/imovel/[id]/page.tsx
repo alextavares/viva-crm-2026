@@ -7,18 +7,10 @@ import { getPublicProperty, getPublicSite } from "@/lib/public-site/site-data"
 import { ogImages, truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
+import { decodePropertyFeatures } from "@/lib/properties/features-codec"
 
 function formatMoneyBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
-}
-
-function pickFeatureNumber(v: unknown) {
-  if (typeof v === "number") return v
-  if (typeof v === "string") {
-    const n = Number(v)
-    return Number.isFinite(n) ? n : null
-  }
-  return null
 }
 
 export default async function PublicPropertyPage({
@@ -39,10 +31,10 @@ export default async function PublicPropertyPage({
   const base = publicBasePath(site.slug, host)
   const homeHref = base || "/"
 
-  const features = prop.features ?? {}
-  const bedrooms = pickFeatureNumber((features as Record<string, unknown>).bedrooms)
-  const bathrooms = pickFeatureNumber((features as Record<string, unknown>).bathrooms)
-  const area = pickFeatureNumber((features as Record<string, unknown>).area)
+  const features = decodePropertyFeatures(prop.features)
+  const bedrooms = features.bedrooms > 0 ? features.bedrooms : null
+  const bathrooms = features.bathrooms > 0 ? features.bathrooms : null
+  const area = features.area > 0 ? features.area : null
   const primaryImageUrl = prop.images?.[0] ?? null
   const primaryImagePath = prop.image_paths?.[0] ?? null
   const galleryItems = (prop.images ?? prop.image_paths ?? []).slice(0, 5)

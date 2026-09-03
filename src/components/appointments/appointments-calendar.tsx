@@ -39,7 +39,7 @@ export function AppointmentsCalendar({ appointments }: AppointmentsCalendarProps
 
     const events = useMemo(() => {
         return appointments.map(apt => {
-            const startDate = new Date(apt.date)
+            const startDate = new Date(apt.starts_at)
             return {
                 id: apt.id,
                 title: `${apt.contacts?.name || 'Cliente'} - ${apt.properties?.title || 'Imóvel'}`,

@@ -8,6 +8,7 @@ import { Building2, MapPin, Bed, Bath, AppWindow, Globe, PencilLine } from "luci
 
 import { PropertySiteVisibilityToggle } from "@/components/properties/property-site-visibility-toggle"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
+import { decodePropertyFeatures } from "@/lib/properties/features-codec"
 import { buildPropertyFixHref } from "@/lib/property-publish-readiness"
 import {
     getPropertyOperationalSnapshot,
@@ -49,11 +50,7 @@ export type PropertyListRow = {
         city?: string | null
         state?: string | null
     } | null
-    features?: {
-        bedrooms?: number | null
-        bathrooms?: number | null
-        area?: number | null
-    } | null
+    features?: unknown | null
 }
 
 export function refLabel(property: { id?: string | null; public_code?: string | null; external_id?: string | null }) {
@@ -174,15 +171,16 @@ export function propertyPriceSummary(property: Pick<PropertyListRow, "price">) {
 }
 
 export function propertyStructureSummary(property: Pick<PropertyListRow, "features" | "built_area" | "total_area">) {
-    const builtArea = property.built_area || property.features?.area || null
+    const decoded = decodePropertyFeatures(property.features)
+    const builtArea = property.built_area || decoded.area || null
 
     return {
-        bedrooms: property.features?.bedrooms && property.features.bedrooms > 0 ? `${property.features.bedrooms}` : "Sem quartos",
-        bathrooms: property.features?.bathrooms && property.features.bathrooms > 0 ? `${property.features.bathrooms}` : "Sem banheiros",
+        bedrooms: decoded.bedrooms > 0 ? `${decoded.bedrooms}` : "Sem quartos",
+        bathrooms: decoded.bathrooms > 0 ? `${decoded.bathrooms}` : "Sem banheiros",
         builtArea: builtArea && builtArea > 0 ? `${builtArea} m²` : "Sem área",
         totalArea: property.total_area && property.total_area > 0 ? `${property.total_area} m² total` : null,
-        hasBedrooms: Boolean(property.features?.bedrooms && property.features.bedrooms > 0),
-        hasBathrooms: Boolean(property.features?.bathrooms && property.features.bathrooms > 0),
+        hasBedrooms: decoded.bedrooms > 0,
+        hasBathrooms: decoded.bathrooms > 0,
         hasBuiltArea: Boolean(builtArea && builtArea > 0),
         hasTotalArea: Boolean(property.total_area && property.total_area > 0),
     }

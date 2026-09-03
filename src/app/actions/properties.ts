@@ -15,6 +15,7 @@ import {
   type PropertyPortalBulkAction,
 } from "@/lib/types"
 import { buildSuggestedPropertyDescription, buildSuggestedPropertyTitle } from "@/lib/property-marketing"
+import { decodePropertyFeatures, encodePropertyFeatures } from "@/lib/properties/features-codec"
 import { getPropertyOperationalSnapshot } from "@/lib/property-operational-readiness"
 
 async function getPropertyActionContext() {
@@ -266,12 +267,11 @@ export async function saveProperty(input: SavePropertyInput): Promise<ActionResu
       publish_zap: Boolean(data.publish_zap),
       publish_imovelweb: Boolean(data.publish_imovelweb),
       publish_olx: Boolean(data.publish_olx),
-      features: {
+      features: encodePropertyFeatures({
         bedrooms: data.bedrooms,
         bathrooms: data.bathrooms,
         area: data.area,
-        type: data.type,
-      },
+      }),
       address: buildPropertyAddress(data),
       images: data.images || [],
       image_paths: deriveStoragePathsForBucket(data.images, "properties"),
@@ -676,15 +676,16 @@ export async function updateBulkPropertyCommercialEnrichment(input: {
     const updates = (properties || [])
       .map((property) => {
         const snapshot = getPropertyOperationalSnapshot(property)
+        const decodedFeatures = decodePropertyFeatures(property.features)
         const needsWeakTitle = snapshot.lightIssues.some((issue) => issue.code === "weak_title")
         const needsDescription = [...snapshot.criticalIssues, ...snapshot.lightIssues].some(
           (issue) => issue.code === "missing_description" || issue.code === "weak_description"
         )
         const suggestedTitle = needsWeakTitle
-          ? buildSuggestedPropertyTitle({
+          ?           buildSuggestedPropertyTitle({
             type: property.type,
             transactionType: property.transaction_type,
-            bedrooms: property.features?.bedrooms ?? null,
+            bedrooms: decodedFeatures.bedrooms || null,
             neighborhood: property.address?.neighborhood ?? null,
             city: property.address?.city ?? null,
           })
@@ -692,9 +693,9 @@ export async function updateBulkPropertyCommercialEnrichment(input: {
         const suggestedDescription = buildSuggestedPropertyDescription({
           type: property.type,
           transactionType: property.transaction_type,
-          bedrooms: property.features?.bedrooms ?? null,
-          bathrooms: property.features?.bathrooms ?? null,
-          area: property.features?.area ?? property.built_area ?? property.total_area ?? null,
+          bedrooms: decodedFeatures.bedrooms || null,
+          bathrooms: decodedFeatures.bathrooms || null,
+          area: decodedFeatures.area || property.built_area || property.total_area || null,
           neighborhood: property.address?.neighborhood ?? null,
           city: property.address?.city ?? null,
         })

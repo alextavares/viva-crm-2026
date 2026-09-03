@@ -51,7 +51,7 @@ export async function saveAppointment(
         const payload = {
             property_id: parsed.data.property_id,
             contact_id: parsed.data.contact_id,
-            date: new Date(parsed.data.date).toISOString(),
+            starts_at: new Date(parsed.data.starts_at).toISOString(),
             status: parsed.data.status,
             notes: parsed.data.notes?.trim() || null,
             updated_at: new Date().toISOString(),
@@ -177,7 +177,7 @@ export async function updateAppointmentStatusAction(
                         (typeof addressObj.full_address === 'string' ? addressObj.full_address : null) || addressText
                 }
 
-                const dateStr = new Date(appointment.date).toLocaleString('pt-BR', {
+                const dateStr = new Date(appointment.starts_at).toLocaleString('pt-BR', {
                     dateStyle: 'full',
                     timeStyle: 'short',
                 })

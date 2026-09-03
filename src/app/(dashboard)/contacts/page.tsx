@@ -356,7 +356,7 @@ export default async function ContactsPage({
 
     return {
       ...contact,
-      deal_stage: opportunityStageByContactId.get(contact.id) ?? contact.deal_stage ?? null,
+      deal_stage: opportunityStageByContactId.get(contact.id) ?? null,
       siteMeta: siteMetaByContactId.get(contact.id) ?? null,
       latestLeadAt:
         latestLeadEventByContactId.get(contact.id) ??

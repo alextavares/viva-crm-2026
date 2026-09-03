@@ -238,6 +238,27 @@ export const DEAL_STAGE_LABELS: Record<DealStage, string> = {
     lost: "Perdido",
 }
 
+export const OPPORTUNITY_STAGES = [
+    "new",
+    "qualified",
+    "visit",
+    "negotiation",
+    "proposal",
+    "won",
+    "lost",
+] as const
+export type OpportunityStage = (typeof OPPORTUNITY_STAGES)[number]
+
+export const OPPORTUNITY_STAGE_LABELS: Record<OpportunityStage, string> = {
+    new: "Nova",
+    qualified: "Qualificada",
+    visit: "Visita",
+    negotiation: "Negociação",
+    proposal: "Proposta",
+    won: "Ganha",
+    lost: "Perdida",
+}
+
 export const PROPOSAL_STATUSES = ["pending", "accepted", "rejected", "counter_offer"] as const
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
 
@@ -393,7 +414,7 @@ export interface Appointment {
     property_id?: string | null
     contact_id?: string | null
     assigned_to?: string | null
-    date: string
+    starts_at: string
     status: string
     notes?: string | null
     created_at?: string
@@ -406,7 +427,7 @@ export interface Appointment {
 export const appointmentSchema = z.object({
     property_id: z.string().min(1, "Selecione um imóvel"),
     contact_id: z.string().min(1, "Selecione um contato"),
-    date: z.string().min(1, "Selecione a data e hora"),
+    starts_at: z.string().min(1, "Selecione a data e hora"),
     notes: z.string().optional(),
     status: z.enum(APPOINTMENT_STATUSES).default("scheduled"),
 })

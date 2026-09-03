@@ -4,14 +4,11 @@ import { createClient } from "@/lib/supabase/server"
 import {
     CONTACT_STATUSES,
     contactSchema,
-    canEditContactDealStage,
-    DEAL_STAGES,
     interestProfileSchema,
     isAdmin,
     type ActionResult,
     type ContactStatus,
     type ContactFormValues,
-    type DealStage,
     type InterestProfile,
 } from "@/lib/types"
 import { revalidatePath } from "next/cache"
@@ -28,11 +25,6 @@ const contactInteractionSchema = z.object({
 const contactWhatsAppTraceSchema = z.object({
     contactId: z.string().uuid(),
     summary: z.string().trim().min(3).max(500),
-})
-
-const contactDealStageSchema = z.object({
-    contactId: z.string().uuid(),
-    dealStage: z.enum(DEAL_STAGES),
 })
 
 const contactStatusSchema = z.object({
@@ -336,71 +328,6 @@ export async function saveContactRecord(input: {
             success: false,
             error: error instanceof Error ? error.message : "Erro ao salvar contato.",
         }
-    }
-}
-
-export async function updateContactDealStage(input: {
-    contactId: string
-    dealStage: DealStage
-}): Promise<ActionResult<{ dealStage: DealStage }>> {
-    try {
-        const parsed = contactDealStageSchema.safeParse(input)
-        if (!parsed.success) {
-            return { success: false, error: "Estágio de negociação inválido." }
-        }
-
-        const supabase = await createClient()
-        const {
-            data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-            return { success: false, error: "Não autenticado." }
-        }
-
-        const { data: profile } = await supabase
-            .from("profiles")
-            .select("organization_id, role")
-            .eq("id", user.id)
-            .single()
-
-        if (!profile?.organization_id) {
-            return { success: false, error: "Sem permissão." }
-        }
-
-        const { data: contact } = await supabase
-            .from("contacts")
-            .select("id, organization_id, assigned_to")
-            .eq("id", parsed.data.contactId)
-            .single()
-
-        if (!contact || contact.organization_id !== profile.organization_id) {
-            return { success: false, error: "Contato não encontrado ou sem acesso." }
-        }
-
-        if (!canEditContactDealStage(profile.role, user.id, contact.assigned_to)) {
-            return { success: false, error: "Você não pode alterar o estágio desta negociação." }
-        }
-
-        const { error } = await supabase
-            .from("contacts")
-            .update({
-                deal_stage: parsed.data.dealStage,
-                updated_at: new Date().toISOString(),
-            })
-            .eq("id", parsed.data.contactId)
-            .eq("organization_id", profile.organization_id)
-
-        if (error) {
-            console.error("Error updating deal stage:", error)
-            return { success: false, error: "Erro ao atualizar estágio da negociação." }
-        }
-
-        revalidatePath(`/contacts/${parsed.data.contactId}`)
-        return { success: true, data: { dealStage: parsed.data.dealStage } }
-    } catch (error) {
-        console.error("Unexpected error updating deal stage:", error)
-        return { success: false, error: "Erro ao atualizar estágio da negociação." }
     }
 }
 

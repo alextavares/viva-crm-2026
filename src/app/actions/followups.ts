@@ -13,6 +13,7 @@ import {
     type FollowupProcessSummary,
     type LeadRedistributionSummary,
 } from "@/lib/followups/operations"
+import { formatManualFollowupSource } from "@/lib/followups/manual-followup"
 
 const limitSchema = z.coerce.number().int().min(1).max(500).optional()
 const contactFollowupActionSchema = z.object({
@@ -170,6 +171,145 @@ export async function applyContactFollowupAction(
         return {
             success: false,
             error: error instanceof Error ? error.message : "Erro ao atualizar a régua do contato.",
+        }
+    }
+}
+
+const manualFollowupSchema = z.object({
+    contactId: z.string().uuid("Contato inválido para o follow-up."),
+    dueAt: z.string().min(1, "Informe data e hora do retorno."),
+    description: z.string().trim().min(3, "Descreva o próximo passo.").max(500),
+})
+
+const resolveManualFollowupSchema = z.object({
+    followupId: z.string().uuid("Follow-up inválido."),
+    resolution: z.enum(["completed", "cancelled"]),
+})
+
+export async function createManualFollowup(input: {
+    contactId: string
+    dueAt: string
+    description: string
+}): Promise<ActionResult<{ id: string }>> {
+    try {
+        const parsed = manualFollowupSchema.safeParse(input)
+        if (!parsed.success) {
+            return {
+                success: false,
+                error: parsed.error.issues[0]?.message || "Dados inválidos para o follow-up.",
+            }
+        }
+
+        const dueAt = new Date(parsed.data.dueAt)
+        if (Number.isNaN(dueAt.getTime())) {
+            return { success: false, error: "Data e hora do retorno inválidas." }
+        }
+
+        const auth = await getAdminActionContext()
+        if ("error" in auth) {
+            return { success: false, error: auth.error ?? "Sem permissão." }
+        }
+
+        const { data: contact } = await auth.supabase
+            .from("contacts")
+            .select("id, organization_id, assigned_to")
+            .eq("id", parsed.data.contactId)
+            .single()
+
+        if (!contact || contact.organization_id !== auth.profile.organization_id) {
+            return { success: false, error: "Contato não encontrado ou sem acesso." }
+        }
+
+        const { data: activeSteps } = await auth.supabase
+            .from("contact_followups")
+            .select("step")
+            .eq("organization_id", auth.profile.organization_id)
+            .eq("contact_id", parsed.data.contactId)
+            .in("status", ["pending", "processing"])
+
+        const nextStep = (activeSteps ?? []).reduce((max, row) => Math.max(max, row.step ?? 0), 0) + 1
+
+        const { data: created, error } = await auth.supabase
+            .from("contact_followups")
+            .insert({
+                organization_id: auth.profile.organization_id,
+                contact_id: parsed.data.contactId,
+                assigned_to: contact.assigned_to ?? auth.user.id,
+                template_id: null,
+                step: nextStep,
+                due_at: dueAt.toISOString(),
+                status: "pending",
+                source: formatManualFollowupSource(parsed.data.description),
+            })
+            .select("id")
+            .single()
+
+        if (error || !created?.id) {
+            return { success: false, error: error?.message || "Não foi possível agendar o retorno." }
+        }
+
+        revalidateFollowupPaths(parsed.data.contactId)
+        return { success: true, data: { id: created.id } }
+    } catch (error) {
+        console.error("Unexpected createManualFollowup error:", error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Não foi possível agendar o retorno.",
+        }
+    }
+}
+
+export async function resolveManualFollowup(input: {
+    followupId: string
+    resolution: "completed" | "cancelled"
+}): Promise<ActionResult<{ id: string }>> {
+    try {
+        const parsed = resolveManualFollowupSchema.safeParse(input)
+        if (!parsed.success) {
+            return { success: false, error: "Resolução inválida para o follow-up." }
+        }
+
+        const auth = await getAdminActionContext()
+        if ("error" in auth) {
+            return { success: false, error: auth.error ?? "Sem permissão." }
+        }
+
+        const { data: followup } = await auth.supabase
+            .from("contact_followups")
+            .select("id, contact_id, status")
+            .eq("id", parsed.data.followupId)
+            .eq("organization_id", auth.profile.organization_id)
+            .single()
+
+        if (!followup) {
+            return { success: false, error: "Follow-up não encontrado ou sem acesso." }
+        }
+
+        if (followup.status !== "pending" && followup.status !== "processing") {
+            return { success: false, error: "Este retorno já foi encerrado." }
+        }
+
+        const { error } = await auth.supabase
+            .from("contact_followups")
+            .update({
+                status: parsed.data.resolution,
+                completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", parsed.data.followupId)
+            .eq("organization_id", auth.profile.organization_id)
+
+        if (error) {
+            return { success: false, error: error.message || "Não foi possível encerrar o retorno." }
+        }
+
+        revalidateFollowupPaths(followup.contact_id)
+        return { success: true, data: { id: parsed.data.followupId } }
+    } catch (error) {
+        console.error("Unexpected resolveManualFollowup error:", error)
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Não foi possível encerrar o retorno.",
         }
     }
 }

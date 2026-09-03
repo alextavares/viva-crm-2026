@@ -1,6 +1,6 @@
 "use client"
 
-import { updateContactDealStage } from "@/app/actions/contacts"
+import { advanceOpportunityStage } from "@/app/actions/opportunities"
 import { Badge } from "@/components/ui/badge"
 import {
     Select,
@@ -10,7 +10,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { DealStageBadge } from "@/components/contacts/deal-stage-badge"
-import { DEAL_STAGES, DEAL_STAGE_LABELS, getPropertyTypeLabel, type DealStage } from "@/lib/types"
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STAGE_LABELS, getPropertyTypeLabel, type OpportunityStage } from "@/lib/types"
 import { Building, Globe, Home, Mail, MapPin, Phone, UserRound } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState, useTransition } from "react"
@@ -32,7 +32,7 @@ interface SiteMeta {
 }
 
 export interface ContactRecordSummaryProps {
-    contactId: string
+    opportunityId?: string | null
     name: string
     type: string
     status: string
@@ -58,7 +58,7 @@ export interface ContactRecordSummaryProps {
 }
 
 export function ContactRecordSummary({
-    contactId,
+    opportunityId = null,
     name,
     type,
     status,
@@ -83,10 +83,10 @@ export function ContactRecordSummary({
     children
 }: ContactRecordSummaryProps) {
     const optimisticStatus = status
-    const safeDealStage = (DEAL_STAGES.includes((dealStage ?? "lead") as DealStage)
-        ? (dealStage ?? "lead")
-        : "lead") as DealStage
-    const [selectedDealStage, setSelectedDealStage] = useState<DealStage>(safeDealStage)
+    const safeDealStage = ((OPPORTUNITY_STAGES as readonly string[]).includes(dealStage ?? "")
+        ? (dealStage as OpportunityStage)
+        : "new")
+    const [selectedDealStage, setSelectedDealStage] = useState<OpportunityStage>(safeDealStage)
     const [isPending, startTransition] = useTransition()
     const slaBadge = buildSlaBadge(latestLeadAt || null, optimisticStatus, leadDistributionSettings)
     const interestProfile = [
@@ -109,17 +109,29 @@ export function ContactRecordSummary({
     }, [safeDealStage])
 
     function handleDealStageChange(nextStage: string) {
-        if (!DEAL_STAGES.includes(nextStage as DealStage)) return
-        const nextValue = nextStage as DealStage
+        if (!(OPPORTUNITY_STAGES as readonly string[]).includes(nextStage)) return
+        const nextValue = nextStage as OpportunityStage
         if (nextValue === selectedDealStage) return
+
+        if (!opportunityId) {
+            toast.error("Crie uma oportunidade para este contato antes de mudar o estágio.")
+            return
+        }
 
         if (
             (nextValue === "won" || nextValue === "lost") &&
             !window.confirm(
-                `Confirmar marcação da negociação como ${DEAL_STAGE_LABELS[nextValue].toLowerCase()}?`
+                `Confirmar marcação da oportunidade como ${OPPORTUNITY_STAGE_LABELS[nextValue].toLowerCase()}?`
             )
         ) {
             return
+        }
+
+        let lossReason: string | null = null
+        if (nextValue === "lost") {
+            const typed = window.prompt("Motivo da perda (obrigatório):")
+            if (!typed?.trim()) return
+            lossReason = typed.trim()
         }
 
         const previousStage = selectedDealStage
@@ -127,9 +139,10 @@ export function ContactRecordSummary({
 
         startTransition(async () => {
             try {
-                const result = await updateContactDealStage({
-                    contactId,
-                    dealStage: nextValue,
+                const result = await advanceOpportunityStage({
+                    opportunityId,
+                    stage: nextValue,
+                    lossReason,
                 })
 
                 if (!result.success) {
@@ -138,13 +151,13 @@ export function ContactRecordSummary({
                     return
                 }
 
-                toast.success("Estágio da negociação atualizado.")
+                toast.success("Estágio da oportunidade atualizado.")
             } catch (error) {
                 setSelectedDealStage(previousStage)
                 const message =
                     error instanceof Error && error.message
                         ? error.message
-                        : "Erro ao atualizar estágio da negociação."
+                        : "Erro ao atualizar estágio da oportunidade."
                 toast.error(message)
             }
         })
@@ -331,9 +344,9 @@ export function ContactRecordSummary({
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent align="end">
-                                            {DEAL_STAGES.map((stage) => (
+                                            {OPPORTUNITY_STAGES.map((stage) => (
                                                 <SelectItem key={stage} value={stage}>
-                                                    {DEAL_STAGE_LABELS[stage]}
+                                                    {OPPORTUNITY_STAGE_LABELS[stage]}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

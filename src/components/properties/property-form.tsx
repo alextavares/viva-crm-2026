@@ -28,6 +28,7 @@ import { PropertyFormStepNav } from "@/components/properties/property-form-step-
 import { PropertyOwnerQuickCreate } from "@/components/properties/property-owner-quick-create"
 import { toast } from "sonner"
 import { saveProperty } from "@/app/actions/properties"
+import { decodePropertyFeatures } from "@/lib/properties/features-codec"
 import { createClient } from "@/lib/supabase/client"
 import {
     DEFAULT_PROPERTY_TYPE,
@@ -132,9 +133,9 @@ export function PropertyForm({ initialData }: PropertyFormProps) {
             publish_zap: Boolean(initialData?.publish_zap ?? false),
             publish_imovelweb: Boolean(initialData?.publish_imovelweb ?? false),
             publish_olx: Boolean(initialData?.publish_olx ?? false),
-            bedrooms: initialData?.features?.bedrooms || 0,
-            bathrooms: initialData?.features?.bathrooms || 0,
-            area: initialData?.features?.area || 0,
+            bedrooms: decodePropertyFeatures(initialData?.features).bedrooms || 0,
+            bathrooms: decodePropertyFeatures(initialData?.features).bathrooms || 0,
+            area: decodePropertyFeatures(initialData?.features).area || 0,
             address_street: (initialData?.address as PropertyAddress | undefined)?.street || "",
             address_number: (initialData?.address as PropertyAddress | undefined)?.number || "",
             address_neighborhood: (initialData?.address as PropertyAddress | undefined)?.neighborhood || "",

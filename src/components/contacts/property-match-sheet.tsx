@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Search, Home, Loader2 } from 'lucide-react'
 import type { Tables } from '@/lib/supabase/database.types'
+import { decodePropertyFeatures } from '@/lib/properties/features-codec'
 import { getPropertyTypeLabel } from '@/lib/types'
 
 type ContactProfile = {
@@ -44,10 +45,9 @@ function getAddressPart(address: Tables<'properties'>['address'], key: 'city' | 
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
-function getBedrooms(): number | null {
-    // CANONICAL CONTRACT GAP: `properties.features` is a free-text array with
-    // no structured bedroom count, so bedroom matching is unavailable.
-    return null
+function getBedrooms(features: unknown): number | null {
+    const decoded = decodePropertyFeatures(features).bedrooms
+    return decoded > 0 ? decoded : null
 }
 
 function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 'score'> {
@@ -60,7 +60,7 @@ function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 's
         city: getAddressPart(property.address, 'city'),
         neighborhood: getAddressPart(property.address, 'neighborhood'),
         price: property.price,
-        bedrooms: getBedrooms(),
+        bedrooms: getBedrooms(property.features),
     }
 }
 

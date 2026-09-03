@@ -10,7 +10,7 @@ import { AppointmentCardActions } from "./appointment-card-actions"
 
 export type AppointmentListRow = {
     id: string
-    date: string
+    starts_at: string
     status: string
     notes?: string | null
     properties?: {
@@ -101,10 +101,10 @@ function AppointmentCard({ appointment }: { appointment: AppointmentListRow }) {
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pr-12">
                         <div className="flex items-center gap-2">
                             <CardTitle className="text-sm font-medium">
-                                {formatDate(appointment.date)}
+                                {formatDate(appointment.starts_at)}
                             </CardTitle>
                             {(() => {
-                                const rel = getRelativeDay(appointment.date)
+                                const rel = getRelativeDay(appointment.starts_at)
                                 return rel ? (
                                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${rel.className}`}>
                                         {rel.label}
