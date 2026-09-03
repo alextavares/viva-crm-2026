@@ -5,13 +5,10 @@ import type { Metadata } from "next"
 import { getPublicLinks, getPublicNewsList, getPublicSite } from "@/lib/public-site/site-data"
 import { truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
-import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 import { HeroBanner } from "@/components/public/site-banners"
 import { PublicSearchFiltersInstant } from "@/components/public/public-search-filters-instant"
-
-function formatMoneyBRL(v: number | null | undefined) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
-}
+import { PublicPropertyCard } from "@/components/public/public-property-card"
+import { filterCuratedPublicProperties, pickCuratedBanner } from "@/lib/public-site/public-curation"
 
 function formatDatePt(v: string | null | undefined) {
   if (!v) return null
@@ -107,14 +104,14 @@ export default async function PublicSiteHome({
     offset,
   })
 
-  const list: SitePropertyCard[] = items ?? []
+  const list: SitePropertyCard[] = filterCuratedPublicProperties(items ?? [])
   const [news, links] = await Promise.all([
     getPublicNewsList(site.slug, 3, 0),
     getPublicLinks(site.slug),
   ])
 
   const brandName = site.settings?.brand_name || site.slug
-  const heroBanner = site.banners.find((b) => b.placement === "hero") ?? null
+  const heroBanner = pickCuratedBanner(site.banners, "hero")
   const isPremium = site.settings?.theme === "premium"
 
   const host = await getRequestHost()
@@ -208,7 +205,7 @@ export default async function PublicSiteHome({
               </p>
               <div className="mt-3 text-lg font-semibold">Fale com a equipe e receba uma selecao alinhada ao seu perfil.</div>
               <p className="mt-2 text-sm text-muted-foreground">
-                O contato entra no CRM e o time retorna com abordagem consultiva via WhatsApp, telefone ou e-mail.
+                O contato segue para a equipe e o retorno acontece com abordagem consultiva via WhatsApp, telefone ou e-mail.
               </p>
               <Link
                 href={`${homeHref === "/" ? "" : homeHref}/contact`}
@@ -228,80 +225,22 @@ export default async function PublicSiteHome({
                 </a>
               </div>
               <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-                <Link
+                <PublicPropertyCard
+                  property={featuredSelection[0]}
                   href={`${homeHref === "/" ? "" : homeHref}/imovel/${featuredSelection[0].id}`}
-                  className="group overflow-hidden rounded-[2rem] border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <div className="aspect-[16/9] bg-muted">
-                    {(() => {
-                      const heroSrc =
-                        resolveMediaPathUrl("properties", featuredSelection[0].thumbnail_path) ??
-                        resolveMediaUrl(featuredSelection[0].thumbnail_url) ??
-                        featuredSelection[0].thumbnail_url ??
-                        undefined
-                      return heroSrc ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={heroSrc}
-                          alt={featuredSelection[0].title}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                        />
-                      ) : null
-                    })()}
-                  </div>
-                  <div className="p-6">
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      Destaque Premium
-                    </div>
-                    <div className="mt-2 text-2xl font-serif">{featuredSelection[0].title}</div>
-                    <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                      {featuredSelection[0].neighborhood || featuredSelection[0].city
-                        ? `${featuredSelection[0].neighborhood || ""}${featuredSelection[0].city ? ` - ${featuredSelection[0].city}` : ""}`
-                        : "Localizacao a informar"}
-                    </div>
-                    <div className="mt-5 text-xl font-semibold" style={{ color: "var(--site-primary)" }}>
-                      {formatMoneyBRL(featuredSelection[0].price)}
-                    </div>
-                  </div>
-                </Link>
+                  theme={site.settings?.theme}
+                  variant="highlight"
+                />
                 <div className="grid gap-4">
                   {featuredSelection.slice(1).map((p) => {
-                    const thumbnailSrc =
-                      resolveMediaPathUrl("properties", p.thumbnail_path) ??
-                      resolveMediaUrl(p.thumbnail_url) ??
-                      p.thumbnail_url ??
-                      undefined
-
                     return (
-                      <Link
+                      <PublicPropertyCard
                         key={p.id}
+                        property={p}
                         href={`${homeHref === "/" ? "" : homeHref}/imovel/${p.id}`}
-                        className="group overflow-hidden rounded-[2rem] border bg-white/85 shadow-sm transition-shadow hover:shadow-md"
-                      >
-                        <div className="grid md:grid-cols-[0.46fr_0.54fr]">
-                          <div className="aspect-[4/3] bg-muted">
-                            {thumbnailSrc ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={thumbnailSrc}
-                                alt={p.title}
-                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                              />
-                            ) : null}
-                          </div>
-                          <div className="p-5">
-                            <div className="line-clamp-2 text-base font-semibold">{p.title}</div>
-                            <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
-                              {p.neighborhood || p.city
-                                ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}`
-                                : "Localizacao a informar"}
-                            </div>
-                            <div className="mt-4 text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
-                              {formatMoneyBRL(p.price)}
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
+                        theme={site.settings?.theme}
+                        variant="side"
+                      />
                     )
                   })}
                 </div>
@@ -316,7 +255,7 @@ export default async function PublicSiteHome({
               {[
                 "Atendimento rapido pelo WhatsApp",
                 "Busca objetiva por cidade e bairro",
-                "Lead entra direto no CRM da equipe",
+                "Contato direto com a equipe da imobiliária",
               ].map((item) => (
                 <div key={item} className="rounded-2xl border bg-muted/10 p-4 text-sm font-medium">
                   {item}
@@ -372,59 +311,13 @@ export default async function PublicSiteHome({
 
         <div className={`mt-6 grid gap-4 ${isPremium ? "lg:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           {list.map((p) => {
-            const thumbnailSrc =
-              resolveMediaPathUrl("properties", p.thumbnail_path) ??
-              resolveMediaUrl(p.thumbnail_url) ??
-              p.thumbnail_url ??
-              undefined
-
             return (
-              <Link
+              <PublicPropertyCard
                 key={p.id}
+                property={p}
                 href={`${homeHref === "/" ? "" : homeHref}/imovel/${p.id}`}
-                className={`group overflow-hidden border bg-white/85 shadow-sm transition-shadow hover:shadow-md ${isPremium ? "rounded-[2rem]" : "rounded-3xl"}`}
-              >
-                <div className={`bg-muted ${isPremium ? "aspect-[16/10]" : "aspect-[4/3]"}`}>
-                  {thumbnailSrc ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={thumbnailSrc}
-                      alt={p.title}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    />
-                  ) : null}
-                </div>
-                <div className={isPremium ? "p-6" : "p-5"}>
-                  <div className={`line-clamp-1 ${isPremium ? "text-lg font-semibold" : "text-sm font-medium"}`}>{p.title}</div>
-                  <div className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                    {p.neighborhood || p.city ? `${p.neighborhood || ""}${p.city ? ` - ${p.city}` : ""}` : "Localização a informar"}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Ref: {p.public_code || p.id.slice(0, 8)}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                    <span className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}>
-                      {p.type || "Tipo a informar"}
-                    </span>
-                    <span className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}>
-                      {isPremium ? "Atendimento consultivo" : "Contato rapido"}
-                    </span>
-                  </div>
-                  <div className={`flex items-end justify-between gap-3 ${isPremium ? "mt-6" : "mt-4"}`}>
-                    <div className="text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
-                      {formatMoneyBRL(p.price)}
-                    </div>
-                    <div className="text-xs font-medium text-muted-foreground">
-                      {isPremium ? "Ver detalhes" : "Abrir imovel"}
-                    </div>
-                  </div>
-                  <div className={`mt-4 border-t pt-4 text-xs text-muted-foreground ${isPremium ? "border-muted/70" : "border-muted/60"}`}>
-                    {isPremium
-                      ? "Veja imagens, contexto do imovel e solicite atendimento personalizado."
-                      : "Abra o imovel e envie seu interesse direto para a equipe."}
-                  </div>
-                </div>
-              </Link>
+                theme={site.settings?.theme}
+              />
             )
           })}
         </div>

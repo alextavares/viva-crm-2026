@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { LeadDistributionSettingsForm } from "@/components/leads/lead-distribution-settings-form"
@@ -73,17 +74,33 @@ export default async function LeadDistributionSettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold md:text-3xl">Distribuição de Leads + SLA</h1>
           <p className="text-muted-foreground">
-            Distribua novos leads automaticamente para brokers e monitore o tempo de primeira resposta.
+            Distribua novos leads automaticamente para corretores e monitore o tempo de primeira resposta.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge variant={initial.enabled ? "default" : "secondary"}>
+              Distribuição {initial.enabled ? "ativa" : "desligada"}
+            </Badge>
+            <Badge variant="outline">SLA: {initial.sla_minutes} min</Badge>
+            <Badge variant="outline">
+              Redistribuição {initial.redistribute_overdue ? "ativa" : "desligada"}
+            </Badge>
+          </div>
         </div>
-        <Link href="/settings">
-          <Button variant="outline">Voltar</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/contacts?view=kanban">
+            <Button variant="outline">Abrir kanban</Button>
+          </Link>
+          <Link href="/contacts">
+            <Button variant="outline">Ver contatos</Button>
+          </Link>
+          <Link href="/settings">
+            <Button variant="outline">Voltar</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-lg border bg-muted/10 p-4">
         <LeadDistributionSettingsForm
-          organizationId={organizationId}
           canManage={isAdmin}
           tableReady={tableReady}
           initial={initial}

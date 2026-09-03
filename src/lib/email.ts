@@ -17,6 +17,13 @@ export async function sendTransactionalEmail(params: SendEmailParams) {
         console.info(`  To: ${Array.isArray(params.to) ? params.to.join(', ') : params.to}`)
         console.info(`  Subject: ${params.subject}`)
         console.info(`  HTML Length: ${params.html.length} chars`)
+
+        // Allow QA to force a simulated failure
+        if (params.subject.includes('[FAIL]')) {
+            console.warn('[Email Simulator] Simulating a FAILURE response for QA.')
+            return { success: false, error: new Error('Simulated email error') }
+        }
+
         return { success: true, simulated: true }
     }
 

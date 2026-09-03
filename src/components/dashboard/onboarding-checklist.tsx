@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CheckCircle2, ChevronDown, ChevronUp, Circle, ExternalLink } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { setOnboardingCollapsed } from "@/app/actions/settings"
 
 type Item = {
   done: boolean
@@ -75,7 +76,7 @@ export function OnboardingChecklist({
   initialCollapsed: boolean
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
-  const autoCollapsedRef = useRef(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   useEffect(() => {
     setCollapsed(initialCollapsed)
@@ -85,13 +86,14 @@ export function OnboardingChecklist({
     async (next: boolean) => {
       if (!isAdmin) return
       try {
-        await fetch("/api/onboarding/collapse", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ collapsed: next }),
-        })
+        const result = await setOnboardingCollapsed({ collapsed: next })
+        if (!result.success) {
+          setErrorMsg(result.error)
+          return
+        }
+        setErrorMsg(null)
       } catch {
-        // Non-blocking persistence: UI state should remain responsive.
+        setErrorMsg("Não foi possível atualizar o checklist agora.")
       }
     },
     [isAdmin]
@@ -141,18 +143,40 @@ export function OnboardingChecklist({
   const requiredItems = items.filter((item) => !item.optional)
   const requiredDoneCount = requiredItems.filter((item) => item.done).length
   const readyForSales = requiredDoneCount === requiredItems.length
+  const previousReadyRef = useRef(readyForSales)
+  const hasInitializedReadyRef = useRef(false)
+  const manualExpandedAfterReadyRef = useRef(false)
 
   useEffect(() => {
-    if (!isAdmin || autoCollapsedRef.current) return
-    if (!readyForSales || collapsed) return
+    if (!hasInitializedReadyRef.current) {
+      hasInitializedReadyRef.current = true
+      previousReadyRef.current = readyForSales
+      if (!readyForSales) {
+        manualExpandedAfterReadyRef.current = false
+      }
+      return
+    }
 
-    autoCollapsedRef.current = true
+    const wasReady = previousReadyRef.current
+    previousReadyRef.current = readyForSales
+
+    if (!readyForSales) {
+      manualExpandedAfterReadyRef.current = false
+      return
+    }
+
+    const becameReady = !wasReady && readyForSales
+    if (!isAdmin || !becameReady || collapsed || manualExpandedAfterReadyRef.current) return
+
     setCollapsed(true)
     void persistCollapsed(true)
   }, [readyForSales, collapsed, isAdmin, persistCollapsed])
 
   const handleToggle = () => {
     const next = !collapsed
+    if (readyForSales && !next) {
+      manualExpandedAfterReadyRef.current = true
+    }
     setCollapsed(next)
     void persistCollapsed(next)
   }
@@ -196,6 +220,7 @@ export function OnboardingChecklist({
             ? "CRM pronto para vender. Se quiser, conecte o domínio próprio depois."
             : "Complete estes passos para publicar o site e começar a captar leads."}
         </div>
+        {errorMsg ? <div className="text-sm text-red-600">{errorMsg}</div> : null}
         {!collapsed ? (
           <div className="grid gap-3">
             {items.map((item) => (

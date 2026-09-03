@@ -11,7 +11,7 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
 const QA_EMAIL = 'qa@example.com'
 const QA_PASSWORD = 'password123'
@@ -26,7 +26,7 @@ function screenshotPath(filename: string) {
     return path.join(SCREENSHOT_DIR, filename)
 }
 
-async function login(page: Parameters<typeof test>[0]['page']) {
+async function login(page: Page) {
     await page.goto('/login')
     await page.getByLabel('Email').fill(QA_EMAIL)
     await page.getByLabel('Senha').fill(QA_PASSWORD)

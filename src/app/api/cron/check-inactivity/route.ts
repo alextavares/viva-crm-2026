@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { Database } from '@/lib/supabase/database.types'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
         // 2. Fetch old, non-closed contacts
         const { data: contacts, error: err2 } = await supabase
             .from('contacts')
-            .select('id, name, broker_id, organization_id')
+            .select('id, name, assigned_to, organization_id')
             .lte('created_at', cutOffString)
             .not('status', 'in', '("won","lost")')
 
@@ -51,13 +52,13 @@ export async function GET(req: Request) {
         const brokerNotifications = new Map<string, { orgId: string, count: number }>()
 
         inactiveContacts.forEach(contact => {
-            if (!contact.broker_id) return
+            if (!contact.assigned_to) return
 
-            const existing = brokerNotifications.get(contact.broker_id)
+            const existing = brokerNotifications.get(contact.assigned_to)
             if (existing) {
                 existing.count++
             } else {
-                brokerNotifications.set(contact.broker_id, {
+                brokerNotifications.set(contact.assigned_to, {
                     orgId: contact.organization_id,
                     count: 1
                 })
@@ -65,7 +66,7 @@ export async function GET(req: Request) {
         })
 
         // 5. Insert notifications
-        const notificationPayloads: any[] = []
+        const notificationPayloads: Database['public']['Tables']['notifications']['Insert'][] = []
         brokerNotifications.forEach((data, brokerId) => {
             notificationPayloads.push({
                 user_id: brokerId,
@@ -91,8 +92,9 @@ export async function GET(req: Request) {
             notificationsInserted: notificationPayloads.length
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Check inactivity error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        const message = error instanceof Error ? error.message : 'Erro inesperado ao verificar inatividade'
+        return NextResponse.json({ success: false, error: message }, { status: 500 })
     }
 }

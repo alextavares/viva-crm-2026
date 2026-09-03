@@ -1,12 +1,13 @@
 "use client"
 import { useState, useCallback } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Copy, Play, Pause, ExternalLink } from "lucide-react"
+import { togglePortalIntegration } from "@/app/actions/settings"
 
 // Available Portals defined here
 const AVAILABLE_PORTALS = [
@@ -24,62 +25,46 @@ const AVAILABLE_PORTALS = [
     }
 ]
 
-const generateToken = () => {
-    // Generate a secure enough random hash for the feed url (MVP approach without JWTs)
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-}
-
 export default function PortalIntegrationsClient({
-    organizationId,
     orgSlug,
     initialIntegrations,
 }: {
-    organizationId: string
     orgSlug: string
     initialIntegrations: Record<string, unknown>[]
 }) {
+    const router = useRouter()
     const [integrations, setIntegrations] = useState(initialIntegrations)
     const [loadingId, setLoadingId] = useState<string | null>(null)
-    const supabase = createClient()
+    const [portalErrors, setPortalErrors] = useState<Record<string, string | null>>({})
 
     const handleToggleStatus = async (portalId: string, currentIntegration?: Record<string, unknown>) => {
         setLoadingId(portalId)
+        setPortalErrors((prev) => ({ ...prev, [portalId]: null }))
         const isCurrentlyActive = currentIntegration?.status === "active"
         const newStatus = isCurrentlyActive ? "inactive" : "active"
 
-        // If we're activating for the first time or re-activating, ensure we have a token
-        const config = (currentIntegration?.config as Record<string, unknown>) || {}
-        if (newStatus === "active" && !config.feed_token) {
-            config.feed_token = generateToken()
-        }
-
-        const { data, error } = await supabase
-            .from("portal_integrations")
-            .upsert({
-                organization_id: organizationId,
-                portal: portalId,
-                status: newStatus,
-                config: config
-            })
-            .select()
-            .single()
+        const result = await togglePortalIntegration({
+            portal: portalId as "zap_vivareal" | "imovelweb",
+        })
 
         setLoadingId(null)
 
-        if (error) {
-            toast.error(`Erro ao ${newStatus === 'active' ? 'ativar' : 'pausar'} a integração.`)
-            console.error(error)
+        if (!result.success) {
+            setPortalErrors((prev) => ({ ...prev, [portalId]: result.error }))
+            toast.error(result.error)
             return
         }
 
         setIntegrations((prev) => {
             const existing = prev.find(i => i.portal === portalId)
+            const updatedIntegration = result.data?.integration ?? {}
             if (existing) {
-                return prev.map(i => i.portal === portalId ? data : i)
+                return prev.map(i => i.portal === portalId ? updatedIntegration : i)
             }
-            return [...prev, data]
+            return [...prev, updatedIntegration]
         })
 
+        router.refresh()
         toast.success(`Integração com ${AVAILABLE_PORTALS.find(p => p.id === portalId)?.name} ${newStatus === 'active' ? 'ativada' : 'pausada'}.`)
     }
 
@@ -188,36 +173,41 @@ export default function PortalIntegrationsClient({
                             )}
 
                         </CardContent>
-                        <CardFooter className="border-t bg-muted/10 justify-between">
-                            {isActive ? (
-                                <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={isLoading}
-                                    onClick={() => handleToggleStatus(portal.id, integration)}
-                                >
-                                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pause className="mr-2 h-4 w-4" />}
-                                    Pausar Sincronização
-                                </Button>
-                            ) : (
-                                <Button
-                                    variant="default"
-                                    size="sm"
-                                    disabled={isLoading}
-                                    onClick={() => handleToggleStatus(portal.id, integration)}
-                                >
-                                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                                    Ativar Integração XML
-                                </Button>
-                            )}
-
-                            {isActive && (
-                                <a href={feedUrl} target="_blank" rel="noreferrer">
-                                    <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700">
-                                        <ExternalLink className="mr-2 h-3 w-3" /> Visualizar Feed
+                        <CardFooter className="border-t bg-muted/10 flex-col items-stretch gap-2">
+                            <div className="flex justify-between gap-2">
+                                {isActive ? (
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        disabled={isLoading}
+                                        onClick={() => handleToggleStatus(portal.id, integration)}
+                                    >
+                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pause className="mr-2 h-4 w-4" />}
+                                        Pausar Sincronização
                                     </Button>
-                                </a>
-                            )}
+                                ) : (
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        disabled={isLoading}
+                                        onClick={() => handleToggleStatus(portal.id, integration)}
+                                    >
+                                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                                        Ativar Integração XML
+                                    </Button>
+                                )}
+
+                                {isActive && (
+                                    <a href={feedUrl} target="_blank" rel="noreferrer">
+                                        <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700">
+                                            <ExternalLink className="mr-2 h-3 w-3" /> Visualizar Feed
+                                        </Button>
+                                    </a>
+                                )}
+                            </div>
+                            {portalErrors[portal.id] ? (
+                                <p className="text-xs text-red-600">{portalErrors[portal.id]}</p>
+                            ) : null}
                         </CardFooter>
                     </Card>
                 )

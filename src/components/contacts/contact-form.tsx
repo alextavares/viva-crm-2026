@@ -15,14 +15,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { contactSchema, type ContactFormValues } from "@/lib/types"
-
-const SAVE_TIMEOUT_MS = 20_000
+import { saveContactRecord } from "@/app/actions/contacts"
+import { contactSchema, PROPERTY_TYPE_OPTIONS, type ContactFormValues } from "@/lib/types"
 
 interface ContactFormProps {
     initialData?: {
@@ -30,114 +28,71 @@ interface ContactFormProps {
         name: string
         email?: string
         phone?: string
+        city?: string | null
         type: string
         status: string
+        interest_type?: string | null
+        interest_bedrooms?: number | null
+        interest_price_max?: number | null
         notes?: string
     }
 }
 
 export function ContactForm({ initialData }: ContactFormProps) {
-    const { user, organizationId } = useAuth()
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
-    const supabase = createClient()
+    const [submitError, setSubmitError] = useState<string | null>(null)
 
-    const form = useForm({
+    const form = useForm<ContactFormValues>({
         resolver: zodResolver(contactSchema),
         defaultValues: {
             name: initialData?.name || "",
             email: initialData?.email || "",
             phone: initialData?.phone || "",
+            city: initialData?.city || "",
             type: initialData?.type || "lead",
             status: initialData?.status || "new",
+            interest_type: (initialData?.interest_type || "") as ContactFormValues["interest_type"],
+            interest_bedrooms: initialData?.interest_bedrooms ?? null,
+            interest_price_max: initialData?.interest_price_max ?? null,
             notes: initialData?.notes || "",
         },
     })
 
-    async function withTimeout<T>(promise: Promise<T>, ms = SAVE_TIMEOUT_MS): Promise<T> {
-        let timeoutId: ReturnType<typeof setTimeout> | null = null
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => {
-                const err = new Error("RequestTimeout")
-                err.name = "TimeoutError"
-                reject(err)
-            }, ms)
-        })
-
-        try {
-            return await Promise.race([promise, timeoutPromise])
-        } finally {
-            if (timeoutId) clearTimeout(timeoutId)
-        }
-    }
-
     async function onSubmit(data: ContactFormValues) {
-        if (!user || !organizationId) return
-
         setIsLoading(true)
+        setSubmitError(null)
+
         try {
-            let error
+            const result = await saveContactRecord({
+                id: initialData?.id,
+                values: data,
+            })
 
-            if (initialData?.id) {
-                // UPDATE
-                const result = (await withTimeout(
-                    supabase
-                        .from('contacts')
-                        .update({
-                            ...data,
-                            updated_at: new Date().toISOString(),
-                        })
-                        .eq('id', initialData.id)
-                )) as { error: { message?: string } | null }
-                error = result.error
-            } else {
-                // INSERT
-                const result = (await withTimeout(
-                    supabase
-                        .from('contacts')
-                        .insert({
-                            ...data,
-                            organization_id: organizationId,
-                            assigned_to: user.id,
-                        })
-                        .select("id, type")
-                        .single()
-                )) as { error: { message?: string } | null; data?: { id?: string; type?: string } | null }
-                error = result.error
-
-                if (!error && result.data?.id && (result.data.type || data.type) === "lead") {
-                    const { error: followupError } = await supabase.rpc("followup_schedule_sequence", {
-                        p_org_id: organizationId,
-                        p_contact_id: result.data.id,
-                        p_start_at: new Date().toISOString(),
-                        p_source: "crm_manual",
-                    })
-
-                    if (followupError) {
-                        console.error("Error scheduling manual follow-up:", followupError)
-                    }
-                }
+            if (!result.success) {
+                setSubmitError(result.error)
+                toast.error(result.error)
+                return
             }
 
-            if (error) throw error
-
+            setSubmitError(null)
             toast.success(initialData ? "Contato atualizado com sucesso!" : "Contato criado com sucesso!")
             router.push('/contacts')
             router.refresh()
         } catch (error) {
             console.error('Error saving contact:', error)
-            const isTimeout =
+            const message =
                 typeof error === "object" &&
                 error !== null &&
-                "name" in error &&
-                ((error as { name?: unknown }).name === "TimeoutError" ||
-                    (error as { name?: unknown }).name === "AbortError")
-
-            toast.error(
-                isTimeout
-                    ? "Salvar contato demorou demais. Tente novamente."
+                "message" in error &&
+                typeof (error as { message?: unknown }).message === "string"
+                    ? (error as { message: string }).message
                     : "Erro ao salvar contato. Tente novamente."
-            )
+            const errorMessage = message.startsWith("Erro ao")
+                ? message
+                : `Erro ao salvar contato: ${message}`
+            setSubmitError(errorMessage)
+            toast.error(errorMessage)
         } finally {
             setIsLoading(false)
         }
@@ -146,98 +101,198 @@ export function ContactForm({ initialData }: ContactFormProps) {
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Nome Completo</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="Ex: João da Silva" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-
-                    <FormField
-                        control={form.control}
-                        name="email"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Email</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="joao@example.com" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-
-                    <FormField
-                        control={form.control}
-                        name="phone"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Telefone / WhatsApp</FormLabel>
-                                <FormControl>
-                                    <Input placeholder="(11) 99999-9999" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-
-                    <FormField
-                        control={form.control}
-                        name="type"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Tipo de Contato</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Dados básicos</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Nome Completo</FormLabel>
                                     <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecione" />
-                                        </SelectTrigger>
+                                        <Input placeholder="Ex: João da Silva" {...field} />
                                     </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="lead">Lead (Interessado)</SelectItem>
-                                        <SelectItem value="client">Cliente (Já comprou/alugou)</SelectItem>
-                                        <SelectItem value="owner">Proprietário</SelectItem>
-                                        <SelectItem value="partner">Parceiro</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                    <FormField
-                        control={form.control}
-                        name="status"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Status</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormField
+                            control={form.control}
+                            name="email"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Email</FormLabel>
                                     <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecione" />
-                                        </SelectTrigger>
+                                        <Input placeholder="joao@example.com" {...field} />
                                     </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="new">Novo</SelectItem>
-                                        <SelectItem value="contacted">Contactado</SelectItem>
-                                        <SelectItem value="qualified">Qualificado</SelectItem>
-                                        <SelectItem value="lost">Perdido</SelectItem>
-                                        <SelectItem value="won">Ganho</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="phone"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Telefone / WhatsApp</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="(11) 99999-9999" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="city"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Cidade</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="Ex: São Sebastião" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="type"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tipo de Contato</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="lead">Lead (Interessado)</SelectItem>
+                                            <SelectItem value="client">Cliente (Já comprou/alugou)</SelectItem>
+                                            <SelectItem value="owner">Proprietário</SelectItem>
+                                            <SelectItem value="partner">Parceiro</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="status"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Status</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="new">Novo</SelectItem>
+                                            <SelectItem value="contacted">Em atendimento</SelectItem>
+                                            <SelectItem value="qualified">Qualificado</SelectItem>
+                                            <SelectItem value="lost">Perdido</SelectItem>
+                                            <SelectItem value="won">Ganho</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Perfil de interesse</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <FormField
+                            control={form.control}
+                            name="interest_type"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tipo de imóvel</FormLabel>
+                                    <Select
+                                        onValueChange={(value) => field.onChange(value === "any" ? "" : value)}
+                                        defaultValue={field.value || "any"}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Qualquer tipo" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="any">Qualquer tipo</SelectItem>
+                                            {PROPERTY_TYPE_OPTIONS.map((propertyType) => (
+                                                <SelectItem key={propertyType.value} value={propertyType.value}>
+                                                    {propertyType.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="interest_bedrooms"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Quartos desejados</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            placeholder="Ex: 3"
+                                            value={field.value ?? ""}
+                                            onChange={(e) =>
+                                                field.onChange(e.target.value === "" ? null : Number(e.target.value))
+                                            }
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="interest_price_max"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Preço máximo</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            step="1"
+                                            placeholder="Ex: 1200000"
+                                            value={field.value ?? ""}
+                                            onChange={(e) =>
+                                                field.onChange(e.target.value === "" ? null : Number(e.target.value))
+                                            }
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
 
                 <FormField
                     control={form.control}
@@ -256,6 +311,12 @@ export function ContactForm({ initialData }: ContactFormProps) {
                         </FormItem>
                     )}
                 />
+
+                {submitError ? (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                        {submitError}
+                    </div>
+                ) : null}
 
                 <Button type="submit" disabled={isLoading} className="w-full md:w-auto">
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

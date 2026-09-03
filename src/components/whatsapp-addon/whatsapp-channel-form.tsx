@@ -2,7 +2,12 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import {
+  saveWhatsAppChannelSettings,
+  testWhatsAppChannelConnection,
+} from "@/app/actions/whatsapp"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -27,9 +32,6 @@ type Props = {
   webhookToken: string | null
 }
 
-const SAVE_TIMEOUT_MS = 45_000
-const SAVE_WATCHDOG_MS = 60_000
-
 function normalizeStatus(status: string | null | undefined): "disconnected" | "connected" | "error" {
   if (status === "connected" || status === "error") return status
   return "disconnected"
@@ -52,8 +54,10 @@ function maskToken(value: string | null | undefined) {
 }
 
 export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initial, webhookToken }: Props) {
+  const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [origin, setOrigin] = useState("")
   const [operationMode, setOperationMode] = useState<"live" | "sandbox">(initial.operation_mode === "sandbox" ? "sandbox" : "live")
   const [accessTokenLast4, setAccessTokenLast4] = useState(initial.access_token_last4 || null)
@@ -108,70 +112,39 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
     }
   }, [])
 
-  async function withTimeout<T>(promise: Promise<T>, ms = SAVE_TIMEOUT_MS): Promise<T> {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        const err = new Error("RequestTimeout")
-        err.name = "TimeoutError"
-        reject(err)
-      }, ms)
-    })
-
-    try {
-      return await Promise.race([promise, timeoutPromise])
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }
-
   const save = async () => {
     if (uiBlocked) return
     setIsSaving(true)
-    const uiWatchdog = setTimeout(() => {
-      setIsSaving(false)
-      toast.error("Demorou demais para salvar o canal. Tente novamente.")
-    }, SAVE_WATCHDOG_MS)
+    setErrorMsg(null)
 
     try {
-      const response = await withTimeout(
-        fetch("/api/settings/whatsapp-channel", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          cache: "no-store",
-          body: JSON.stringify({
-            provider: "meta",
-            operation_mode: operationMode,
-            display_phone: displayPhone,
-            business_account_id: businessAccountId,
-            phone_number_id: phoneNumberId,
-            webhook_verify_token: webhookVerifyToken,
-            access_token: accessToken,
-          }),
-        })
-      )
+      const result = await saveWhatsAppChannelSettings({
+        provider: "meta",
+        operation_mode: operationMode,
+        display_phone: displayPhone,
+        business_account_id: businessAccountId,
+        phone_number_id: phoneNumberId,
+        webhook_verify_token: webhookVerifyToken,
+        access_token: accessToken,
+      })
 
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean
-        message?: string
-        channel?: { access_token_last4?: string | null }
-      }
-      if (!response.ok || payload.ok === false) {
-        throw new Error(payload.message || "Falha ao salvar canal.")
+      if (!result.success) {
+        throw new Error(result.error || "Falha ao salvar canal.")
       }
 
       setStatus("disconnected")
+      setErrorMsg(null)
       setLastErrorMessage("")
       setLastTestedAt(null)
-      setAccessTokenLast4(payload.channel?.access_token_last4 || accessToken.slice(-4) || null)
+      setAccessTokenLast4(result.data.channel.access_token_last4 || accessToken.slice(-4) || null)
       setAccessToken("")
       toast.success("Canal salvo. Agora clique em “Testar conexão”.")
+      router.refresh()
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao salvar canal."
+      setErrorMsg(message)
       toast.error(message)
     } finally {
-      clearTimeout(uiWatchdog)
       setIsSaving(false)
     }
   }
@@ -179,45 +152,32 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
   const testConnection = async () => {
     if (uiBlocked) return
     setIsTesting(true)
-    const uiWatchdog = setTimeout(() => {
-      setIsTesting(false)
-      toast.error("Demorou demais para testar conexão. Tente novamente.")
-    }, SAVE_WATCHDOG_MS)
+    setErrorMsg(null)
 
     try {
-      const response = await withTimeout(
-        fetch("/api/settings/whatsapp-channel/test", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          cache: "no-store",
-        })
-      )
+      const result = await testWhatsAppChannelConnection()
 
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean
-        status?: "disconnected" | "connected" | "error"
-        message?: string
-      }
-
-      const nextStatus = normalizeStatus(payload.status)
-      setStatus(nextStatus)
-      setLastTestedAt(new Date().toISOString())
-
-      if (response.ok && payload.ok) {
+      if (result.success) {
+        setStatus(normalizeStatus(result.data.status))
         setLastErrorMessage("")
-        toast.success(payload.message || "Conexão validada com sucesso.")
+        setLastTestedAt(result.data.lastTestedAt)
+        toast.success(result.data.message || "Conexão validada com sucesso.")
+        router.refresh()
       } else {
-        setLastErrorMessage(payload.message || "Não foi possível validar a conexão.")
-        toast.error(payload.message || "Não foi possível validar a conexão.")
+        const message = result.error || "Não foi possível validar a conexão."
+        setStatus("error")
+        setErrorMsg(message)
+        setLastErrorMessage(message)
+        setLastTestedAt(new Date().toISOString())
+        toast.error(message)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao testar conexão."
       setStatus("error")
+      setErrorMsg(message)
       setLastErrorMessage(message)
       toast.error(message)
     } finally {
-      clearTimeout(uiWatchdog)
       setIsTesting(false)
     }
   }
@@ -291,6 +251,9 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
       {lastErrorMessage ? (
         <div className="rounded-lg border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">{lastErrorMessage}</div>
       ) : null}
+      {errorMsg ? (
+        <div className="rounded-lg border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">{errorMsg}</div>
+      ) : null}
 
       <div className="rounded-lg border p-4">
         <div className="text-sm font-medium">Modo de operação</div>
@@ -298,7 +261,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
           <Button
             type="button"
             variant={operationMode === "live" ? "default" : "outline"}
-            onClick={() => setOperationMode("live")}
+            onClick={() => {
+              setErrorMsg(null)
+              setOperationMode("live")
+            }}
             disabled={uiBlocked}
           >
             Produção
@@ -306,7 +272,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
           <Button
             type="button"
             variant={operationMode === "sandbox" ? "default" : "outline"}
-            onClick={() => setOperationMode("sandbox")}
+            onClick={() => {
+              setErrorMsg(null)
+              setOperationMode("sandbox")
+            }}
             disabled={uiBlocked}
           >
             Sandbox
@@ -322,7 +291,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
           <label className="text-sm font-medium">Telefone de exibição (opcional)</label>
           <Input
             value={displayPhone}
-            onChange={(e) => setDisplayPhone(e.target.value)}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setDisplayPhone(e.target.value)
+            }}
             placeholder="+55 11 99999-9999"
             disabled={uiBlocked}
           />
@@ -331,7 +303,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
           <label className="text-sm font-medium">Business Account ID</label>
           <Input
             value={businessAccountId}
-            onChange={(e) => setBusinessAccountId(e.target.value)}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setBusinessAccountId(e.target.value)
+            }}
             placeholder="ex.: 123456789012345"
             disabled={uiBlocked}
           />
@@ -343,7 +318,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
           <label className="text-sm font-medium">Phone Number ID</label>
           <Input
             value={phoneNumberId}
-            onChange={(e) => setPhoneNumberId(e.target.value)}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setPhoneNumberId(e.target.value)
+            }}
             placeholder="ex.: 109876543210987"
             disabled={uiBlocked}
           />
@@ -352,7 +330,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
           <label className="text-sm font-medium">Webhook Verify Token</label>
           <Input
             value={webhookVerifyToken}
-            onChange={(e) => setWebhookVerifyToken(e.target.value)}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setWebhookVerifyToken(e.target.value)
+            }}
             placeholder="token de validação do webhook"
             disabled={uiBlocked}
           />
@@ -364,7 +345,10 @@ export function WhatsAppChannelForm({ canManage, tableReady, addonEnabled, initi
         <Input
           type="password"
           value={accessToken}
-          onChange={(e) => setAccessToken(e.target.value)}
+          onChange={(e) => {
+            setErrorMsg(null)
+            setAccessToken(e.target.value)
+          }}
           placeholder="cole aqui para criar/atualizar o token"
           autoComplete="new-password"
           disabled={uiBlocked}

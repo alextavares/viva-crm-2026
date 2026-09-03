@@ -56,3 +56,27 @@ supabase/.temp/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# CRM local artifacts (sprint QA - nao commitar)
+tmp/
+qa-evidencias/
+capturas/
+.playwright-mcp/
+
+# debug solto na raiz
+attendances-local-desktop.png
+broker_id_search.txt
+env_vars.txt
+final_diff.txt
+tsc.txt
+tsc_errors.txt
+test_query*.js
+test-xml.ts
+qa_script*.mjs
+error_check.mjs
+check.ps1
+seed_appointments.sql
+function-manifest.sql
+
+# rehearsal/experimental local (nunca commitar)
+supabase/experimental/

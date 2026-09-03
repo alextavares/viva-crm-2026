@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
+import { updateContactStatus } from "@/app/actions/contacts"
 
 type Props = {
     contactId: string
@@ -15,8 +15,8 @@ type Props = {
 
 export function ContactStatusActions({ contactId, status }: Props) {
     const router = useRouter()
-    const supabase = createClient()
-    const [isUpdating, setIsUpdating] = useState(false)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+    const [isPending, startTransition] = useTransition()
 
     const canMarkContacted = status === "new"
     const canMarkQualified = status === "new" || status === "contacted"
@@ -29,33 +29,35 @@ export function ContactStatusActions({ contactId, status }: Props) {
         nextStatus: "contacted" | "qualified",
         successMessage: string
     ) => {
-        setIsUpdating(true)
+        setErrorMsg(null)
 
-        try {
-            const { error } = await supabase.from("contacts").update({ status: nextStatus }).eq("id", contactId)
-            if (error) throw error
-            toast.success(successMessage)
-            router.refresh()
-        } catch (error) {
-            console.error(`Error updating contact status to ${nextStatus}:`, error)
-            toast.error("Não foi possível atualizar o status do lead.")
-        } finally {
-            setIsUpdating(false)
-        }
+        startTransition(() => {
+            void (async () => {
+                const result = await updateContactStatus(contactId, nextStatus)
+                if (!result.success) {
+                    setErrorMsg(result.error)
+                    toast.error(result.error)
+                    return
+                }
+
+                toast.success(successMessage)
+                router.refresh()
+            })()
+        })
     }
 
     return (
-        <>
+        <div className="flex flex-col items-start gap-1.5">
             {canMarkContacted && (
                 <Button
                     type="button"
                     size="sm"
                     className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                    disabled={isUpdating}
+                    disabled={isPending}
                     onClick={() => updateStatus("contacted", "Lead marcado como em atendimento.")}
                 >
                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                    {isUpdating ? "Atualizando..." : "Atender"}
+                    {isPending ? "Atualizando..." : "Iniciar atendimento"}
                 </Button>
             )}
 
@@ -65,13 +67,14 @@ export function ContactStatusActions({ contactId, status }: Props) {
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                    disabled={isUpdating}
+                    disabled={isPending}
                     onClick={() => updateStatus("qualified", "Lead marcado como qualificado.")}
                 >
                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                    {isUpdating ? "Atualizando..." : "Qualificar"}
+                    {isPending ? "Atualizando..." : "Qualificar lead"}
                 </Button>
             )}
-        </>
+            {errorMsg ? <p className="text-xs text-red-600">{errorMsg}</p> : null}
+        </div>
     )
 }

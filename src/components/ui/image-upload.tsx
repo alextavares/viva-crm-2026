@@ -6,7 +6,7 @@ import { SortableContext, useSortable, rectSortingStrategy, sortableKeyboardCoor
 import { CSS } from '@dnd-kit/utilities'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { ImagePlus, X, Loader2, Star, GripVertical } from 'lucide-react'
+import { ImagePlus, X, Loader2, Star, GripVertical, ArrowLeft, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { createMediaUploadPath, resolveMediaUrl, uploadPublicMedia } from '@/lib/media'
@@ -27,9 +27,12 @@ interface UploadStatus {
 interface SortableImageCardProps {
     url: string
     index: number
+    total: number
     uploadDisabled: boolean
     onMakePrimary: (url: string) => void
     onRemove: (url: string) => void
+    onMoveLeft: (url: string) => void
+    onMoveRight: (url: string) => void
 }
 
 const IMAGE_UPLOAD_TIMEOUT_MS = 120_000
@@ -37,9 +40,12 @@ const IMAGE_UPLOAD_TIMEOUT_MS = 120_000
 function SortableImageCard({
     url,
     index,
+    total,
     uploadDisabled,
     onMakePrimary,
     onRemove,
+    onMoveLeft,
+    onMoveRight,
 }: SortableImageCardProps) {
     const {
         attributes,
@@ -65,6 +71,9 @@ function SortableImageCard({
             )}
         >
             <div className="absolute top-2 left-2 z-10 flex items-start gap-2">
+                <div className="inline-flex items-center rounded-md bg-black/70 px-2 py-1 text-[10px] font-medium text-white shadow-sm">
+                    {index + 1}/{total}
+                </div>
                 {index === 0 ? (
                     <div className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white shadow-sm">
                         <Star className="h-3 w-3 fill-current" />
@@ -85,6 +94,28 @@ function SortableImageCard({
                 )}
             </div>
             <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 bg-background/95 shadow-sm"
+                    disabled={uploadDisabled || index === 0}
+                    title="Mover para a esquerda"
+                    onClick={() => onMoveLeft(url)}
+                >
+                    <ArrowLeft className="h-3 w-3" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 bg-background/95 shadow-sm"
+                    disabled={uploadDisabled || index === total - 1}
+                    title="Mover para a direita"
+                    onClick={() => onMoveRight(url)}
+                >
+                    <ArrowRight className="h-3 w-3" />
+                </Button>
                 <Button
                     type="button"
                     variant="outline"
@@ -256,6 +287,20 @@ export function ImageUpload({ value = [], onChange, disabled, organizationId }: 
         toast.success('Foto principal atualizada.')
     }
 
+    const onMoveLeft = (url: string) => {
+        if (uploadDisabled) return
+        const currentIndex = value.findIndex((current) => current === url)
+        if (currentIndex <= 0) return
+        onChange(arrayMove(value, currentIndex, currentIndex - 1))
+    }
+
+    const onMoveRight = (url: string) => {
+        if (uploadDisabled) return
+        const currentIndex = value.findIndex((current) => current === url)
+        if (currentIndex < 0 || currentIndex >= value.length - 1) return
+        onChange(arrayMove(value, currentIndex, currentIndex + 1))
+    }
+
     const onRemoveAll = () => {
         if (disabled || isUploading) return
         if (value.length === 0) return
@@ -304,7 +349,7 @@ export function ImageUpload({ value = [], onChange, disabled, organizationId }: 
             ) : null}
             {value.length > 1 ? (
                 <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                    Use o botão <span className="font-medium text-foreground">Arrastar</span> em cada foto para reordenar a exibição.
+                    A primeira foto é a capa. Use <span className="font-medium text-foreground">Definir principal</span>, as setas ou <span className="font-medium text-foreground">Arrastar</span> para organizar a galeria.
                 </div>
             ) : null}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -315,9 +360,12 @@ export function ImageUpload({ value = [], onChange, disabled, organizationId }: 
                                 key={url}
                                 url={url}
                                 index={index}
+                                total={value.length}
                                 uploadDisabled={uploadDisabled}
                                 onMakePrimary={onMakePrimary}
                                 onRemove={onRemove}
+                                onMoveLeft={onMoveLeft}
+                                onMoveRight={onMoveRight}
                             />
                         ))}
 

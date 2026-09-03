@@ -1,5 +1,43 @@
 # Imobi CRM – Status de Execução
 
+## Prioridade Atual — Piloto Vendável
+
+Documento guia: `docs/release-plan-vendavel-2026-04-23.md`
+Go/No-Go: `docs/go-no-go-vendavel-2026-04-23.md`
+Roteiro demo: `docs/demo-script-vendavel-2026-04-23.md`
+Sprint atual: `docs/sprint-acabamento-operacional-2026-04-23.md`
+Roteiro piloto: `docs/piloto-assistido-roteiro-2026-04-24.md`
+Template feedback: `docs/piloto-assistido-feedback-template-2026-04-24.md`
+
+Decisão atual:
+- GO para piloto vendável em ambiente local limpo;
+- GO para demo assistida;
+- GO para piloto assistido com usuário real após sprint curta de acabamento operacional;
+- NO-GO para self-service sem acompanhamento;
+- congelar novas features grandes até coletar feedback real do piloto;
+- preservar como diferencial: CRM imobiliário operacional + WhatsApp sandbox/oficial + IA de pré-atendimento + distribuição/SLA + funil/relatórios simples.
+
+Comandos-gate da versão vendável:
+- `npx tsc --noEmit --pretty false`
+- `npm test`
+- `npm run lint`
+- `npm run build`
+
+Status em 2026-04-23:
+- gates técnicos estabilizados;
+- build passou;
+- `npx supabase db reset --local --yes` validado com `supabase/qa_seed.sql`;
+- P1 de schema, imóveis, distribuição, propostas, contratos, relatórios e slug demo resolvidos em ambiente limpo;
+- WhatsApp sandbox demonstrável e envio sandbox registrado no CRM;
+- nenhum P0/P1 aberto na instância limpa validada.
+- instância estável `http://localhost:3000` revalidada com `npm run start -- -p 3000`: GO para demo vendável;
+- auditoria UX/operacional classificou o produto como piloto assistido sim, self-service não.
+- sprint de acabamento operacional executada em 2026-04-24: gates PASS, smoke QA PASS, P1 nenhum, decisão GO para piloto assistido com usuário real.
+- validação em domínio público em 2026-04-26: captação pública GO pelo detalhe do imóvel; home pública não é ponto de captação.
+- revalidação da sprint em 2026-04-26: gates PASS, smoke QA PASS, nenhum P1, sem alteração de código de produto nesta rodada.
+
+Próxima etapa: rodar piloto assistido com usuário real, registrar feedback e só então abrir próximo sprint.
+
 ## Ciclos Concluídos
 
 ### Ciclo 7 — Confiabilidade e Regras de Negócio

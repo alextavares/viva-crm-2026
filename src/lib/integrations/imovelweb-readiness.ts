@@ -1,3 +1,4 @@
+import { isKnownPropertyType } from "@/lib/types"
 import { getAddressLocalidadeName, parseLocalidadeMappings, resolveMappedLocalidadeId } from "./imovelweb-localidade"
 import { SUPPORTED_IMOVELWEB_PROPERTY_TYPES } from "./imovelweb-catalog"
 
@@ -144,7 +145,7 @@ export function getImovelwebReadinessIssues(
 
     if (!type) {
       add("blocker", "missing_type", `O imóvel '${propertyLabel}' não pode ser publicado porque falta o tipo do imóvel.`)
-    } else if (!SUPPORTED_IMOVELWEB_PROPERTY_TYPES.has(type)) {
+    } else if (!isKnownPropertyType(type) || !SUPPORTED_IMOVELWEB_PROPERTY_TYPES.has(type)) {
       add("blocker", "unsupported_type", `O imóvel '${propertyLabel}' usa o tipo '${type}', que ainda não está mapeado no schema OpenNavent.`)
     }
 

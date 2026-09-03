@@ -78,6 +78,32 @@ export function mapUnivenStatus(raw: unknown): "available" | "sold" | "rented" {
   return "available"
 }
 
+export function mapUnivenTransactionType(
+  venda: unknown,
+  locacao: unknown,
+  temporada: unknown
+): "sale" | "rent" | "seasonal" {
+  if (parseUnivenInt(temporada) > 0) return "seasonal"
+  if (parseUnivenInt(venda) > 0) return "sale"
+  if (parseUnivenInt(locacao) > 0) return "rent"
+  return "sale"
+}
+
+export function mapUnivenPurpose(rawType: unknown, rawSubtype: unknown): "residential" | "commercial" {
+  const haystack = `${safeText(rawType)} ${safeText(rawSubtype)}`.toUpperCase()
+  if (
+    haystack.includes("COMERCIAL") ||
+    haystack.includes("PONTO") ||
+    haystack.includes("LOJA") ||
+    haystack.includes("SALAO") ||
+    haystack.includes("GALPAO")
+  ) {
+    return "commercial"
+  }
+
+  return "residential"
+}
+
 export function buildUnivenAddress(row: UnivenRow): PropertyAddress {
   const street = safeText(row.principalendereco) || null
   const number = safeText(row.principalnumero) || null
@@ -104,6 +130,15 @@ export function buildUnivenAddress(row: UnivenRow): PropertyAddress {
   }
 }
 
+function firstFilled(row: UnivenRow, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = safeText(row[key])
+    if (value) return value
+  }
+
+  return null
+}
+
 export type UnivenPropertyPayload = {
   external_id: string
   title: string
@@ -111,6 +146,13 @@ export type UnivenPropertyPayload = {
   price: number
   type: "apartment" | "house" | "land" | "commercial"
   status: "available" | "sold" | "rented"
+  transaction_type: "sale" | "rent" | "seasonal"
+  purpose: "residential" | "commercial"
+  built_area: number | null
+  total_area: number | null
+  financing_allowed: boolean
+  owner_name: string | null
+  assigned_to_hint: string | null
   features: PropertyFeatures
   address: PropertyAddress
   images: string[]
@@ -130,23 +172,61 @@ export function mapUnivenRowToProperty(row: UnivenRow, imageUrls: string[]): Uni
     safeText(row.internetmetadescription) ||
     ""
 
+  const transaction_type = mapUnivenTransactionType(
+    row.principalvenda,
+    row.principallocalacao,
+    row.principaltemporada
+  )
+
   const promo = parseUnivenDecimal(row.principalvalvendapromo)
-  const regular = parseUnivenDecimal(row.principalvalvenda)
-  const price = (promo && promo > 0 ? promo : regular) ?? 0
+  const sale = parseUnivenDecimal(row.principalvalvenda)
+  const rent = parseUnivenDecimal(row.principalvallocalacao) ?? parseUnivenDecimal(row.principalvallocalacaoestu)
+  const seasonal = parseUnivenDecimal(row.principalvaltemporada)
+  const price =
+    transaction_type === "rent"
+      ? rent ?? 0
+      : transaction_type === "seasonal"
+        ? seasonal ?? 0
+        : (promo && promo > 0 ? promo : sale) ?? 0
 
   const type = mapUnivenType(row.principaltipo)
+  const purpose = mapUnivenPurpose(row.principaltipo, row.principalsubtipo)
   const status = mapUnivenStatus(row.principalsituacao)
+  const financing_allowed = parseUnivenInt(row.principalaceitaf) > 0 || parseUnivenInt(row.principalfinanciado) > 0
+  const owner_name = firstFilled(row, [
+    "proprietarionome",
+    "proprietario",
+    "principalproprietario",
+    "principalproprietarionome",
+    "contatoproprietario",
+  ])
+  const assigned_to_hint = firstFilled(row, [
+    "captacaocorretor",
+    "captacaocaptador",
+    "corretornome",
+    "captadornome",
+  ])
 
   const bedrooms = parseUnivenInt(row.detalhedormitorios)
   const bathrooms = parseUnivenInt(row.detalhebanheiros)
   const garages = parseUnivenInt(row.detalhegaragens)
-  const area = parseUnivenDecimal(row.detalheareautil) ?? parseUnivenDecimal(row.detalheareatotal) ?? 0
+  const suites = parseUnivenInt(row.detalhesuite)
+  const built_area =
+    parseUnivenDecimal(row.detalheareautil) ??
+    parseUnivenDecimal(row.detalheareaconst) ??
+    null
+  const total_area =
+    parseUnivenDecimal(row.detalheareatotal) ??
+    parseUnivenDecimal(row.detalheareaterreno) ??
+    null
+  const area = built_area ?? total_area ?? 0
 
   const features: PropertyFeatures = {
     bedrooms,
     bathrooms,
     area: Number(area) || 0,
     garages,
+    suites,
     // Keep source hints to help support and future enrichments.
     source: "univen",
     source_type: safeText(row.principaltipo) || null,
@@ -164,6 +244,13 @@ export function mapUnivenRowToProperty(row: UnivenRow, imageUrls: string[]): Uni
     price,
     type,
     status,
+    transaction_type,
+    purpose,
+    built_area,
+    total_area,
+    financing_allowed,
+    owner_name,
+    assigned_to_hint,
     features,
     address,
     images,

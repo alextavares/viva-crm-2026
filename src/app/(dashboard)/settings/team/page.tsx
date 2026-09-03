@@ -32,7 +32,7 @@ export default async function TeamSettingsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold md:text-3xl">Equipe</h1>
-          <p className="text-muted-foreground">Gerencie corretores, convites e capacidade de assentos do plano.</p>
+          <p className="text-muted-foreground">Gerencie corretores, convites, capacidade de assentos e o perfil público exibido no site.</p>
         </div>
         <Link href="/settings">
           <Button variant="outline">Voltar</Button>
@@ -41,7 +41,7 @@ export default async function TeamSettingsPage() {
 
       {!canManage ? (
         <div className="rounded-md border p-4 text-sm text-muted-foreground">
-          Apenas <span className="font-medium text-foreground">owner/manager</span> podem gerenciar equipe.
+          Apenas gestores podem gerenciar equipe.
         </div>
       ) : (
         <div className="rounded-lg border bg-muted/10 p-4">

@@ -25,6 +25,11 @@ const contactInteractionSchema = z.object({
     happenedAt: z.string().datetime().optional(),
 })
 
+const contactWhatsAppTraceSchema = z.object({
+    contactId: z.string().uuid(),
+    summary: z.string().trim().min(3).max(500),
+})
+
 const contactDealStageSchema = z.object({
     contactId: z.string().uuid(),
     dealStage: z.enum(DEAL_STAGES),
@@ -138,6 +143,64 @@ export async function saveContactInteraction(input: {
     }
 
     revalidatePath(`/contacts/${parsed.data.contactId}`)
+}
+
+export async function recordExternalWhatsAppAttempt(input: {
+    contactId: string
+    summary: string
+}): Promise<ActionResult<{ id: string }>> {
+    try {
+        const parsed = contactWhatsAppTraceSchema.safeParse(input)
+        if (!parsed.success) {
+            return { success: false, error: "Dados inválidos para registrar WhatsApp." }
+        }
+
+        const context = await getContactActionContext()
+        if ("error" in context) {
+            return { success: false, error: context.error ?? "Sem permissão." }
+        }
+
+        const { supabase, user, profile } = context
+        const { data: contact, error: contactError } = await supabase
+            .from("contacts")
+            .select("id, organization_id")
+            .eq("id", parsed.data.contactId)
+            .eq("organization_id", profile.organization_id)
+            .maybeSingle()
+
+        if (contactError || !contact?.id) {
+            return { success: false, error: "Contato não encontrado nesta organização." }
+        }
+
+        const { data: inserted, error: insertError } = await supabase
+            .from("contact_interactions")
+            .insert({
+                contact_id: parsed.data.contactId,
+                organization_id: profile.organization_id,
+                created_by: user.id,
+                type: "whatsapp",
+                direction: "outbound",
+                summary: parsed.data.summary,
+                happened_at: new Date().toISOString(),
+            })
+            .select("id")
+            .maybeSingle()
+
+        if (insertError || !inserted?.id) {
+            return {
+                success: false,
+                error: insertError?.message || "Não foi possível registrar WhatsApp.",
+            }
+        }
+
+        revalidatePath("/contacts")
+        revalidatePath("/contacts/site")
+        revalidatePath(`/contacts/${parsed.data.contactId}`)
+        return { success: true, data: { id: inserted.id } }
+    } catch (error) {
+        console.error("Unexpected external WhatsApp trace error:", error)
+        return { success: false, error: "Não foi possível registrar WhatsApp." }
+    }
 }
 
 export async function saveContactRecord(input: {
@@ -353,7 +416,7 @@ export async function updateContactStatus(
 
         const context = await getContactActionContext()
         if ("error" in context) {
-            return { success: false, error: context.error }
+            return { success: false, error: context.error ?? "Sem permissão." }
         }
 
         const { supabase, profile } = context
@@ -402,7 +465,7 @@ export async function deleteContact(contactId: string): Promise<ActionResult<{ d
 
         const context = await getContactActionContext()
         if ("error" in context) {
-            return { success: false, error: context.error }
+            return { success: false, error: context.error ?? "Sem permissão." }
         }
 
         const { supabase, profile } = context
@@ -509,7 +572,7 @@ export async function saveContactInterestProfile(input: {
 
         const context = await getContactActionContext()
         if ("error" in context) {
-            return { success: false, error: context.error }
+            return { success: false, error: context.error ?? "Sem permissão." }
         }
 
         const { supabase } = context

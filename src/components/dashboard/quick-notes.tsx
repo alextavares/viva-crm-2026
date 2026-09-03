@@ -7,39 +7,15 @@ import { StickyNote } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 
 export function QuickNotes() {
-    const [note, setNote] = useState("")
-    const [isClient, setIsClient] = useState(false)
+    const [note, setNote] = useState(() => {
+        if (typeof window === "undefined") return ""
+        return localStorage.getItem("imobi_quick_note") ?? ""
+    })
     const debouncedNote = useDebounce(note, 1000)
 
     useEffect(() => {
-        setIsClient(true)
-        const savedNote = localStorage.getItem("imobi_quick_note")
-        if (savedNote) {
-            setNote(savedNote)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (isClient) {
-            localStorage.setItem("imobi_quick_note", debouncedNote)
-        }
-    }, [debouncedNote, isClient])
-
-    if (!isClient) {
-        return (
-            <Card className="h-[200px]">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <StickyNote className="h-4 w-4 text-muted-foreground" />
-                        Notas Rápidas
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="h-full bg-muted/20 animate-pulse rounded-md"></div>
-                </CardContent>
-            </Card>
-        )
-    }
+        localStorage.setItem("imobi_quick_note", debouncedNote)
+    }, [debouncedNote])
 
     return (
         <Card className="flex flex-col">

@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, type MouseEvent } from "react"
+import { useState, useTransition, type MouseEvent } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, ExternalLink, Building } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
+import { updateContactStatus } from "@/app/actions/contacts"
 
 type Props = {
     contactId: string
@@ -18,8 +18,8 @@ type Props = {
 
 export function ContactListPrimaryAction({ contactId, type, status, onOptimisticUpdate, onRevertUpdate }: Props) {
     const router = useRouter()
-    const supabase = createClient()
-    const [isUpdating, setIsUpdating] = useState(false)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+    const [isPending, startTransition] = useTransition()
 
     const updateStatus = async (
         event: MouseEvent<HTMLButtonElement>,
@@ -29,54 +29,58 @@ export function ContactListPrimaryAction({ contactId, type, status, onOptimistic
         event.preventDefault()
         event.stopPropagation()
 
-        setIsUpdating(true)
+        setErrorMsg(null)
         if (onOptimisticUpdate) onOptimisticUpdate(nextStatus)
 
-        try {
-            const { error } = await supabase.from("contacts").update({ status: nextStatus }).eq("id", contactId)
-            if (error) throw error
-            toast.success(successMessage)
-            router.refresh()
-        } catch (error) {
-            console.error(`Error updating contact status to ${nextStatus}:`, error)
-            toast.error("Não foi possível atualizar o status do lead.")
-            if (onRevertUpdate) onRevertUpdate()
-        } finally {
-            setIsUpdating(false)
-        }
+        startTransition(() => {
+            void (async () => {
+                const result = await updateContactStatus(contactId, nextStatus)
+                if (!result.success) {
+                    setErrorMsg(result.error)
+                    toast.error(result.error)
+                    if (onRevertUpdate) onRevertUpdate()
+                    return
+                }
+
+                toast.success(successMessage)
+                router.refresh()
+            })()
+        })
     }
 
     if (type === "lead") {
         if (status === "new") {
             return (
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} className="flex flex-col items-start gap-1.5">
                     <Button
                         type="button"
                         size="sm"
                         className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                        disabled={isUpdating}
+                        disabled={isPending}
                         onClick={(e) => updateStatus(e, "contacted", "Lead marcado como em atendimento.")}
                     >
                         <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                        {isUpdating ? "Atualizando..." : "Atender"}
+                        {isPending ? "Atualizando..." : "Iniciar atendimento"}
                     </Button>
+                    {errorMsg ? <p className="text-xs text-red-600">{errorMsg}</p> : null}
                 </div>
             )
         }
         if (status === "contacted") {
             return (
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} className="flex flex-col items-start gap-1.5">
                     <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         className="h-8 text-xs border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                        disabled={isUpdating}
+                        disabled={isPending}
                         onClick={(e) => updateStatus(e, "qualified", "Lead marcado como qualificado.")}
                     >
                         <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                        {isUpdating ? "Atualizando..." : "Qualificar"}
+                        {isPending ? "Atualizando..." : "Qualificar lead"}
                     </Button>
+                    {errorMsg ? <p className="text-xs text-red-600">{errorMsg}</p> : null}
                 </div>
             )
         }
@@ -93,7 +97,7 @@ export function ContactListPrimaryAction({ contactId, type, status, onOptimistic
                 className="flex bg-secondary/50 hover:bg-secondary text-secondary-foreground text-xs font-medium px-3 py-1.5 rounded-md transition-colors items-center cursor-pointer"
             >
                 <Building className="mr-1.5 h-3.5 w-3.5" />
-                Ver imóveis
+                Ver imóveis do proprietário
             </div>
         )
     }
@@ -102,7 +106,7 @@ export function ContactListPrimaryAction({ contactId, type, status, onOptimistic
     return (
         <div className="flex bg-secondary/50 hover:bg-secondary text-secondary-foreground text-xs font-medium px-3 py-1.5 rounded-md transition-colors items-center cursor-pointer">
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-            Abrir
+            Abrir ficha
         </div>
     )
 }

@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
+import { PublicContactIdentityCard } from "@/components/public/public-contact-identity-card"
 import { SiteLeadForm } from "@/components/public/site-lead-form"
 import { getPublicProperty, getPublicSite } from "@/lib/public-site/site-data"
 import { ogImages, truncate, withBase } from "@/lib/public-site/seo"
@@ -46,6 +47,26 @@ export default async function PublicPropertyPage({
   const primaryImagePath = prop.image_paths?.[0] ?? null
   const galleryItems = (prop.images ?? prop.image_paths ?? []).slice(0, 5)
   const isPremium = site.settings?.theme === "premium"
+  const brandName = site.settings?.brand_name?.trim() || "Imobiliária"
+  const siteLogoUrl =
+    resolveMediaPathUrl("site-assets", site.settings?.logo_path) ??
+    resolveMediaUrl(site.settings?.logo_url) ??
+    site.settings?.logo_url ??
+    null
+  const responsibleBroker = prop.responsible_broker?.full_name?.trim()
+      ? {
+        name: prop.responsible_broker.full_name.trim(),
+        avatarUrl:
+          resolveMediaPathUrl("site-assets", prop.responsible_broker.avatar_path) ??
+          resolveMediaUrl(prop.responsible_broker.avatar_url) ??
+          prop.responsible_broker.avatar_url ??
+          null,
+        creci: prop.responsible_broker.creci?.trim() || null,
+        whatsapp: prop.responsible_broker.whatsapp?.trim() || site.settings?.whatsapp?.trim() || null,
+        responseTimeLabel: prop.responsible_broker.response_time_label?.trim() || null,
+      }
+    : null
+  const whatsappCtaMessage = `Olá, vi o imóvel "${prop.title}" e gostaria de mais informações.`
 
   const addressLine =
     prop.address?.neighborhood || prop.address?.city || prop.address?.state
@@ -107,9 +128,11 @@ export default async function PublicPropertyPage({
             {isPremium ? "Atendimento consultivo" : "Resposta rapida"}
           </div>
           <div className={isPremium ? "text-3xl font-serif leading-tight" : "text-2xl font-semibold leading-tight"}>{prop.title}</div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            Ref: {prop.public_code || prop.id.slice(0, 8)}
-          </div>
+          {prop.public_code ? (
+            <div className="mt-2 text-xs text-muted-foreground">
+              Ref: {prop.public_code}
+            </div>
+          ) : null}
           <div className="mt-1 text-sm text-muted-foreground">{addressLine}</div>
           <div className="mt-5 text-3xl font-semibold" style={{ color: "var(--site-primary)" }}>
             {formatMoneyBRL(prop.price)}
@@ -130,23 +153,47 @@ export default async function PublicPropertyPage({
             </div>
           </div>
 
-          <div className={`mt-6 border bg-muted/10 ${isPremium ? "rounded-3xl p-5" : "rounded-2xl p-4"}`}>
+          <div className="mt-6">
+            <PublicContactIdentityCard
+              theme={site.settings?.theme}
+              ctaMessage={whatsappCtaMessage}
+              state={
+                responsibleBroker
+                  ? {
+                      mode: "broker",
+                      name: responsibleBroker.name,
+                      avatarUrl: responsibleBroker.avatarUrl,
+                      creci: responsibleBroker.creci,
+                      whatsapp: responsibleBroker.whatsapp,
+                      responseTimeLabel: responsibleBroker.responseTimeLabel,
+                    }
+                  : {
+                      mode: "team",
+                      organizationName: brandName,
+                      avatarUrl: siteLogoUrl,
+                      whatsapp: site.settings?.whatsapp?.trim() || null,
+                    }
+              }
+            />
+          </div>
+
+          <div className={`mt-4 border bg-muted/10 ${isPremium ? "rounded-3xl p-5" : "rounded-2xl p-4"}`}>
             <div className="text-sm font-semibold">{isPremium ? "Solicite atendimento" : "Pedir informacoes"}</div>
             <div className="mt-2 text-xs text-muted-foreground">
               {isPremium
-                ? "Seu contato entra no CRM e a equipe retorna com atendimento consultivo pelo WhatsApp."
-                : "Seu contato vai para a inbox e o atendimento responde pelo WhatsApp."}
+                ? "Seu contato segue para a equipe e o retorno acontece com atendimento consultivo pelo WhatsApp."
+                : "Seu contato segue para a equipe e o atendimento responde pelo WhatsApp informado."}
             </div>
             <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
               {isPremium ? (
                 <>
                   <div className="rounded-2xl border bg-white px-3 py-2">Retorno consultivo com contexto do imovel e proximos passos.</div>
-                  <div className="rounded-2xl border bg-white px-3 py-2">Contato centralizado no CRM para nao perder nenhum lead.</div>
+                  <div className="rounded-2xl border bg-white px-3 py-2">Atendimento organizado para orientar a proxima etapa com seguranca.</div>
                 </>
               ) : (
                 <>
                   <div className="rounded-2xl border bg-white px-3 py-2">WhatsApp como canal principal para acelerar o primeiro contato.</div>
-                  <div className="rounded-2xl border bg-white px-3 py-2">Lead cai direto no CRM para resposta rapida da equipe.</div>
+                  <div className="rounded-2xl border bg-white px-3 py-2">Sua mensagem chega para a equipe com contexto do imovel de interesse.</div>
                 </>
               )}
             </div>
@@ -159,8 +206,8 @@ export default async function PublicPropertyPage({
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">O que acontece depois</div>
             <div className="mt-2 text-xs text-muted-foreground">
               {isPremium
-                ? "A equipe recebe seu interesse, revisa o contexto no CRM e retorna com atendimento personalizado."
-                : "Seu contato entra na fila do CRM e a equipe responde com mais agilidade pelo canal informado."}
+                ? "A equipe recebe seu interesse, revisa o contexto do imovel e retorna com atendimento personalizado."
+                : "A equipe responde com mais agilidade pelo canal informado."}
             </div>
           </div>
         </aside>

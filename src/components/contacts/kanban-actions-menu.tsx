@@ -1,5 +1,7 @@
 "use client"
 
+"use client"
+
 import { MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,6 +12,10 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
+import { recordExternalWhatsAppAttempt } from "@/app/actions/contacts"
+import { buildWhatsAppUrl } from "@/lib/whatsapp"
+import { buildBrokerWhatsAppMessage, buildExternalWhatsAppTraceSummary } from "@/lib/whatsapp-context"
 import { MessageTemplate, Contact } from "@/lib/types"
 import { bindTemplateVariables } from "@/lib/templates"
 
@@ -23,6 +29,7 @@ export function KanbanActionsMenu({ contact, templates, brokerName }: KanbanActi
     const whatsappTemplates = templates.filter((t) => t.channel === "whatsapp")
 
     const handleSend = (template: MessageTemplate | null) => {
+        void (async () => {
         if (!contact.phone) return
 
         let text = ""
@@ -32,17 +39,33 @@ export function KanbanActionsMenu({ contact, templates, brokerName }: KanbanActi
                 broker_name: brokerName,
             })
         } else {
-            text = `Olá ${contact.name}, tudo bem?`
+            text = buildBrokerWhatsAppMessage({
+                contactName: contact.name,
+            })
         }
 
-        // Retira caracteres não numéricos do telefone para o wa.me
-        const phoneDigits = contact.phone.replace(/\D/g, "")
+        const url = buildWhatsAppUrl({ phone: contact.phone, message: text })
+        if (!url) return
+        const popup = window.open("", "_blank", "noopener,noreferrer")
 
-        // Cria a URL do WhatsApp Web/App
-        const url = new URL(`https://wa.me/${phoneDigits}`)
-        url.searchParams.set("text", text)
+        const result = await recordExternalWhatsAppAttempt({
+            contactId: contact.id,
+            summary: buildExternalWhatsAppTraceSummary({}),
+        })
 
-        window.open(url.toString(), "_blank", "noopener,noreferrer")
+        if (!result.success) {
+            popup?.close()
+            toast.error(result.error)
+            return
+        }
+
+        if (popup) {
+            popup.location.href = url
+        } else {
+            window.open(url, "_blank", "noopener,noreferrer")
+        }
+        toast.success("WhatsApp aberto e registrado na timeline.")
+        })()
     }
 
     if (!contact.phone) return null

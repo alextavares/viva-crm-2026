@@ -1,20 +1,15 @@
 import { PropertyForm } from '@/components/properties/property-form'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function NewPropertyPage() {
     return (
-        <div className="max-w-4xl mx-auto py-8">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Novo Imóvel</CardTitle>
-                    <CardDescription>
-                        Cadastre um novo imóvel para venda ou locação.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <PropertyForm />
-                </CardContent>
-            </Card>
+        <div className="space-y-6">
+            <div className="flex flex-col gap-1">
+                <h1 className="text-lg font-semibold md:text-2xl">Novo imóvel</h1>
+                <p className="text-sm text-muted-foreground">
+                    Cadastre os dados essenciais, proprietário, fotos e publicação sem sair do fluxo.
+                </p>
+            </div>
+            <PropertyForm />
         </div>
     )
 }

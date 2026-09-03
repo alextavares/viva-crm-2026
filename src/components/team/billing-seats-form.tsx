@@ -9,77 +9,45 @@ import { SeatCapacityAlert } from "@/components/team/seat-capacity-alert"
 import { getSeatCapacityAlert } from "@/lib/team/billing"
 import { displayEmptyForZero } from "@/lib/utils"
 
-type BillingResponse = {
-  ok: boolean
-  plan: {
-    broker_seat_limit: number
-    billing_cycle_anchor: string
-    billing_cycle_interval: "monthly" | "yearly"
-    status: "active" | "inactive"
-  }
-  usage: {
-    used: number
-    seat_limit: number
-    available: number
-  }
-  cycle: {
-    start: string
-    end: string
-    interval: "monthly" | "yearly"
-    total_days: number
-    remaining_days: number
-  }
-  pending_change: {
-    id: string
-    action: "downgrade" | "upgrade"
-    status: string
-    old_limit: number
-    new_limit: number
-    effective_at: string
-  } | null
-  history: Array<{
-    id: string
-    action: "downgrade" | "upgrade"
-    status: string
-    old_limit: number
-    new_limit: number
-    effective_at: string
-    prorated_amount_cents: number
-    currency_code: string
-    created_at: string
-  }>
-}
+import { loadBillingSeatsData, applyBrokerSeatPlanChange, type BillingSeatsData } from "@/app/actions/team"
 
 export function BillingSeatsForm({ canManage }: { canManage: boolean }) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [data, setData] = useState<BillingResponse | null>(null)
+  const [data, setData] = useState<BillingSeatsData | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const [upgradeLimit, setUpgradeLimit] = useState("")
   const [unitPriceCents, setUnitPriceCents] = useState("0")
   const [downgradeLimit, setDowngradeLimit] = useState("")
 
   const load = useCallback(async () => {
+    if (!canManage) return
+
     setLoading(true)
-    try {
-      const response = await fetch("/api/settings/billing/seats", { cache: "no-store" })
-      const json = (await response.json()) as BillingResponse | { message?: string }
-      if (!response.ok || !("ok" in json) || !json.ok) {
-        throw new Error(("message" in json && json.message) || "Falha ao carregar cobrança.")
-      }
-      setData(json)
-      setUpgradeLimit(String((json.plan?.broker_seat_limit ?? 0) + 1))
-      setDowngradeLimit(String(Math.max(0, (json.plan?.broker_seat_limit ?? 0) - 1)))
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao carregar cobrança.")
-    } finally {
-      setLoading(false)
+    const result = await loadBillingSeatsData()
+    if (result.success) {
+      setData(result.data)
+      setUpgradeLimit(String((result.data.plan?.broker_seat_limit ?? 0) + 1))
+      setDowngradeLimit(String(Math.max(0, (result.data.plan?.broker_seat_limit ?? 0) - 1)))
+      setErrorMsg(null)
+    } else {
+      const message = result.error || "Falha ao carregar cobrança."
+      setErrorMsg(message)
+      toast.error(message)
     }
-  }, [])
+    setLoading(false)
+  }, [canManage])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    if (!canManage) return
+
+    const timeoutId = window.setTimeout(() => {
+      void load()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [canManage, load])
 
   const cycleText = useMemo(() => {
     if (!data) return ""
@@ -87,37 +55,38 @@ export function BillingSeatsForm({ canManage }: { canManage: boolean }) {
     const end = new Date(data.cycle.end).toLocaleDateString("pt-BR")
     return `${start} até ${end}`
   }, [data])
-  const capacityAlert = useMemo(() => getSeatCapacityAlert(data?.usage, 1), [data?.usage])
+  const capacityAlert = useMemo(() => getSeatCapacityAlert(data?.usage || null, 1), [data?.usage])
 
   async function submitChange(payload: { action: "upgrade" | "downgrade"; new_limit: number; unit_price_cents?: number }) {
     setSubmitting(true)
-    try {
-      const response = await fetch("/api/settings/billing/seats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const json = (await response.json()) as { ok?: boolean; message?: string; code?: string; change?: { prorated_amount_cents?: number } }
-      if (!response.ok || !json.ok) {
-        throw new Error(json.message || "Falha ao salvar mudança de assentos.")
-      }
+    setErrorMsg(null)
+    const result = await applyBrokerSeatPlanChange({
+      action: payload.action,
+      newLimit: payload.new_limit,
+      unitPriceCents: payload.unit_price_cents,
+      currencyCode: "BRL",
+    })
 
+    if (result.success) {
       if (payload.action === "upgrade") {
-        const cents = json.change?.prorated_amount_cents ?? 0
-        toast.success(`Upgrade aplicado. Pró-rata calculado: ${(cents / 100).toFixed(2)}.`)
+        const cents = result.data.prorated_amount_cents ?? 0
+        toast.success(`Upgrade aplicado. Pró-rata calculado: R$ ${(cents / 100).toFixed(2).replace(".", ",")}.`)
       } else {
         toast.success("Downgrade agendado para o próximo ciclo.")
       }
       await load()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao salvar alteração.")
-    } finally {
-      setSubmitting(false)
+    } else {
+      const message = result.error || "Falha ao atualizar assentos."
+      setErrorMsg(message)
+      toast.error(message)
     }
+    setSubmitting(false)
   }
 
   return (
     <div className="space-y-6">
+      {errorMsg ? <p className="text-sm text-red-600">{errorMsg}</p> : null}
+
       <section className="rounded-md border p-4">
         <h2 className="text-sm font-semibold">Plano atual</h2>
         {loading || !data ? (

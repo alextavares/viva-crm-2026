@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { applyContactFollowupAction } from "@/app/actions/followups"
 
 type Job = {
   id: string
@@ -45,26 +46,28 @@ function statusClass(status: Job["status"]) {
 export function ContactFollowupPanel({ contactId, canManage, jobs }: Props) {
   const router = useRouter()
   const [loadingAction, setLoadingAction] = useState<null | "pause" | "resume" | "cancel">(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const hasPending = useMemo(() => jobs.some((j) => j.status === "pending"), [jobs])
   const hasPaused = useMemo(() => jobs.some((j) => j.status === "paused"), [jobs])
 
   const runAction = async (action: "pause" | "resume" | "cancel") => {
+    setErrorMsg(null)
     setLoadingAction(action)
     try {
-      const res = await fetch(`/api/followups/contact/${contactId}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action }),
-      })
-      const data = await res.json().catch(() => ({}))
+      const result = await applyContactFollowupAction(contactId, action)
+      if (!result.success) {
+        setErrorMsg(result.error)
+        toast.error(result.error)
+        return
+      }
 
-      if (!res.ok) throw new Error(data?.message || "Falha ao atualizar régua.")
-
-      toast.success(`Ação "${action}" aplicada em ${data.affected ?? 0} follow-ups.`)
+      toast.success(`Ação "${action}" aplicada em ${result.data?.affected ?? 0} follow-ups.`)
       router.refresh()
     } catch (error) {
       console.error("Error running followup action:", error)
-      toast.error("Erro ao atualizar a régua deste contato.")
+      const message = error instanceof Error ? error.message : "Erro ao atualizar a régua deste contato."
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
       setLoadingAction(null)
     }
@@ -106,6 +109,7 @@ export function ContactFollowupPanel({ contactId, canManage, jobs }: Props) {
           </div>
         ) : null}
       </div>
+      {errorMsg ? <p className="mt-3 text-sm text-red-600">{errorMsg}</p> : null}
 
       {jobs.length === 0 ? (
         <div className="mt-4 rounded-md border bg-background p-3 text-sm text-muted-foreground">

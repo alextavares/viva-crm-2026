@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { processFollowupsForOrganization } from "@/lib/followups/operations"
 
 type ProcessBody = {
   limit?: number
@@ -48,15 +49,11 @@ export async function POST(req: Request) {
     organizationId = profile.organization_id
   }
 
-  const { data, error } = await supabase.rpc("followup_process_due", {
-    p_limit: limit,
-    p_org_id: organizationId,
-  })
-
-  if (error) {
-    return NextResponse.json({ ok: false, message: error.message, code: error.code }, { status: 500 })
+  const result = await processFollowupsForOrganization(supabase, organizationId, limit)
+  if (!result.success) {
+    return NextResponse.json({ ok: false, message: result.error }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, result: data })
+  return NextResponse.json({ ok: true, result: result.data })
 }
 

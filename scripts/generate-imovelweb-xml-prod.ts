@@ -49,7 +49,7 @@ async function main() {
     }
 
     // Generate XML
-    const publisher = { name: 'Imobiliária Teste', email: 'contato@teste.com' };
+    const publisher = { nomeContato: 'Imobiliária Teste', emailContato: 'contato@teste.com' };
     const xml = generateImovelwebXml(properties as CRMProperty[], publisher);
 
     // Save to file

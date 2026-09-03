@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { applyContactFollowupActionForOrganization } from "@/lib/followups/operations"
 
 type ActionBody = {
   action?: "pause" | "resume" | "cancel"
@@ -40,81 +41,12 @@ export async function POST(req: Request, { params }: RouteParams) {
   const organizationId = profile?.organization_id ?? null
   if (!canManage || !organizationId) return new NextResponse("Forbidden", { status: 403 })
 
-  const { data: contact } = await supabase
-    .from("contacts")
-    .select("id, organization_id")
-    .eq("id", contactId)
-    .eq("organization_id", organizationId)
-    .maybeSingle()
-
-  if (!contact) return new NextResponse("Not Found", { status: 404 })
-
-  if (body.action === "pause") {
-    const { data, error } = await supabase
-      .from("followup_jobs")
-      .update({ status: "paused", updated_at: new Date().toISOString() })
-      .eq("organization_id", organizationId)
-      .eq("contact_id", contactId)
-      .eq("status", "pending")
-      .select("id")
-
-    if (error) {
-      return NextResponse.json({ ok: false, message: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, action: "pause", affected: data?.length ?? 0 })
+  const result = await applyContactFollowupActionForOrganization(supabase, organizationId, contactId, body.action)
+  if (!result.success) {
+    const status = result.error.includes("não encontrado") ? 404 : 500
+    return NextResponse.json({ ok: false, message: result.error }, { status })
   }
 
-  if (body.action === "cancel") {
-    const { data, error } = await supabase
-      .from("followup_jobs")
-      .update({ status: "canceled", updated_at: new Date().toISOString() })
-      .eq("organization_id", organizationId)
-      .eq("contact_id", contactId)
-      .in("status", ["pending", "paused"])
-      .select("id")
-
-    if (error) {
-      return NextResponse.json({ ok: false, message: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, action: "cancel", affected: data?.length ?? 0 })
-  }
-
-  const { data: pausedJobs, error: pausedError } = await supabase
-    .from("followup_jobs")
-    .select("id, scheduled_at")
-    .eq("organization_id", organizationId)
-    .eq("contact_id", contactId)
-    .eq("status", "paused")
-    .order("scheduled_at", { ascending: true })
-
-  if (pausedError) {
-    return NextResponse.json({ ok: false, message: pausedError.message }, { status: 500 })
-  }
-
-  const now = Date.now()
-  let affected = 0
-  for (const job of pausedJobs || []) {
-    const scheduledAt = new Date(job.scheduled_at).getTime()
-    const nextScheduledAt = new Date(Math.max(scheduledAt, now + 10_000)).toISOString()
-    const { error } = await supabase
-      .from("followup_jobs")
-      .update({
-        status: "pending",
-        scheduled_at: nextScheduledAt,
-        updated_at: new Date().toISOString(),
-        error: null,
-      })
-      .eq("id", job.id)
-      .eq("organization_id", organizationId)
-
-    if (error) {
-      return NextResponse.json({ ok: false, message: error.message }, { status: 500 })
-    }
-    affected += 1
-  }
-
-  return NextResponse.json({ ok: true, action: "resume", affected })
+  return NextResponse.json({ ok: true, ...result.data })
 }
 

@@ -8,6 +8,7 @@ import { WhatsAppFab } from "@/components/marketing/whatsapp-fab"
 import { withBase, ogImages, truncate } from "@/lib/public-site/seo"
 import { getPublicSite } from "@/lib/public-site/site-data"
 import { getRequestHost, isPreviewHost, publicBasePath } from "@/lib/public-site/host"
+import { pickCuratedBanner } from "@/lib/public-site/public-curation"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 
 export const dynamic = "force-dynamic"
@@ -93,8 +94,8 @@ export default async function PublicSiteLayout({
   const homeHref = base || "/"
   const isPremium = site.settings?.theme === "premium"
 
-  const topbar = site.banners.find((b) => b.placement === "topbar") ?? null
-  const popup = site.banners.find((b) => b.placement === "popup") ?? null
+  const topbar = pickCuratedBanner(site.banners, "topbar")
+  const popup = pickCuratedBanner(site.banners, "popup")
 
   return (
     <div
@@ -231,7 +232,7 @@ export default async function PublicSiteLayout({
               <div className="mt-1 text-sm text-muted-foreground">
                 {isPremium
                   ? "Curadoria imobiliária com apresentação profissional e atendimento consultivo."
-                  : "Busca rápida, lead direto no CRM e atendimento humano via WhatsApp."}
+                  : "Busca rápida, atendimento humano via WhatsApp e contato sem fricção."}
               </div>
             </div>
             <div>

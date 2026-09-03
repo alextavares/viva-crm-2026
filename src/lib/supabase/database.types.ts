@@ -14,9 +14,337 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_lead_messages: {
+        Row: {
+          author: string
+          channel: string
+          content: string
+          created_at: string
+          direction: string
+          id: string
+          organization_id: string
+          payload_json: Json
+          session_id: string
+        }
+        Insert: {
+          author: string
+          channel?: string
+          content: string
+          created_at?: string
+          direction: string
+          id?: string
+          organization_id: string
+          payload_json?: Json
+          session_id: string
+        }
+        Update: {
+          author?: string
+          channel?: string
+          content?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          organization_id?: string
+          payload_json?: Json
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_lead_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_lead_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "ai_lead_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_lead_qualifications: {
+        Row: {
+          budget_max: number | null
+          budget_min: number | null
+          city: string | null
+          intent: string | null
+          neighborhoods: string[] | null
+          organization_id: string
+          property_type: string | null
+          session_id: string
+          stage_score: number
+          summary: string | null
+          timeline: string | null
+          transaction_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget_max?: number | null
+          budget_min?: number | null
+          city?: string | null
+          intent?: string | null
+          neighborhoods?: string[] | null
+          organization_id: string
+          property_type?: string | null
+          session_id: string
+          stage_score?: number
+          summary?: string | null
+          timeline?: string | null
+          transaction_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget_max?: number | null
+          budget_min?: number | null
+          city?: string | null
+          intent?: string | null
+          neighborhoods?: string[] | null
+          organization_id?: string
+          property_type?: string | null
+          session_id?: string
+          stage_score?: number
+          summary?: string | null
+          timeline?: string | null
+          transaction_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_lead_qualifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_lead_qualifications_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "ai_lead_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_lead_reengagement_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          final_escalation_delay_minutes: number
+          first_delay_minutes: number
+          handoff_message_template: string | null
+          inactive_message_template: string | null
+          message_template: string
+          notify_broker: boolean
+          notify_manager: boolean
+          organization_id: string
+          second_delay_minutes: number
+          sla_minutes: number
+          third_delay_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          final_escalation_delay_minutes?: number
+          first_delay_minutes?: number
+          handoff_message_template?: string | null
+          inactive_message_template?: string | null
+          message_template?: string
+          notify_broker?: boolean
+          notify_manager?: boolean
+          organization_id: string
+          second_delay_minutes?: number
+          sla_minutes?: number
+          third_delay_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          final_escalation_delay_minutes?: number
+          first_delay_minutes?: number
+          handoff_message_template?: string | null
+          inactive_message_template?: string | null
+          message_template?: string
+          notify_broker?: boolean
+          notify_manager?: boolean
+          organization_id?: string
+          second_delay_minutes?: number
+          sla_minutes?: number
+          third_delay_minutes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_lead_reengagement_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_lead_reengagements: {
+        Row: {
+          attempt_count: number
+          contact_id: string
+          created_at: string
+          escalated_at: string | null
+          id: string
+          last_attempt_at: string | null
+          last_attempt_message: string | null
+          max_attempts: number
+          next_attempt_at: string | null
+          organization_id: string
+          reason: string
+          session_id: string
+          status: string
+          stopped_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          contact_id: string
+          created_at?: string
+          escalated_at?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          last_attempt_message?: string | null
+          max_attempts?: number
+          next_attempt_at?: string | null
+          organization_id: string
+          reason: string
+          session_id: string
+          status?: string
+          stopped_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          contact_id?: string
+          created_at?: string
+          escalated_at?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          last_attempt_message?: string | null
+          max_attempts?: number
+          next_attempt_at?: string | null
+          organization_id?: string
+          reason?: string
+          session_id?: string
+          status?: string
+          stopped_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_lead_reengagements_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_lead_reengagements_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_lead_reengagements_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "ai_lead_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_lead_sessions: {
+        Row: {
+          assigned_to_at_handoff: string | null
+          closed_at: string | null
+          contact_id: string
+          created_at: string
+          current_step: string
+          handoff_completed_at: string | null
+          handoff_requested_at: string | null
+          id: string
+          last_message_at: string | null
+          organization_id: string
+          paused_at: string | null
+          qualified_at: string | null
+          source: string
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to_at_handoff?: string | null
+          closed_at?: string | null
+          contact_id: string
+          created_at?: string
+          current_step?: string
+          handoff_completed_at?: string | null
+          handoff_requested_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          organization_id: string
+          paused_at?: string | null
+          qualified_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to_at_handoff?: string | null
+          closed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          current_step?: string
+          handoff_completed_at?: string | null
+          handoff_requested_at?: string | null
+          id?: string
+          last_message_at?: string | null
+          organization_id?: string
+          paused_at?: string | null
+          qualified_at?: string | null
+          source?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_lead_sessions_assigned_to_at_handoff_fkey"
+            columns: ["assigned_to_at_handoff"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_lead_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_lead_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
-          broker_id: string | null
+          assigned_to: string | null
           contact_id: string | null
           created_at: string | null
           date: string
@@ -28,7 +356,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          broker_id?: string | null
+          assigned_to?: string | null
           contact_id?: string | null
           created_at?: string | null
           date: string
@@ -40,7 +368,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          broker_id?: string | null
+          assigned_to?: string | null
           contact_id?: string | null
           created_at?: string | null
           date?: string
@@ -54,7 +382,7 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "appointments_broker_id_fkey"
-            columns: ["broker_id"]
+            columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -293,11 +621,16 @@ export type Database = {
       }
       contacts: {
         Row: {
+          ai_last_summary: string | null
+          ai_score: number | null
+          ai_status: string | null
           assigned_to: string | null
           city: string | null
           created_at: string | null
           deal_stage: string | null
           email: string | null
+          handoff_at: string | null
+          handoff_to_profile_id: string | null
           id: string
           interest_bedrooms: number | null
           interest_neighborhoods: string[] | null
@@ -307,16 +640,22 @@ export type Database = {
           notes: string | null
           organization_id: string
           phone: string | null
+          qualified_by_ai_at: string | null
           status: string | null
           type: string | null
           updated_at: string | null
         }
         Insert: {
+          ai_last_summary?: string | null
+          ai_score?: number | null
+          ai_status?: string | null
           assigned_to?: string | null
           city?: string | null
           created_at?: string | null
           deal_stage?: string | null
           email?: string | null
+          handoff_at?: string | null
+          handoff_to_profile_id?: string | null
           id?: string
           interest_bedrooms?: number | null
           interest_neighborhoods?: string[] | null
@@ -326,16 +665,22 @@ export type Database = {
           notes?: string | null
           organization_id: string
           phone?: string | null
+          qualified_by_ai_at?: string | null
           status?: string | null
           type?: string | null
           updated_at?: string | null
         }
         Update: {
+          ai_last_summary?: string | null
+          ai_score?: number | null
+          ai_status?: string | null
           assigned_to?: string | null
           city?: string | null
           created_at?: string | null
           deal_stage?: string | null
           email?: string | null
+          handoff_at?: string | null
+          handoff_to_profile_id?: string | null
           id?: string
           interest_bedrooms?: number | null
           interest_neighborhoods?: string[] | null
@@ -345,11 +690,19 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           phone?: string | null
+          qualified_by_ai_at?: string | null
           status?: string | null
           type?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_handoff_to_profile_id_fkey"
+            columns: ["handoff_to_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contacts_assigned_to_fkey"
             columns: ["assigned_to"]
@@ -406,7 +759,7 @@ export type Database = {
       }
       deal_contracts: {
         Row: {
-          broker_id: string | null
+          assigned_to: string | null
           commission_value: number | null
           contact_id: string
           contract_type: string | null
@@ -423,7 +776,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          broker_id?: string | null
+          assigned_to?: string | null
           commission_value?: number | null
           contact_id: string
           contract_type?: string | null
@@ -440,7 +793,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          broker_id?: string | null
+          assigned_to?: string | null
           commission_value?: number | null
           contact_id?: string
           contract_type?: string | null
@@ -459,7 +812,7 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deal_contracts_broker_id_fkey"
-            columns: ["broker_id"]
+            columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -496,7 +849,7 @@ export type Database = {
       }
       deal_proposals: {
         Row: {
-          broker_id: string | null
+          assigned_to: string | null
           contact_id: string
           created_at: string | null
           id: string
@@ -510,7 +863,7 @@ export type Database = {
           valid_until: string | null
         }
         Insert: {
-          broker_id?: string | null
+          assigned_to?: string | null
           contact_id: string
           created_at?: string | null
           id?: string
@@ -524,7 +877,7 @@ export type Database = {
           valid_until?: string | null
         }
         Update: {
-          broker_id?: string | null
+          assigned_to?: string | null
           contact_id?: string
           created_at?: string | null
           id?: string
@@ -540,7 +893,7 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deal_proposals_broker_id_fkey"
-            columns: ["broker_id"]
+            columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1357,32 +1710,47 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
+          creci: string | null
           created_at: string | null
           email: string | null
           full_name: string | null
           id: string
           is_active: boolean
           organization_id: string | null
+          public_display_name: string | null
+          public_profile_enabled: boolean
+          public_whatsapp: string | null
           role: string | null
           updated_at: string | null
         }
         Insert: {
+          avatar_url?: string | null
+          creci?: string | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
           id: string
           is_active?: boolean
           organization_id?: string | null
+          public_display_name?: string | null
+          public_profile_enabled?: boolean
+          public_whatsapp?: string | null
           role?: string | null
           updated_at?: string | null
         }
         Update: {
+          avatar_url?: string | null
+          creci?: string | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           is_active?: boolean
           organization_id?: string | null
+          public_display_name?: string | null
+          public_profile_enabled?: boolean
+          public_whatsapp?: string | null
           role?: string | null
           updated_at?: string | null
         }
@@ -1399,7 +1767,7 @@ export type Database = {
       properties: {
         Row: {
           address: Json | null
-          broker_id: string | null
+          assigned_to: string | null
           built_area: number | null
           created_at: string | null
           description: string | null
@@ -1413,6 +1781,7 @@ export type Database = {
           last_published_at: string | null
           operation: string
           organization_id: string
+          owner_contact_id: string | null
           owner_name: string | null
           price: number | null
           public_code: string
@@ -1432,7 +1801,7 @@ export type Database = {
         }
         Insert: {
           address?: Json | null
-          broker_id?: string | null
+          assigned_to?: string | null
           built_area?: number | null
           created_at?: string | null
           description?: string | null
@@ -1446,6 +1815,7 @@ export type Database = {
           last_published_at?: string | null
           operation?: string
           organization_id: string
+          owner_contact_id?: string | null
           owner_name?: string | null
           price?: number | null
           public_code: string
@@ -1465,7 +1835,7 @@ export type Database = {
         }
         Update: {
           address?: Json | null
-          broker_id?: string | null
+          assigned_to?: string | null
           built_area?: number | null
           created_at?: string | null
           description?: string | null
@@ -1479,6 +1849,7 @@ export type Database = {
           last_published_at?: string | null
           operation?: string
           organization_id?: string
+          owner_contact_id?: string | null
           owner_name?: string | null
           price?: number | null
           public_code?: string
@@ -1499,7 +1870,7 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "properties_broker_id_fkey"
-            columns: ["broker_id"]
+            columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1509,6 +1880,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "properties_owner_contact_id_fkey"
+            columns: ["owner_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -1754,6 +2132,7 @@ export type Database = {
           theme: string
           updated_at: string | null
           whatsapp: string | null
+          whatsapp_onboarding_collapsed: boolean
         }
         Insert: {
           brand_name?: string | null
@@ -1775,6 +2154,7 @@ export type Database = {
           theme?: string
           updated_at?: string | null
           whatsapp?: string | null
+          whatsapp_onboarding_collapsed?: boolean
         }
         Update: {
           brand_name?: string | null
@@ -1796,6 +2176,7 @@ export type Database = {
           theme?: string
           updated_at?: string | null
           whatsapp?: string | null
+          whatsapp_onboarding_collapsed?: boolean
         }
         Relationships: [
           {
@@ -2159,7 +2540,7 @@ export type Database = {
         Args: { p_feed_token: string; p_portal: string }
         Returns: {
           address: Json | null
-          broker_id: string | null
+          assigned_to: string | null
           built_area: number | null
           created_at: string | null
           description: string | null

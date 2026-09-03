@@ -2,6 +2,8 @@ import Link from "next/link"
 import { getPublicThemeFlags } from "@/lib/public-site/theme"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 import type { SitePropertyCard, SiteTheme } from "@/lib/site"
+import { isSuspiciousPublicMedia } from "@/lib/public-site/public-curation"
+import { getPropertyTypeLabel } from "@/lib/types"
 
 type PublicPropertyCardProps = {
   property: SitePropertyCard
@@ -15,14 +17,7 @@ function formatMoneyBRL(v: number | null | undefined) {
 }
 
 function publicTypeLabel(type: string | null | undefined) {
-  if (!type) return "Tipo a informar"
-  if (type === "apartment") return "Apartamento"
-  if (type === "house") return "Casa"
-  if (type === "condominium_house") return "Casa em condomínio"
-  if (type === "land") return "Terreno"
-  if (type === "commercial") return "Comercial"
-  if (type === "commercial_space") return "Salão comercial"
-  return type
+  return getPropertyTypeLabel(type, "Tipo a informar")
 }
 
 function propertyLocationLabel(property: SitePropertyCard) {
@@ -33,6 +28,20 @@ function propertyLocationLabel(property: SitePropertyCard) {
   return "Localização a informar"
 }
 
+function formatArea(area: number | null | undefined) {
+  if (area == null || area <= 0) return null
+  const rounded = Number.isInteger(area) ? area.toString() : area.toFixed(1).replace(".", ",")
+  return `${rounded} m²`
+}
+
+function propertyHighlights(property: SitePropertyCard) {
+  return [
+    property.bedrooms && property.bedrooms > 0 ? `${property.bedrooms} quarto${property.bedrooms > 1 ? "s" : ""}` : null,
+    property.bathrooms && property.bathrooms > 0 ? `${property.bathrooms} banheiro${property.bathrooms > 1 ? "s" : ""}` : null,
+    formatArea(property.area),
+  ].filter(Boolean) as string[]
+}
+
 export function PublicPropertyCard({
   property,
   href,
@@ -40,11 +49,13 @@ export function PublicPropertyCard({
   variant = "default",
 }: PublicPropertyCardProps) {
   const { isPremium, isTrustFirst, isCompact, isSearchHighlights } = getPublicThemeFlags(theme)
-  const thumbnailSrc =
+  const rawThumbnailSrc =
     resolveMediaPathUrl("properties", property.thumbnail_path) ??
     resolveMediaUrl(property.thumbnail_url) ??
     property.thumbnail_url ??
     undefined
+  const thumbnailSrc = isSuspiciousPublicMedia(rawThumbnailSrc) ? undefined : rawThumbnailSrc
+  const highlights = propertyHighlights(property)
 
   if (variant === "side") {
     return (
@@ -68,6 +79,15 @@ export function PublicPropertyCard({
             <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
               {propertyLocationLabel(property)}
             </div>
+            {highlights.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                {highlights.map((item) => (
+                  <span key={item} className="rounded-2xl border bg-white px-2.5 py-1">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-4 text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
               {formatMoneyBRL(property.price)}
             </div>
@@ -94,6 +114,15 @@ export function PublicPropertyCard({
           <div className="mt-2 text-xs text-muted-foreground line-clamp-1">
             {property.neighborhood || property.city || "Localização a informar"}
           </div>
+          {highlights.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+              {highlights.map((item) => (
+                <span key={item} className="rounded-2xl border bg-white px-2.5 py-1">
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-4 text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
             {formatMoneyBRL(property.price)}
           </div>
@@ -126,17 +155,24 @@ export function PublicPropertyCard({
             <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
               {propertyLocationLabel(property)}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Ref: {property.public_code || property.id.slice(0, 8)}
-            </div>
+            {property.public_code ? (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Ref: {property.public_code}
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
               <span className="rounded-2xl border bg-white px-2.5 py-1">{publicTypeLabel(property.type)}</span>
+              {highlights.map((item) => (
+                <span key={item} className="rounded-2xl border bg-white px-2.5 py-1">
+                  {item}
+                </span>
+              ))}
             </div>
             <div className="mt-4 flex items-end justify-between gap-3">
               <div className="text-base font-semibold" style={{ color: "var(--site-primary)" }}>
                 {formatMoneyBRL(property.price)}
               </div>
-              <div className="text-[11px] font-medium text-muted-foreground">Abrir</div>
+              <div className="rounded-full border px-3 py-1 text-[11px] font-medium">Ver imóvel</div>
             </div>
           </div>
         </div>
@@ -159,13 +195,23 @@ export function PublicPropertyCard({
             <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
               {propertyLocationLabel(property)}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Ref: {property.public_code || property.id.slice(0, 8)}
-            </div>
+            {property.public_code ? (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Ref: {property.public_code}
+              </div>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
               <span className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}>
                 {publicTypeLabel(property.type)}
               </span>
+              {highlights.map((item) => (
+                <span
+                  key={item}
+                  className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}
+                >
+                  {item}
+                </span>
+              ))}
               <span className={`${isPremium ? "rounded-full" : "rounded-2xl"} border bg-white px-2.5 py-1`}>
                 {isPremium
                   ? "Atendimento consultivo"
@@ -180,8 +226,8 @@ export function PublicPropertyCard({
               <div className="text-lg font-semibold" style={{ color: "var(--site-primary)" }}>
                 {formatMoneyBRL(property.price)}
               </div>
-              <div className="text-xs font-medium text-muted-foreground">
-                {isPremium ? "Ver detalhes" : isSearchHighlights ? "Ver oferta" : "Abrir imovel"}
+              <div className="rounded-full border px-3 py-1 text-xs font-medium">
+                {isPremium ? "Ver imóvel" : isSearchHighlights ? "Ver oferta" : "Tenho interesse"}
               </div>
             </div>
             <div className={`mt-4 border-t pt-4 text-xs text-muted-foreground ${isPremium ? "border-muted/70" : "border-muted/60"}`}>

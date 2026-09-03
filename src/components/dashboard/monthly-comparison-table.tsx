@@ -23,7 +23,31 @@ export interface MonthlyMetric {
 interface MonthlyComparisonTableProps {
     currentMonthName: string
     previousMonthName: string
-    metrics: MonthlyMetric[] | MonthlyMetricsObj | any
+    metrics: MonthlyMetric[] | MonthlyMetricsObj
+}
+
+function TableGroup({ title, items }: { title: string, items: MonthlyMetric[] }) {
+    if (items.length === 0) return null;
+
+    return (
+        <>
+            <tr className="bg-muted/30">
+                <td colSpan={4} className="py-1 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</td>
+            </tr>
+            {items.map((m) => (
+                <tr key={m.label} className="border-b last:border-0 hover:bg-muted/10 transition-colors">
+                    <td className="py-2.5 px-2 text-sm font-medium">{m.label}</td>
+                    <td className="py-2.5 px-2 text-right text-sm font-semibold">{m.current}</td>
+                    <td className="py-2.5 px-2 text-right text-sm text-muted-foreground">{m.previous}</td>
+                    <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                        <div className="flex justify-end">
+                            <DeltaBadge current={m.current} previous={m.previous} />
+                        </div>
+                    </td>
+                </tr>
+            ))}
+        </>
+    )
 }
 
 function DeltaBadge({ current, previous }: { current: number; previous: number }) {
@@ -41,7 +65,7 @@ function DeltaBadge({ current, previous }: { current: number; previous: number }
 
 export function MonthlyComparisonTable({ currentMonthName, previousMonthName, metrics }: MonthlyComparisonTableProps) {
     // Normalizar os dados para agrupar nas seções
-    let formattedData = {
+    const formattedData = {
         captacao: [] as MonthlyMetric[],
         vendas: [] as MonthlyMetric[]
     }
@@ -59,29 +83,6 @@ export function MonthlyComparisonTable({ currentMonthName, previousMonthName, me
             { label: "Visitas", current: metrics.currentMonthVisitas || 0, previous: metrics.previousMonthVisitas || 0 },
             { label: "Vendas", current: metrics.currentMonthVendas || 0, previous: metrics.previousMonthVendas || 0 }
         ]
-    }
-
-    const TableGroup = ({ title, items }: { title: string, items: MonthlyMetric[] }) => {
-        if (!items || items.length === 0) return null;
-        return (
-            <>
-                <tr className="bg-muted/30">
-                    <td colSpan={4} className="py-1 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</td>
-                </tr>
-                {items.map((m) => (
-                    <tr key={m.label} className="border-b last:border-0 hover:bg-muted/10 transition-colors">
-                        <td className="py-2.5 px-2 text-sm font-medium">{m.label}</td>
-                        <td className="py-2.5 px-2 text-right text-sm font-semibold">{m.current}</td>
-                        <td className="py-2.5 px-2 text-right text-sm text-muted-foreground">{m.previous}</td>
-                        <td className="py-2.5 px-2 text-right whitespace-nowrap">
-                            <div className="flex justify-end">
-                                <DeltaBadge current={m.current} previous={m.previous} />
-                            </div>
-                        </td>
-                    </tr>
-                ))}
-            </>
-        )
     }
 
     return (

@@ -1,11 +1,18 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { CheckCircle2, ChevronDown, ChevronUp, Circle, Lock } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { setWhatsAppOnboardingCollapsed } from "@/app/actions/settings"
 import type { WhatsAppOnboardingSnapshot, WhatsAppOnboardingStep } from "@/lib/whatsapp-onboarding"
+
+const STORAGE_KEY = "dashboard:whatsapp-onboarding-collapsed"
+
+function isSchemaDriftError(message: string) {
+  return /whatsapp_onboarding_collapsed|column .* does not exist|schema cache/i.test(message)
+}
 
 function stateMeta(step: WhatsAppOnboardingStep) {
   if (step.state === "done") {
@@ -23,7 +30,7 @@ function stateMeta(step: WhatsAppOnboardingStep) {
       icon: Lock,
       iconClass: "mt-0.5 h-5 w-5 text-amber-600",
       badgeClass: "border-amber-200 bg-amber-100 text-amber-800",
-      badgeLabel: "Bloqueado",
+      badgeLabel: "Aguardando",
       canAct: false,
     }
   }
@@ -37,34 +44,91 @@ function stateMeta(step: WhatsAppOnboardingStep) {
   }
 }
 
-export function WhatsAppOnboardingChecklist({ snapshot }: { snapshot: WhatsAppOnboardingSnapshot }) {
-  const [collapsed, setCollapsed] = useState(false)
+export function WhatsAppOnboardingChecklist({
+  snapshot,
+  initialCollapsed,
+}: {
+  snapshot: WhatsAppOnboardingSnapshot
+  initialCollapsed: boolean
+}) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const nextStep = snapshot.steps.find((step) => step.state !== "done")
+
+  useEffect(() => {
+    setCollapsed(initialCollapsed)
+  }, [initialCollapsed])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const stored = window.localStorage.getItem(STORAGE_KEY)
+    if (stored === "1") {
+      setCollapsed(true)
+    } else if (stored === "0") {
+      setCollapsed(false)
+    }
+  }, [])
+
+  const persistCollapsed = useCallback(async (next: boolean) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0")
+    }
+
+    try {
+      const result = await setWhatsAppOnboardingCollapsed({ collapsed: next })
+      if (!result.success) {
+        if (isSchemaDriftError(result.error)) {
+          setErrorMsg(null)
+          return
+        }
+        setErrorMsg(result.error)
+        return
+      }
+      setErrorMsg(null)
+    } catch {
+      setErrorMsg("Não foi possível atualizar o checklist do WhatsApp agora.")
+    }
+  }, [])
 
   const progressPercent = useMemo(() => Math.round((snapshot.doneCount / Math.max(snapshot.steps.length, 1)) * 100), [snapshot.doneCount, snapshot.steps.length])
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+    <Card className="border-dashed bg-muted/10">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <div>
-          <CardTitle className="text-base">Onboarding WhatsApp Oficial</CardTitle>
+          <CardTitle className="text-base">WhatsApp oficial</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             {snapshot.doneCount}/{snapshot.steps.length} concluídos
           </p>
-          <div className="mt-2 h-2 w-44 overflow-hidden rounded-full bg-muted">
+          <div className="mt-2 h-2 w-32 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setCollapsed((v) => !v)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const next = !collapsed
+            setCollapsed(next)
+            void persistCollapsed(next)
+          }}
+        >
           {collapsed ? "Expandir" : "Recolher"}
           {collapsed ? <ChevronDown className="ml-1 h-4 w-4" /> : <ChevronUp className="ml-1 h-4 w-4" />}
         </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 pt-0">
         <div className="text-sm text-muted-foreground">
           {snapshot.ready
             ? "Canal oficial pronto para uso."
-            : "Complete os passos para liberar envio oficial sem suporte manual."}
+            : "Ainda faltam etapas para liberar o canal oficial."}
         </div>
+        {collapsed && nextStep ? (
+          <div className="rounded-lg border bg-background/80 px-3 py-2 text-sm">
+            <span className="font-medium">Próxima etapa:</span> {nextStep.title}
+          </div>
+        ) : null}
+        {errorMsg ? <div className="text-sm text-red-600">{errorMsg}</div> : null}
 
         {!collapsed ? (
           <div className="grid gap-3">
@@ -73,7 +137,7 @@ export function WhatsAppOnboardingChecklist({ snapshot }: { snapshot: WhatsAppOn
               const Icon = meta.icon
 
               return (
-                <div key={step.id} className="flex items-start justify-between gap-3 rounded-2xl border bg-card/50 p-4">
+                <div key={step.id} className="flex items-start justify-between gap-3 rounded-xl border bg-card/50 p-3">
                   <div className="flex items-start gap-3">
                     <Icon className={meta.iconClass} />
                     <div>
@@ -96,7 +160,7 @@ export function WhatsAppOnboardingChecklist({ snapshot }: { snapshot: WhatsAppOn
                     </Link>
                   ) : (
                     <span className="inline-flex items-center whitespace-nowrap rounded-xl px-3 py-2 text-xs font-medium text-muted-foreground ring-1 ring-border">
-                      Depende do passo anterior
+                      Faça a etapa acima
                     </span>
                   )}
                 </div>

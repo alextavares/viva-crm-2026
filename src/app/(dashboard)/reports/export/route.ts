@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import {
+    loadLeadAttributionMetrics,
+    type AttributionPeriod,
+} from '@/lib/analytics/lead-attribution'
+import {
+    loadOperationalFunnelMetrics,
+    type FunnelPeriod,
+} from '@/lib/analytics/operational-funnel'
 
 type Period = '30d' | '90d' | '12m'
-type ReportType = 'properties' | 'contacts' | 'team'
+type ReportType = 'properties' | 'contacts' | 'team' | 'attribution' | 'funnel'
+
+function parseAttributionPeriod(value: string | null): AttributionPeriod {
+    return value === 'today' || value === '7d' || value === '30d' ? value : '7d'
+}
+
+function parseFunnelPeriod(value: string | null): FunnelPeriod {
+    return value === 'today' || value === '7d' || value === '30d' ? value : '7d'
+}
 
 function periodDate(p: Period): Date {
     const now = new Date()
@@ -37,29 +53,30 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const type = (searchParams.get('type') as ReportType) || 'properties'
     const period = (searchParams.get('period') as Period) || '30d'
+    const attributionPeriod = parseAttributionPeriod(searchParams.get('attributionPeriod'))
+    const funnelPeriod = parseFunnelPeriod(searchParams.get('funnelPeriod'))
     const since = periodDate(period).toISOString()
 
     let csv = ''
-    const filename = `relatorio-${type}-${period}-${new Date().toISOString().split('T')[0]}.csv`
+    const filename = `relatorio-${type}-${type === 'attribution' ? attributionPeriod : type === 'funnel' ? funnelPeriod : period}-${new Date().toISOString().split('T')[0]}.csv`
 
     if (type === 'properties') {
         const { data } = await supabase
             .from('properties')
-            .select('code, title, type, transaction_type, status, sale_price, rent_price, city, neighborhood, created_at')
+            .select('public_code, title, type, transaction_type, status, price, address, created_at')
             .gte('created_at', since)
             .order('created_at', { ascending: false })
             .limit(1000)
 
         const rows = (data ?? []).map((p) => ({
-            Código: p.code ?? '',
+            Código: p.public_code ?? '',
             Título: p.title ?? '',
             Tipo: p.type ?? '',
             Transação: p.transaction_type ?? '',
             Status: p.status ?? '',
-            'Preço Venda': p.sale_price ?? '',
-            'Preço Aluguel': p.rent_price ?? '',
-            Cidade: p.city ?? '',
-            Bairro: p.neighborhood ?? '',
+            Preço: p.price ?? '',
+            Cidade: (p.address as { city?: string | null } | null)?.city ?? '',
+            Bairro: (p.address as { neighborhood?: string | null } | null)?.neighborhood ?? '',
             'Cadastrado em': p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '',
         }))
         csv = toCsv(rows)
@@ -99,27 +116,27 @@ export async function GET(request: NextRequest) {
 
         const { data: contactsData } = await supabase
             .from('contacts')
-            .select('broker_id, deal_stage')
+            .select('assigned_to, deal_stage')
             .gte('created_at', since)
-            .not('broker_id', 'is', null)
+            .not('assigned_to', 'is', null)
 
         const { data: propsData } = await supabase
             .from('properties')
-            .select('broker_id')
+            .select('assigned_to')
             .gte('created_at', since)
-            .not('broker_id', 'is', null)
+            .not('assigned_to', 'is', null)
 
         const stats: Record<string, { contacts: number; properties: number; won: number }> = {}
         for (const c of contactsData ?? []) {
-            if (!c.broker_id) continue
-            stats[c.broker_id] ??= { contacts: 0, properties: 0, won: 0 }
-            stats[c.broker_id].contacts++
-            if (c.deal_stage === 'won') stats[c.broker_id].won++
+            if (!c.assigned_to) continue
+            stats[c.assigned_to] ??= { contacts: 0, properties: 0, won: 0 }
+            stats[c.assigned_to].contacts++
+            if (c.deal_stage === 'won') stats[c.assigned_to].won++
         }
         for (const p of propsData ?? []) {
-            if (!p.broker_id) continue
-            stats[p.broker_id] ??= { contacts: 0, properties: 0, won: 0 }
-            stats[p.broker_id].properties++
+            if (!p.assigned_to) continue
+            stats[p.assigned_to] ??= { contacts: 0, properties: 0, won: 0 }
+            stats[p.assigned_to].properties++
         }
 
         const rows = (members ?? []).map((m) => ({
@@ -128,6 +145,62 @@ export async function GET(request: NextRequest) {
             Leads: stats[m.id]?.contacts ?? 0,
             Imóveis: stats[m.id]?.properties ?? 0,
             Ganhos: stats[m.id]?.won ?? 0,
+        }))
+        csv = toCsv(rows)
+    }
+
+    if (type === 'attribution') {
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
+
+        const { data: profile } = user
+            ? await supabase
+                  .from('profiles')
+                  .select('organization_id, role')
+                  .eq('id', user.id)
+                  .single()
+            : { data: null }
+
+        const role = profile?.role ?? null
+        if (role !== 'owner' && role !== 'manager') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
+        const metrics = await loadLeadAttributionMetrics(supabase, profile?.organization_id ?? null, attributionPeriod)
+        const rows = metrics.rows.map((row) => ({
+            Origem: row.origin,
+            Campanha: row.campaign ?? '',
+            Fechamentos: row.closedCount,
+            'Valor total': row.closedValue,
+        }))
+        csv = toCsv(rows)
+    }
+
+    if (type === 'funnel') {
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
+
+        const { data: profile } = user
+            ? await supabase
+                  .from('profiles')
+                  .select('organization_id, role')
+                  .eq('id', user.id)
+                  .single()
+            : { data: null }
+
+        const role = profile?.role ?? null
+        if (role !== 'owner' && role !== 'manager') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
+        const metrics = await loadOperationalFunnelMetrics(supabase, profile?.organization_id ?? null, funnelPeriod)
+        const rows = metrics.stages.map((row) => ({
+            Etapa: row.label,
+            Volume: row.count,
+            'Conversão etapa anterior': row.conversionFromPrevious ?? '',
+            'Conversão desde entrada': row.conversionFromStart ?? '',
         }))
         csv = toCsv(rows)
     }

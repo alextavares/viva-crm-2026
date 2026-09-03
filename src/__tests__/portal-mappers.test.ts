@@ -1,5 +1,5 @@
 import { generateImovelwebXml } from "@/lib/integrations/imovelweb-mapper"
-import { generateZapXml, mapTransactionType, type CRMProperty } from "@/lib/integrations/zap-mapper"
+import { generateZapXml, mapPropertyType, mapTransactionType, type CRMProperty } from "@/lib/integrations/zap-mapper"
 
 function buildProperty(overrides: Partial<CRMProperty> = {}): CRMProperty {
   return {
@@ -130,13 +130,18 @@ describe("portal mappers", () => {
   it("uses official sandbox subtypes for condominium houses and commercial spaces", () => {
     const condominiumXml = generateImovelwebXml([buildProperty({ type: "condominium_house" })])
     const commercialXml = generateImovelwebXml([buildProperty({ type: "commercial_space" })])
+    const condominiumZapXml = generateZapXml([buildProperty({ type: "condominium_house" })])
+    const commercialZapXml = generateZapXml([buildProperty({ type: "commercial_space" })])
 
     expect(condominiumXml).toContain("<idTipo>1</idTipo>")
     expect(condominiumXml).toContain("<idSubTipo>6</idSubTipo>")
     expect(condominiumXml).toContain("<subTipo>Casa de Condomínio</subTipo>")
+    expect(condominiumZapXml).toContain("<PropertyType>Casa de Condominio</PropertyType>")
 
     expect(commercialXml).toContain("<idTipo>1005</idTipo>")
     expect(commercialXml).toContain("<idSubTipo>19</idSubTipo>")
     expect(commercialXml).toContain("<subTipo>Loja/Salão</subTipo>")
+    expect(commercialZapXml).toContain("<PropertyType>Comercial</PropertyType>")
+    expect(mapPropertyType("commercial_space")).toBe("Comercial")
   })
 })

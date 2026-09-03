@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { toast } from 'sonner'
+import { markAllNotificationsRead } from '@/app/actions/notifications'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -44,6 +46,8 @@ export function NotificationsMenu() {
     const [open, setOpen] = useState(false)
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
+    const [markingRead, setMarkingRead] = useState(false)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
     const fetchNotifications = useCallback(async () => {
         const { data } = await supabase
@@ -52,13 +56,17 @@ export function NotificationsMenu() {
             .order('created_at', { ascending: false })
             .limit(20)
         if (data) {
-            setNotifications(data as Notification[])
-            setUnreadCount(data.filter((n: any) => !n.read_at).length)
+            const nextNotifications = data as Notification[]
+            setNotifications(nextNotifications)
+            setUnreadCount(nextNotifications.filter((n) => !n.read_at).length)
         }
     }, [supabase])
 
     useEffect(() => {
-        fetchNotifications()
+        const bootstrap = async () => {
+            await fetchNotifications()
+        }
+        void bootstrap()
 
         // Realtime subscription
         const channel = supabase
@@ -79,12 +87,18 @@ export function NotificationsMenu() {
     const handleOpen = async (isOpen: boolean) => {
         setOpen(isOpen)
         if (isOpen && unreadCount > 0) {
-            await supabase
-                .from('notifications')
-                .update({ read_at: new Date().toISOString() })
-                .is('read_at', null)
-            setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })))
-            setUnreadCount(0)
+            setMarkingRead(true)
+            setErrorMsg(null)
+            const result = await markAllNotificationsRead()
+            if (result.success) {
+                const readAt = result.data?.readAt ?? new Date().toISOString()
+                setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? readAt })))
+                setUnreadCount(0)
+            } else {
+                setErrorMsg(result.error)
+                toast.error(result.error)
+            }
+            setMarkingRead(false)
         }
     }
 
@@ -103,12 +117,19 @@ export function NotificationsMenu() {
             <PopoverContent align="end" className="w-80 p-0">
                 <div className="flex items-center justify-between border-b px-4 py-3">
                     <span className="text-sm font-semibold">Notificações</span>
-                    {unreadCount === 0 && (
+                    {markingRead ? (
+                        <span className="text-xs text-muted-foreground">Marcando como lidas...</span>
+                    ) : unreadCount === 0 ? (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Check className="h-3 w-3" /> Tudo lido
                         </span>
-                    )}
+                    ) : null}
                 </div>
+                {errorMsg ? (
+                    <div className="border-b border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive">
+                        {errorMsg}
+                    </div>
+                ) : null}
                 <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
                         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
@@ -130,7 +151,7 @@ export function NotificationsMenu() {
                                         {n.body && (
                                             <p className="text-xs text-muted-foreground truncate">{n.body}</p>
                                         )}
-                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                        <p className="mt-0.5 text-xs text-muted-foreground" suppressHydrationWarning>
                                             {relativeTime(n.created_at)}
                                         </p>
                                     </div>

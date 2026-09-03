@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { PORTALS, PORTAL_LABEL, type PortalIntegrationRow, type PortalKey, type PortalIntegrationRunRow } from "@/lib/integrations"
-import { Settings2, RefreshCw, FileText, Link2 } from "lucide-react"
+import { FileText, Link2 } from "lucide-react"
 
 function statusBadge(status: PortalIntegrationRow["status"]) {
     switch (status) {
@@ -106,7 +106,7 @@ export default async function IntegrationsPage() {
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold tracking-tight">Integrações</h1>
                 <p className="text-muted-foreground">
-                    Conecte portais e automatize publicação e recebimento de leads. (MVP: estrutura pronta, conectores em evolução.)
+                    Conecte portais, acompanhe prontidão e receba leads no CRM.
                 </p>
             </div>
 
@@ -171,22 +171,14 @@ export default async function IntegrationsPage() {
                                             {canManage ? "Conectar / Configurar" : "Ver detalhes"}
                                         </Button>
                                     </Link>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div>
                                         <Link href={`/integrations/${portal}/report`}>
                                             <Button variant="outline" className="w-full">
                                                 <FileText className="h-4 w-4 mr-2" />
                                                 Relatório
                                             </Button>
                                         </Link>
-                                        <Button variant="outline" className="w-full" disabled title="Em breve">
-                                            <RefreshCw className="h-4 w-4 mr-2" />
-                                            Sincronizar
-                                        </Button>
                                     </div>
-                                    <Button variant="ghost" className="w-full" disabled title="Em breve">
-                                        <Settings2 className="h-4 w-4 mr-2" />
-                                        Avançado
-                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>

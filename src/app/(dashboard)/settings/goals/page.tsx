@@ -265,7 +265,7 @@ export default async function GoalsSettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold md:text-3xl">Metas do Corretor</h1>
           <p className="text-muted-foreground">
-            Configure metas semanais/mensais de captação, resposta rápida e visitas. Owner/manager decide o padrão e pode ajustar por corretor.
+            Configure metas semanais/mensais de captação, resposta rápida e visitas. Gestores decidem o padrão e podem ajustar por corretor.
           </p>
         </div>
         <Link href="/settings">
@@ -275,7 +275,6 @@ export default async function GoalsSettingsPage() {
 
       <div className="rounded-lg border bg-muted/10 p-4">
         <GoalsSettingsForm
-          organizationId={organizationId}
           canManage={isAdmin}
           tableReady={tableReady}
           initial={initial}

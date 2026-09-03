@@ -22,24 +22,42 @@ import {
     rectSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import {
+    buildSlaBadge,
+    getTypeLabel,
+    type EnrichedContactRow,
+    type LeadDistributionSettings,
+} from '@/components/contacts/contacts-grid'
 import { useRouter } from 'next/navigation'
-import { type Contact, KANBAN_COLUMNS } from '@/lib/types'
-import { GripVertical } from 'lucide-react'
+import { KANBAN_COLUMNS } from '@/lib/types'
+import { GripVertical, Mail, Phone } from 'lucide-react'
+import { updateContactStatus } from '@/app/actions/contacts'
 
 interface LeadsKanbanProps {
-    initialData: Contact[]
+    initialData: EnrichedContactRow[]
+    leadDistributionSettings: LeadDistributionSettings
+    itemLabel?: string
     shouldRefreshOnSuccess?: boolean
 }
 
-export function LeadsKanban({ initialData, shouldRefreshOnSuccess = true }: LeadsKanbanProps) {
-    const [contacts, setContacts] = useState<Contact[]>(initialData)
+function getSortTimestamp(value: string | null | undefined) {
+    if (!value) return 0
+    const ts = new Date(value).getTime()
+    return Number.isFinite(ts) ? ts : 0
+}
+
+export function LeadsKanban({
+    initialData,
+    leadDistributionSettings,
+    itemLabel = 'lead',
+    shouldRefreshOnSuccess = true,
+}: LeadsKanbanProps) {
+    const [contacts, setContacts] = useState<EnrichedContactRow[]>(initialData)
     const [activeId, setActiveId] = useState<string | null>(null)
-    const supabase = createClient()
     const router = useRouter()
 
     const sensors = useSensors(
@@ -54,9 +72,17 @@ export function LeadsKanban({ initialData, shouldRefreshOnSuccess = true }: Lead
     )
 
     const columns = useMemo(() => {
-        const cols: Record<string, Contact[]> = {}
+        const cols: Record<string, EnrichedContactRow[]> = {}
         KANBAN_COLUMNS.forEach(col => {
-            cols[col.id] = contacts.filter(c => c.status === col.id)
+            cols[col.id] = contacts
+                .filter(c => c.status === col.id)
+                .sort((a, b) => {
+                    if (col.id === 'new') {
+                        return getSortTimestamp(a.latestLeadAt || a.created_at) - getSortTimestamp(b.latestLeadAt || b.created_at)
+                    }
+
+                    return getSortTimestamp(b.updated_at || b.created_at) - getSortTimestamp(a.updated_at || a.created_at)
+                })
         })
         return cols
     }, [contacts])
@@ -89,6 +115,9 @@ export function LeadsKanban({ initialData, shouldRefreshOnSuccess = true }: Lead
             return
         }
 
+        const targetColumnTitle =
+            KANBAN_COLUMNS.find((column) => column.id === overContainer)?.title || 'nova etapa'
+
         // Optimistic update
         const previousContacts = [...contacts]
         const updatedContacts = contacts.map(c =>
@@ -97,24 +126,16 @@ export function LeadsKanban({ initialData, shouldRefreshOnSuccess = true }: Lead
         setContacts(updatedContacts)
         setActiveId(null)
 
-        // API update
-        try {
-            const { error } = await supabase
-                .from('contacts')
-                .update({ status: overContainer })
-                .eq('id', activeId)
-
-            if (error) throw error
-
-            toast.success('Status atualizado com sucesso!')
-            if (shouldRefreshOnSuccess) {
-                router.refresh()
-            }
-        } catch (error) {
-            console.error('Error updating status:', error)
-            toast.error('Erro ao atualizar status. Desfazendo alterações.')
-            // Revert on error
+        const result = await updateContactStatus(activeId, overContainer)
+        if (!result.success) {
+            toast.error(result.error)
             setContacts(previousContacts)
+            return
+        }
+
+        toast.success(`Lead movido para ${targetColumnTitle}.`)
+        if (shouldRefreshOnSuccess) {
+            router.refresh()
         }
     }
 
@@ -144,28 +165,91 @@ export function LeadsKanban({ initialData, shouldRefreshOnSuccess = true }: Lead
                         id={col.id}
                         title={col.title}
                         contacts={columns[col.id] || []}
+                        leadDistributionSettings={leadDistributionSettings}
+                        itemLabel={itemLabel}
                     />
                 ))}
             </div>
 
             <DragOverlay dropAnimation={dropAnimation}>
-                {activeItem ? <KanbanCard contact={activeItem} isOverlay /> : null}
+                {activeItem ? (
+                    <KanbanCard
+                        contact={activeItem}
+                        leadDistributionSettings={leadDistributionSettings}
+                        isOverlay
+                    />
+                ) : null}
             </DragOverlay>
         </DndContext>
     )
 }
 
-function KanbanColumn({ id, title, contacts }: { id: string, title: string, contacts: Contact[] }) {
+function getColumnHint(columnId: string) {
+    switch (columnId) {
+        case 'new':
+            return 'Primeiro contato · mais antigos primeiro'
+        case 'contacted':
+            return 'Em atendimento'
+        case 'qualified':
+            return 'Perfil validado'
+        case 'lost':
+            return 'Sem avanço'
+        case 'won':
+            return 'Oportunidade fechada'
+        default:
+            return null
+    }
+}
+
+function getColumnEmptyState(columnId: string, itemLabel: string) {
+    switch (columnId) {
+        case 'new':
+            return `Nenhum ${itemLabel} novo. Arraste um ${itemLabel} para iniciar o atendimento.`
+        case 'contacted':
+            return `Nenhum ${itemLabel} em atendimento. Arraste um ${itemLabel} para esta etapa.`
+        case 'qualified':
+            return `Nenhum ${itemLabel} qualificado. Arraste um ${itemLabel} para esta etapa.`
+        case 'lost':
+            return `Nenhum ${itemLabel} perdido. Arraste um ${itemLabel} para esta etapa.`
+        case 'won':
+            return `Nenhum ${itemLabel} ganho. Arraste um ${itemLabel} para esta etapa.`
+        default:
+            return `Arraste um ${itemLabel} para esta etapa.`
+    }
+}
+
+function KanbanColumn({
+    id,
+    title,
+    contacts,
+    leadDistributionSettings,
+    itemLabel,
+}: {
+    id: string
+    title: string
+    contacts: EnrichedContactRow[]
+    leadDistributionSettings: LeadDistributionSettings
+    itemLabel: string
+}) {
     const { setNodeRef } = useDroppable({
         id: id,
     })
+    const pluralItemLabel = itemLabel === 'lead' ? 'leads' : 'contatos'
+    const contactCountLabel = `${contacts.length} ${contacts.length === 1 ? itemLabel : pluralItemLabel}`
+    const columnHint = getColumnHint(id)
+    const emptyStateMessage = getColumnEmptyState(id, itemLabel)
 
     return (
         <div ref={setNodeRef} data-testid={`kanban-column-${id}`} className="min-w-[300px] bg-muted/30 rounded-lg p-4 flex flex-col h-full">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-sm">{title}</h3>
+                <div className="min-w-0">
+                    <h3 className="font-semibold text-sm">{title}</h3>
+                    {columnHint ? (
+                        <p className="text-[11px] text-muted-foreground">{columnHint}</p>
+                    ) : null}
+                </div>
                 <Badge variant="secondary" className="text-xs">
-                    {contacts.length}
+                    {contactCountLabel}
                 </Badge>
             </div>
 
@@ -176,11 +260,15 @@ function KanbanColumn({ id, title, contacts }: { id: string, title: string, cont
             >
                 <div className="flex-1 space-y-3 overflow-y-auto pr-2">
                     {contacts.map((contact) => (
-                        <KanbanCard key={contact.id} contact={contact} />
+                        <KanbanCard
+                            key={contact.id}
+                            contact={contact}
+                            leadDistributionSettings={leadDistributionSettings}
+                        />
                     ))}
                     {contacts.length === 0 && (
                         <div className="h-20 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground text-xs">
-                            Arraste aqui
+                            {emptyStateMessage}
                         </div>
                     )}
                 </div>
@@ -189,7 +277,15 @@ function KanbanColumn({ id, title, contacts }: { id: string, title: string, cont
     )
 }
 
-function KanbanCard({ contact, isOverlay }: { contact: Contact; isOverlay?: boolean }) {
+function KanbanCard({
+    contact,
+    leadDistributionSettings,
+    isOverlay,
+}: {
+    contact: EnrichedContactRow
+    leadDistributionSettings: LeadDistributionSettings
+    isOverlay?: boolean
+}) {
     const {
         attributes,
         listeners,
@@ -206,6 +302,7 @@ function KanbanCard({ contact, isOverlay }: { contact: Contact; isOverlay?: bool
     })
 
     const router = useRouter()
+    const slaBadge = buildSlaBadge(contact.latestLeadAt || null, contact.status, leadDistributionSettings)
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -238,7 +335,12 @@ function KanbanCard({ contact, isOverlay }: { contact: Contact; isOverlay?: bool
                             </Avatar>
                             <div className="min-w-0">
                                 <h4 className="font-medium text-sm line-clamp-1">{contact.name}</h4>
-                                <p className="text-xs text-muted-foreground capitalize">{contact.type}</p>
+                                <p className="text-xs text-muted-foreground">{getTypeLabel(contact.type)}</p>
+                                {slaBadge ? (
+                                    <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${slaBadge.className}`}>
+                                        SLA: {slaBadge.label} ({slaBadge.elapsed})
+                                    </span>
+                                ) : null}
                             </div>
                         </div>
                         {/* Drag handle — only this area triggers drag */}
@@ -252,12 +354,16 @@ function KanbanCard({ contact, isOverlay }: { contact: Contact; isOverlay?: bool
                         </button>
                     </div>
 
-                    {(contact.email || contact.phone) && (
-                        <div className="text-xs text-muted-foreground space-y-1 pt-1 border-t">
-                            {contact.email && <div className="truncate">{contact.email}</div>}
-                            {contact.phone && <div>{contact.phone}</div>}
+                    <div className="space-y-1 border-t pt-1 text-xs text-muted-foreground">
+                        <div className={`flex items-center gap-1.5 truncate ${contact.email ? '' : 'italic'}`}>
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{contact.email || 'Sem email'}</span>
                         </div>
-                    )}
+                        <div className={`flex items-center gap-1.5 ${contact.phone ? '' : 'italic'}`}>
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <span>{contact.phone || 'Sem telefone'}</span>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>

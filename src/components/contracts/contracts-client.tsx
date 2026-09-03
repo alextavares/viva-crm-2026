@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, Pencil } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -27,24 +28,30 @@ import { ContractForm } from "./contract-form"
 export function ContractsClient({
     initialData,
     organizationId,
-    role
+    role,
 }: {
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     initialData: any[],
     organizationId: string,
     role: string
 }) {
-    const [contracts] = useState(initialData)
+    const router = useRouter()
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     const [editingContract, setEditingContract] = useState<any | null>(null)
     const canEdit = role === "owner" || role === "manager"
 
+    function handleSuccess() {
+        setIsCreateOpen(false)
+        setEditingContract(null)
+        router.refresh()
+    }
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                    Mostrando <strong>{contracts.length}</strong> contratos arquivados ou ativos.
+                    Mostrando <strong>{initialData.length}</strong> contratos arquivados ou ativos.
                 </p>
                 {canEdit && (
                     <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -63,7 +70,7 @@ export function ContractsClient({
                             </DialogHeader>
                             <ContractForm
                                 organizationId={organizationId}
-                                onSuccess={() => setIsCreateOpen(false)}
+                                onSuccess={handleSuccess}
                                 onCancel={() => setIsCreateOpen(false)}
                             />
                         </DialogContent>
@@ -87,14 +94,14 @@ export function ContractsClient({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {contracts.length === 0 ? (
+                        {initialData.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={9} className="h-24 text-center">
                                     Nenhum contrato encontrado.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            contracts.map((contract) => (
+                            initialData.map((contract) => (
                                 <TableRow key={contract.id}>
                                     <TableCell>
                                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${contract.status === 'active' ? 'bg-green-100 text-green-700' :
@@ -173,7 +180,7 @@ export function ContractsClient({
                                                     <ContractForm
                                                         organizationId={organizationId}
                                                         initialData={contract}
-                                                        onSuccess={() => setEditingContract(null)}
+                                                        onSuccess={handleSuccess}
                                                         onCancel={() => setEditingContract(null)}
                                                     />
                                                 </DialogContent>

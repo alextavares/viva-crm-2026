@@ -1,16 +1,35 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "sonner"
-
-type OrgInfo = { id: string; name: string; slug: string }
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  deleteSiteLink,
+  deleteSiteNews,
+  saveSiteLink,
+  saveSiteNews,
+  toggleSiteLinkPublished,
+  toggleSiteNewsPublished,
+} from "@/app/actions/site-content"
+import type { ActionResult } from "@/lib/types"
 
 type SiteNewsRow = {
   id: string
@@ -38,7 +57,6 @@ type SiteLinkRow = {
 }
 
 type Props = {
-  org: OrgInfo
   initial: {
     news: SiteNewsRow[]
     links: SiteLinkRow[]
@@ -67,12 +85,26 @@ function formatDate(v: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(d)
 }
 
-export function SiteContentAdmin({ org, initial }: Props) {
-  const supabase = useMemo(() => createClient(), [])
+function sortLinks(items: SiteLinkRow[]) {
+  return [...items].sort((a, b) => a.sort_order - b.sort_order || b.created_at.localeCompare(a.created_at))
+}
 
-  const [pending, setPending] = useState(false)
+function getErrorMessage(error: unknown) {
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message
+  }
+  return "Erro ao salvar conteúdo do site."
+}
+
+export function SiteContentAdmin({ initial }: Props) {
+  const router = useRouter()
+  const [inFlight, setInFlight] = useState(0)
+  const pending = inFlight > 0
+  const [busyMsg, setBusyMsg] = useState<string | null>(null)
+  const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({})
+
   const [news, setNews] = useState<SiteNewsRow[]>(initial.news)
-  const [links, setLinks] = useState<SiteLinkRow[]>(initial.links)
+  const [links, setLinks] = useState<SiteLinkRow[]>(sortLinks(initial.links))
 
   const [newNewsOpen, setNewNewsOpen] = useState(false)
   const [editNewsOpen, setEditNewsOpen] = useState(false)
@@ -94,19 +126,43 @@ export function SiteContentAdmin({ org, initial }: Props) {
     sort_order: String(links.length ? Math.max(...links.map((l) => l.sort_order)) + 1 : 0),
   })
 
-  async function run(action: () => Promise<void>) {
-    setPending(true)
+  const runAction = async <T,>(
+    sectionKey: string,
+    fn: () => Promise<ActionResult<T>>,
+    successMessage: string,
+    opts?: {
+      busy?: string
+      onSuccess?: (data: T | undefined) => void
+      refresh?: boolean
+    }
+  ) => {
+    setInFlight((c) => c + 1)
+    setSectionErrors((prev) => ({ ...prev, [sectionKey]: null }))
+    if (opts?.busy) setBusyMsg(opts.busy)
+
     try {
-      await action()
+      const result = await fn()
+      if (!result.success) {
+        setSectionErrors((prev) => ({ ...prev, [sectionKey]: result.error }))
+        toast.error(result.error)
+        return false
+      }
+
+      opts?.onSuccess?.(result.data)
+      toast.success(successMessage)
+      if (opts?.refresh ?? true) {
+        router.refresh()
+      }
+      return true
     } catch (error) {
-      console.error(error)
-      const msg =
-        typeof error === "object" && error && "message" in error && typeof error.message === "string"
-          ? error.message
-          : "Erro ao salvar conteúdo do site."
-      toast.error(msg)
+      const message = getErrorMessage(error)
+      console.error(`Error running ${sectionKey} action:`, error)
+      setSectionErrors((prev) => ({ ...prev, [sectionKey]: message }))
+      toast.error(message)
+      return false
     } finally {
-      setPending(false)
+      setInFlight((c) => Math.max(0, c - 1))
+      setBusyMsg((current) => (opts?.busy && current === opts.busy ? null : current))
     }
   }
 
@@ -136,175 +192,204 @@ export function SiteContentAdmin({ org, initial }: Props) {
     return { title, url, description, sort_order: sortOrder }
   }
 
-  async function createNews() {
-    await run(async () => {
+  const createNews = async () => {
+    try {
       const payload = ensureNewsInput(newNews)
-      const { data, error } = await supabase
-        .from("site_news")
-        .insert({
-          organization_id: org.id,
-          title: payload.title,
-          slug: payload.slug,
-          excerpt: payload.excerpt,
-          content: payload.content,
-          is_published: false,
-        })
-        .select("*")
-        .single()
-
-      if (error) throw error
-      setNews((prev) => [data as SiteNewsRow, ...prev])
-      setNewNews({ title: "", slug: "", excerpt: "", content: "" })
-      setNewNewsOpen(false)
-      toast.success("Notícia criada.")
-    })
+      await runAction(
+        "news",
+        () => saveSiteNews(payload),
+        "Notícia criada.",
+        {
+          busy: "Criando notícia...",
+          onSuccess: (data) => {
+            const created = (data as { news?: SiteNewsRow } | undefined)?.news
+            if (created) {
+              setNews((prev) => [created, ...prev])
+            }
+            setNewNews({ title: "", slug: "", excerpt: "", content: "" })
+            setNewNewsOpen(false)
+          },
+        }
+      )
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setSectionErrors((prev) => ({ ...prev, news: message }))
+      toast.error(message)
+    }
   }
 
-  async function saveNewsEdit() {
+  const saveNewsEdit = async () => {
     if (!editingNews) return
-    await run(async () => {
+
+    try {
       const payload = ensureNewsInput({
         title: editingNews.title,
         slug: editingNews.slug,
         excerpt: editingNews.excerpt ?? "",
         content: editingNews.content,
       })
-      const { data, error } = await supabase
-        .from("site_news")
-        .update({
-          title: payload.title,
-          slug: payload.slug,
-          excerpt: payload.excerpt,
-          content: payload.content,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", editingNews.id)
-        .select("*")
-        .single()
-      if (error) throw error
-      setNews((prev) => prev.map((n) => (n.id === editingNews.id ? (data as SiteNewsRow) : n)))
-      setEditingNews(null)
-      setEditNewsOpen(false)
-      toast.success("Notícia atualizada.")
-    })
-  }
 
-  async function toggleNewsPublished(row: SiteNewsRow) {
-    await run(async () => {
-      const next = !row.is_published
-      const { data, error } = await supabase
-        .from("site_news")
-        .update({
-          is_published: next,
-          published_at: next ? row.published_at ?? new Date().toISOString() : row.published_at,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", row.id)
-        .select("*")
-        .single()
-      if (error) throw error
-      setNews((prev) => prev.map((n) => (n.id === row.id ? (data as SiteNewsRow) : n)))
-      toast.success(next ? "Notícia publicada." : "Notícia despublicada.")
-    })
-  }
-
-  async function deleteNews(id: string) {
-    await run(async () => {
-      const { error } = await supabase.from("site_news").delete().eq("id", id)
-      if (error) throw error
-      setNews((prev) => prev.filter((n) => n.id !== id))
-      toast.success("Notícia excluída.")
-    })
-  }
-
-  async function createLink() {
-    await run(async () => {
-      const payload = ensureLinkInput(newLink)
-      const { data, error } = await supabase
-        .from("site_links")
-        .insert({
-          organization_id: org.id,
-          title: payload.title,
-          url: payload.url,
-          description: payload.description,
-          sort_order: payload.sort_order,
-          is_published: false,
-        })
-        .select("*")
-        .single()
-      if (error) throw error
-      setLinks((prev) =>
-        [...prev, data as SiteLinkRow].sort((a, b) => a.sort_order - b.sort_order || b.created_at.localeCompare(a.created_at))
+      await runAction(
+        "editNews",
+        () => saveSiteNews({ id: editingNews.id, ...payload }),
+        "Notícia atualizada.",
+        {
+          busy: "Salvando notícia...",
+          onSuccess: (data) => {
+            const updated = (data as { news?: SiteNewsRow } | undefined)?.news
+            if (updated) {
+              setNews((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+            }
+            setEditingNews(null)
+            setEditNewsOpen(false)
+          },
+        }
       )
-      setNewLink({
-        title: "",
-        url: "",
-        description: "",
-        sort_order: String(payload.sort_order + 1),
-      })
-      setNewLinkOpen(false)
-      toast.success("Link criado.")
-    })
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setSectionErrors((prev) => ({ ...prev, editNews: message }))
+      toast.error(message)
+    }
   }
 
-  async function saveLinkEdit() {
+  const toggleNewsPublished = async (row: SiteNewsRow) => {
+    await runAction(
+      "news",
+      () => toggleSiteNewsPublished({ id: row.id }),
+      row.is_published ? "Notícia despublicada." : "Notícia publicada.",
+      {
+        busy: "Atualizando notícia...",
+        onSuccess: (data) => {
+          const updated = (data as { news?: SiteNewsRow } | undefined)?.news
+          if (updated) {
+            setNews((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+          }
+        },
+      }
+    )
+  }
+
+  const deleteNews = async (id: string) => {
+    await runAction(
+      "news",
+      () => deleteSiteNews({ id }),
+      "Notícia excluída.",
+      {
+        busy: "Excluindo notícia...",
+        onSuccess: () => {
+          setNews((prev) => prev.filter((item) => item.id !== id))
+        },
+      }
+    )
+  }
+
+  const createLink = async () => {
+    try {
+      const payload = ensureLinkInput(newLink)
+      await runAction(
+        "links",
+        () =>
+          saveSiteLink({
+            title: payload.title,
+            url: payload.url,
+            description: payload.description,
+            sortOrder: payload.sort_order,
+          }),
+        "Link criado.",
+        {
+          busy: "Criando link...",
+          onSuccess: (data) => {
+            const created = (data as { link?: SiteLinkRow } | undefined)?.link
+            if (created) {
+              setLinks((prev) => sortLinks([...prev, created]))
+            }
+            setNewLink({
+              title: "",
+              url: "",
+              description: "",
+              sort_order: String(payload.sort_order + 1),
+            })
+            setNewLinkOpen(false)
+          },
+        }
+      )
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setSectionErrors((prev) => ({ ...prev, links: message }))
+      toast.error(message)
+    }
+  }
+
+  const saveLinkEdit = async () => {
     if (!editingLink) return
-    await run(async () => {
+
+    try {
       const payload = ensureLinkInput({
         title: editingLink.title,
         url: editingLink.url,
         description: editingLink.description ?? "",
         sort_order: String(editingLink.sort_order),
       })
-      const { data, error } = await supabase
-        .from("site_links")
-        .update({
-          title: payload.title,
-          url: payload.url,
-          description: payload.description,
-          sort_order: payload.sort_order,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", editingLink.id)
-        .select("*")
-        .single()
-      if (error) throw error
-      setLinks((prev) =>
-        prev
-          .map((l) => (l.id === editingLink.id ? (data as SiteLinkRow) : l))
-          .sort((a, b) => a.sort_order - b.sort_order || b.created_at.localeCompare(a.created_at))
+
+      await runAction(
+        "editLink",
+        () =>
+          saveSiteLink({
+            id: editingLink.id,
+            title: payload.title,
+            url: payload.url,
+            description: payload.description,
+            sortOrder: payload.sort_order,
+          }),
+        "Link atualizado.",
+        {
+          busy: "Salvando link...",
+          onSuccess: (data) => {
+            const updated = (data as { link?: SiteLinkRow } | undefined)?.link
+            if (updated) {
+              setLinks((prev) => sortLinks(prev.map((item) => (item.id === updated.id ? updated : item))))
+            }
+            setEditingLink(null)
+            setEditLinkOpen(false)
+          },
+        }
       )
-      setEditingLink(null)
-      setEditLinkOpen(false)
-      toast.success("Link atualizado.")
-    })
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setSectionErrors((prev) => ({ ...prev, editLink: message }))
+      toast.error(message)
+    }
   }
 
-  async function toggleLinkPublished(row: SiteLinkRow) {
-    await run(async () => {
-      const next = !row.is_published
-      const { data, error } = await supabase
-        .from("site_links")
-        .update({
-          is_published: next,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", row.id)
-        .select("*")
-        .single()
-      if (error) throw error
-      setLinks((prev) => prev.map((l) => (l.id === row.id ? (data as SiteLinkRow) : l)))
-      toast.success(next ? "Link publicado." : "Link despublicado.")
-    })
+  const toggleLinkPublished = async (row: SiteLinkRow) => {
+    await runAction(
+      "links",
+      () => toggleSiteLinkPublished({ id: row.id }),
+      row.is_published ? "Link despublicado." : "Link publicado.",
+      {
+        busy: "Atualizando link...",
+        onSuccess: (data) => {
+          const updated = (data as { link?: SiteLinkRow } | undefined)?.link
+          if (updated) {
+            setLinks((prev) => sortLinks(prev.map((item) => (item.id === updated.id ? updated : item))))
+          }
+        },
+      }
+    )
   }
 
-  async function deleteLink(id: string) {
-    await run(async () => {
-      const { error } = await supabase.from("site_links").delete().eq("id", id)
-      if (error) throw error
-      setLinks((prev) => prev.filter((l) => l.id !== id))
-      toast.success("Link excluído.")
-    })
+  const deleteLink = async (id: string) => {
+    await runAction(
+      "links",
+      () => deleteSiteLink({ id }),
+      "Link excluído.",
+      {
+        busy: "Excluindo link...",
+        onSuccess: () => {
+          setLinks((prev) => prev.filter((item) => item.id !== id))
+        },
+      }
+    )
   }
 
   return (
@@ -336,11 +421,17 @@ export function SiteContentAdmin({ org, initial }: Props) {
                   </div>
                   <div className="grid gap-2">
                     <Label>Slug</Label>
-                    <Input value={newNews.slug} onChange={(e) => setNewNews((prev) => ({ ...prev, slug: slugify(e.target.value) }))} />
+                    <Input
+                      value={newNews.slug}
+                      onChange={(e) => setNewNews((prev) => ({ ...prev, slug: slugify(e.target.value) }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label>Resumo</Label>
-                    <Textarea value={newNews.excerpt} onChange={(e) => setNewNews((prev) => ({ ...prev, excerpt: e.target.value }))} />
+                    <Textarea
+                      value={newNews.excerpt}
+                      onChange={(e) => setNewNews((prev) => ({ ...prev, excerpt: e.target.value }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label>Conteúdo</Label>
@@ -356,12 +447,15 @@ export function SiteContentAdmin({ org, initial }: Props) {
                     Cancelar
                   </Button>
                   <Button onClick={createNews} disabled={pending}>
-                    {pending ? "Salvando..." : "Criar notícia"}
+                    {pending ? busyMsg ?? "Processando..." : "Criar notícia"}
                   </Button>
                 </DialogFooter>
+                {sectionErrors.news ? <p className="text-sm text-red-600">{sectionErrors.news}</p> : null}
               </DialogContent>
             </Dialog>
           </div>
+
+          {sectionErrors.news ? <p className="text-sm text-red-600">{sectionErrors.news}</p> : null}
 
           {news.length === 0 ? (
             <div className="rounded-xl border bg-muted/10 p-4 text-sm text-muted-foreground">Nenhuma notícia cadastrada.</div>
@@ -392,9 +486,33 @@ export function SiteContentAdmin({ org, initial }: Props) {
                       >
                         Editar
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => deleteNews(item.id)} disabled={pending}>
-                        Excluir
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive" disabled={pending}>
+                            Excluir
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir notícia?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta ação não pode ser desfeita. A notícia será removida permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={(event) => {
+                                event.preventDefault()
+                                void deleteNews(item.id)
+                              }}
+                              variant="destructive"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                   {item.excerpt ? <div className="mt-2 text-sm text-muted-foreground line-clamp-2">{item.excerpt}</div> : null}
@@ -427,15 +545,26 @@ export function SiteContentAdmin({ org, initial }: Props) {
                   </div>
                   <div className="grid gap-2">
                     <Label>URL</Label>
-                    <Input value={newLink.url} onChange={(e) => setNewLink((prev) => ({ ...prev, url: e.target.value }))} placeholder="https://..." />
+                    <Input
+                      value={newLink.url}
+                      onChange={(e) => setNewLink((prev) => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://..."
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label>Descrição</Label>
-                    <Textarea value={newLink.description} onChange={(e) => setNewLink((prev) => ({ ...prev, description: e.target.value }))} />
+                    <Textarea
+                      value={newLink.description}
+                      onChange={(e) => setNewLink((prev) => ({ ...prev, description: e.target.value }))}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label>Ordem</Label>
-                    <Input value={newLink.sort_order} inputMode="numeric" onChange={(e) => setNewLink((prev) => ({ ...prev, sort_order: e.target.value }))} />
+                    <Input
+                      value={newLink.sort_order}
+                      inputMode="numeric"
+                      onChange={(e) => setNewLink((prev) => ({ ...prev, sort_order: e.target.value }))}
+                    />
                   </div>
                 </div>
                 <DialogFooter>
@@ -443,12 +572,15 @@ export function SiteContentAdmin({ org, initial }: Props) {
                     Cancelar
                   </Button>
                   <Button onClick={createLink} disabled={pending}>
-                    {pending ? "Salvando..." : "Criar link"}
+                    {pending ? busyMsg ?? "Processando..." : "Criar link"}
                   </Button>
                 </DialogFooter>
+                {sectionErrors.links ? <p className="text-sm text-red-600">{sectionErrors.links}</p> : null}
               </DialogContent>
             </Dialog>
           </div>
+
+          {sectionErrors.links ? <p className="text-sm text-red-600">{sectionErrors.links}</p> : null}
 
           {links.length === 0 ? (
             <div className="rounded-xl border bg-muted/10 p-4 text-sm text-muted-foreground">Nenhum link cadastrado.</div>
@@ -479,9 +611,33 @@ export function SiteContentAdmin({ org, initial }: Props) {
                       >
                         Editar
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => deleteLink(item.id)} disabled={pending}>
-                        Excluir
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive" disabled={pending}>
+                            Excluir
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir link útil?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta ação não pode ser desfeita. O link será removido permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={(event) => {
+                                event.preventDefault()
+                                void deleteLink(item.id)
+                              }}
+                              variant="destructive"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                   {item.description ? <div className="mt-2 text-sm text-muted-foreground line-clamp-2">{item.description}</div> : null}
@@ -535,9 +691,10 @@ export function SiteContentAdmin({ org, initial }: Props) {
               Cancelar
             </Button>
             <Button onClick={saveNewsEdit} disabled={pending || !editingNews}>
-              {pending ? "Salvando..." : "Salvar"}
+              {pending ? busyMsg ?? "Processando..." : "Salvar"}
             </Button>
           </DialogFooter>
+          {sectionErrors.editNews ? <p className="text-sm text-red-600">{sectionErrors.editNews}</p> : null}
         </DialogContent>
       </Dialog>
 
@@ -586,9 +743,10 @@ export function SiteContentAdmin({ org, initial }: Props) {
               Cancelar
             </Button>
             <Button onClick={saveLinkEdit} disabled={pending || !editingLink}>
-              {pending ? "Salvando..." : "Salvar"}
+              {pending ? busyMsg ?? "Processando..." : "Salvar"}
             </Button>
           </DialogFooter>
+          {sectionErrors.editLink ? <p className="text-sm text-red-600">{sectionErrors.editLink}</p> : null}
         </DialogContent>
       </Dialog>
     </div>

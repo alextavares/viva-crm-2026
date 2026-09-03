@@ -2,27 +2,59 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { proposalSchema } from "@/lib/types"
+import {
+    type ActionResult,
+    canCreateProposalForContact,
+    canDeleteProposalRecord,
+    canEditProposalRecord,
+    isTerminalDealStage,
+    proposalSchema,
+    type DealStage,
+} from "@/lib/types"
 
-export async function saveProposal(formData: FormData) {
+function formatDbError(prefix: string, error: unknown) {
+    if (typeof error === "object" && error !== null) {
+        const message = "message" in error && typeof error.message === "string" ? error.message : null
+        const details = "details" in error && typeof error.details === "string" ? error.details : null
+        const hint = "hint" in error && typeof error.hint === "string" ? error.hint : null
+        const code = "code" in error && typeof error.code === "string" ? error.code : null
+        const suffix = [message, details, hint, code ? `código ${code}` : null].filter(Boolean).join(" | ")
+        if (suffix) return `${prefix}: ${suffix}`
+    }
+
+    if (error instanceof Error && error.message) {
+        return `${prefix}: ${error.message}`
+    }
+
+    return prefix
+}
+
+export async function saveProposal(formData: FormData): Promise<ActionResult<{ id: string }>> {
+    try {
     const supabase = await createClient()
 
     const rawData = {
-        property_id: formData.get("property_id") as string,
+        property_id: (formData.get("property_id") as string | null) ?? "",
         proposed_value: formData.get("proposed_value"),
-        payment_conditions: formData.get("payment_conditions") as string,
-        valid_until: formData.get("valid_until") as string,
-        status: formData.get("status") as string,
-        notes: formData.get("notes") as string,
+        payment_conditions: (formData.get("payment_conditions") as string | null) ?? "",
+        valid_until: (formData.get("valid_until") as string | null) ?? "",
+        status: (formData.get("status") as string | null) ?? "pending",
+        notes: (formData.get("notes") as string | null) ?? "",
     }
 
     const parsed = proposalSchema.safeParse(rawData)
     if (!parsed.success) {
-        return { error: "Dados inválidos: verifique os campos da proposta." }
+        const firstIssue = parsed.error.issues[0]?.message
+        return {
+            success: false,
+            error: firstIssue
+                ? `Dados inválidos na proposta: ${firstIssue}`
+                : "Dados inválidos: verifique os campos da proposta.",
+        }
     }
 
     const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return { error: "Não autenticado" }
+    if (!userData.user) return { success: false, error: "Não autenticado" }
 
     const { data: profile } = await supabase
         .from("profiles")
@@ -30,28 +62,25 @@ export async function saveProposal(formData: FormData) {
         .eq("id", userData.user.id)
         .single()
 
-    if (!profile?.organization_id) return { error: "Sem permissão" }
+    if (!profile?.organization_id) return { success: false, error: "Sem permissão" }
 
     const role = (profile.role as string | null) ?? null
-    if (role !== "owner" && role !== "manager") {
-        return { error: "Apenas gestores podem criar ou editar propostas." }
-    }
 
     const id = formData.get("id") as string | null
     const contactId = formData.get("contact_id") as string
-    const brokerId = formData.get("broker_id") as string | null
+    const assignedTo = formData.get("assigned_to") as string | null
     const orgId = profile.organization_id
 
     // Validate contact belongs to the same organization
     const { data: contactCheck } = await supabase
         .from("contacts")
-        .select("id")
+        .select("id, assigned_to, deal_stage")
         .eq("id", contactId)
         .eq("organization_id", orgId)
         .single()
 
     if (!contactCheck) {
-        return { error: "Contato não encontrado nesta organização." }
+        return { success: false, error: "Contato não encontrado nesta organização." }
     }
 
     // Validate property belongs to the same organization (if provided)
@@ -64,14 +93,46 @@ export async function saveProposal(formData: FormData) {
             .single()
 
         if (!propertyCheck) {
-            return { error: "Imóvel não encontrado nesta organização." }
+            return { success: false, error: "Imóvel não encontrado nesta organização." }
+        }
+    }
+
+    let effectiveAssignedTo = assignedTo || null
+
+    if (!id) {
+        if (!canCreateProposalForContact(role, userData.user.id, contactCheck.assigned_to)) {
+            return { success: false, error: "Você não pode criar proposta para este contato." }
+        }
+        if (role === "broker") {
+            effectiveAssignedTo = userData.user.id
+        }
+    } else {
+        const { data: existingProposal } = await supabase
+            .from("deal_proposals")
+            .select("id, assigned_to")
+            .eq("id", id)
+            .eq("organization_id", orgId)
+            .single()
+
+        if (!existingProposal) {
+            return { success: false, error: "Proposta não encontrada nesta organização." }
+        }
+
+        if (!canEditProposalRecord(role, userData.user.id, existingProposal.assigned_to)) {
+            return { success: false, error: "Você não pode editar esta proposta." }
+        }
+
+        if (role === "broker") {
+            effectiveAssignedTo = userData.user.id
+        } else {
+            effectiveAssignedTo = assignedTo || existingProposal.assigned_to || null
         }
     }
 
     const payload = {
         organization_id: orgId,
         contact_id: contactId,
-        broker_id: brokerId || null,
+        assigned_to: effectiveAssignedTo,
         property_id: parsed.data.property_id || null,
         proposed_value: parsed.data.proposed_value,
         payment_conditions: parsed.data.payment_conditions || null,
@@ -81,7 +142,8 @@ export async function saveProposal(formData: FormData) {
         updated_at: new Date().toISOString()
     }
 
-    let proposalId = id;
+    let proposalId = id
+    let linkedContractStatus: string | null = null
 
     if (id) {
         // Bloquear edição se já existe contrato
@@ -92,7 +154,7 @@ export async function saveProposal(formData: FormData) {
             .single()
 
         if (existingContract) {
-            return { error: "Esta proposta já gerou um contrato e não pode mais ser editada." }
+            return { success: false, error: "Esta proposta já gerou um contrato e não pode mais ser editada." }
         }
 
         // Atualizar
@@ -104,7 +166,7 @@ export async function saveProposal(formData: FormData) {
 
         if (error) {
             console.error("Erro ao atualizar proposta:", error)
-            return { error: "Erro ao atualizar proposta no banco de dados." }
+            return { success: false, error: formatDbError("Erro ao atualizar proposta", error) }
         }
     } else {
         // Criar
@@ -116,10 +178,10 @@ export async function saveProposal(formData: FormData) {
 
         if (error) {
             console.error("Erro ao criar proposta:", error)
-            return { error: "Erro ao criar proposta no banco de dados." }
+            return { success: false, error: formatDbError("Erro ao criar proposta", error) }
         }
 
-        proposalId = data.id;
+        proposalId = data.id
     }
 
     // Auto-create contract draft if accepted
@@ -127,34 +189,72 @@ export async function saveProposal(formData: FormData) {
         // Check if a contract for this proposal already exists to avoid duplicates
         const { data: existingContract } = await supabase
             .from("deal_contracts")
-            .select("id")
+            .select("id, status")
             .eq("proposal_id", proposalId)
             .single()
 
-        if (!existingContract && proposalId) {
-            const { error: contractError } = await supabase
+        if (existingContract) {
+            linkedContractStatus = existingContract.status ?? "draft"
+        } else if (proposalId) {
+            const { data: createdContract, error: contractError } = await supabase
                 .from("deal_contracts")
                 .insert([{
                     organization_id: orgId,
                     proposal_id: proposalId,
                     contact_id: contactId,
                     property_id: parsed.data.property_id,
-                    broker_id: brokerId || null,
+                    assigned_to: effectiveAssignedTo,
                     contract_type: 'sale', // Defaulting to sale based on context, user can edit later
                     final_value: parsed.data.proposed_value,
                     status: 'draft',
                     created_at: new Date().toISOString()
                 }])
+                .select("id, status")
+                .single()
 
             if (contractError) {
                 console.error("Erro ao auto-gerar contrato:", contractError)
                 // We don't fail the proposal transaction, but log it
+            } else {
+                linkedContractStatus = createdContract?.status ?? "draft"
             }
         }
     }
 
+    let nextDealStage: DealStage | null = null
+    if (parsed.data.status === "pending" || parsed.data.status === "counter_offer") {
+        nextDealStage = "negotiation"
+    } else if (parsed.data.status === "accepted" && linkedContractStatus) {
+        nextDealStage = "closing"
+    }
+
+    if (nextDealStage && !isTerminalDealStage(contactCheck.deal_stage)) {
+        const { error: contactStageError } = await supabase
+            .from("contacts")
+            .update({
+                deal_stage: nextDealStage,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", contactId)
+            .eq("organization_id", orgId)
+
+        if (contactStageError) {
+            console.error("Erro ao atualizar estágio da negociação:", contactStageError)
+        }
+    }
+
     revalidatePath(`/contacts/${contactId}`)
-    return { success: true }
+    if (linkedContractStatus) {
+        revalidatePath("/contracts")
+    }
+    return { success: true, data: { id: proposalId ?? id ?? "" } }
+    } catch (error) {
+        console.error("Unexpected error saving proposal:", error)
+        return {
+            success: false,
+            error: formatDbError("Erro ao salvar proposta", error),
+        }
+    }
 }
 
 export async function deleteProposal(proposalId: string, contactId: string) {
@@ -172,7 +272,7 @@ export async function deleteProposal(proposalId: string, contactId: string) {
     if (!profile?.organization_id) return { error: "Sem permissão" }
 
     const role = (profile.role as string | null) ?? null
-    if (role !== "owner" && role !== "manager") {
+    if (!canDeleteProposalRecord(role)) {
         return { error: "Apenas gestores podem excluir propostas." }
     }
 

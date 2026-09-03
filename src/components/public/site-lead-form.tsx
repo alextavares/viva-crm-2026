@@ -140,7 +140,7 @@ export function SiteLeadForm({ siteSlug, propertyId, propertyTitle }: Props) {
 
       {status === "ok" ? (
         <div className="rounded-2xl border bg-white p-3 text-sm text-green-700">
-          Mensagem enviada com sucesso! (Destino: CRM da organização <strong>{siteSlug}</strong>)
+          Recebemos sua mensagem. Nossa equipe vai retornar pelo WhatsApp informado.
         </div>
       ) : null}
       {status === "error" ? (

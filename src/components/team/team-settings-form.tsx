@@ -2,23 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+
+import {
+  inviteTeamMember,
+  loadTeamSettingsData,
+  updateBrokerPublicProfile,
+  updateBrokerMemberStatus,
+  type TeamSettingsData,
+} from "@/app/actions/team"
+import { SeatCapacityAlert } from "@/components/team/seat-capacity-alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { SeatCapacityAlert } from "@/components/team/seat-capacity-alert"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { getSeatCapacityAlert } from "@/lib/team/billing"
-import type { TeamAuditEvent, TeamInvite, TeamMember, TeamSeatUsage, UserRole } from "@/lib/types"
+import type { UserRole } from "@/lib/types"
 
-type TeamPayload = {
-  ok: boolean
-  usage: TeamSeatUsage
-  members: TeamMember[]
-  invites: TeamInvite[]
-  audit_events: TeamAuditEvent[]
-}
+type InviteRole = Exclude<UserRole, "owner">
 
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
+const ROLE_OPTIONS: Array<{ value: InviteRole; label: string }> = [
   { value: "broker", label: "Corretor (consome assento)" },
   { value: "assistant", label: "Assistente" },
   { value: "manager", label: "Gerente" },
@@ -26,120 +34,178 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
 
 export function TeamSettingsForm({ canManage }: { canManage: boolean }) {
   const [email, setEmail] = useState("")
-  const [role, setRole] = useState<UserRole>("broker")
+  const [role, setRole] = useState<InviteRole>("broker")
   const [loading, setLoading] = useState(true)
   const [submittingInvite, setSubmittingInvite] = useState(false)
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null)
-  const [usage, setUsage] = useState<TeamSeatUsage | null>(null)
-  const [members, setMembers] = useState<TeamMember[]>([])
-  const [invites, setInvites] = useState<TeamInvite[]>([])
-  const [auditEvents, setAuditEvents] = useState<TeamAuditEvent[]>([])
+  const [savingPublicProfileId, setSavingPublicProfileId] = useState<string | null>(null)
+  const [data, setData] = useState<TeamSettingsData | null>(null)
+  const [publicProfiles, setPublicProfiles] = useState<Record<string, {
+    public_display_name: string
+    creci: string
+    public_whatsapp: string
+    avatar_url: string
+    public_profile_enabled: boolean
+  }>>({})
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const sortedMembers = useMemo(
     () =>
-      [...members].sort((a, b) => {
+      [...(data?.members || [])].sort((a, b) => {
         if (a.role === "owner") return -1
         if (b.role === "owner") return 1
         if (a.role === "manager" && b.role !== "owner") return -1
         if (b.role === "manager" && a.role !== "owner") return 1
         return (a.full_name || "").localeCompare(b.full_name || "", "pt-BR")
       }),
-    [members]
+    [data?.members]
   )
-  const capacityAlert = useMemo(() => getSeatCapacityAlert(usage, 1), [usage])
+
+  const capacityAlert = useMemo(() => getSeatCapacityAlert(data?.usage || null, 1), [data?.usage])
 
   const loadTeam = useCallback(async () => {
+    if (!canManage) return
+
     setLoading(true)
-    try {
-      const response = await fetch("/api/settings/team", { cache: "no-store" })
-      const data = (await response.json()) as TeamPayload | { message?: string }
-      if (!response.ok || !("ok" in data) || !data.ok) {
-        throw new Error(("message" in data && data.message) || "Falha ao carregar equipe.")
-      }
-      setUsage(data.usage)
-      setMembers(data.members)
-      setInvites(data.invites)
-      setAuditEvents(data.audit_events || [])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao carregar equipe."
+    const result = await loadTeamSettingsData()
+    if (result.success) {
+      setData(result.data)
+      setPublicProfiles(
+        Object.fromEntries(
+          (result.data?.members || []).map((member) => [
+            member.id,
+            {
+              public_display_name: member.public_display_name ?? "",
+              creci: member.creci ?? "",
+              public_whatsapp: member.public_whatsapp ?? "",
+              avatar_url: member.avatar_url ?? "",
+              public_profile_enabled: Boolean(member.public_profile_enabled),
+            },
+          ])
+        )
+      )
+      setErrorMsg(null)
+    } else {
+      const message = result.error || "Falha ao carregar equipe."
+      setErrorMsg(message)
       toast.error(message)
-    } finally {
-      setLoading(false)
     }
-  }, [])
+    setLoading(false)
+  }, [canManage])
 
   useEffect(() => {
-    void loadTeam()
-  }, [loadTeam])
+    if (!canManage) return
 
-  async function handleInvite(e: React.FormEvent) {
-    e.preventDefault()
+    const timeoutId = window.setTimeout(() => {
+      void loadTeam()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [canManage, loadTeam])
+
+  async function handleInvite(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     if (!canManage) return
 
     setSubmittingInvite(true)
-    try {
-      const response = await fetch("/api/settings/team/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
-      })
+    setErrorMsg(null)
+    const result = await inviteTeamMember({ email, role })
 
-      const data = (await response.json()) as { ok?: boolean; message?: string; code?: string }
-      if (!response.ok || !data.ok) {
-        if (data.code === "broker_seat_limit_reached") {
-          throw new Error(data.message || "Limite de corretores atingido.")
-        }
-        throw new Error(data.message || "Falha ao enviar convite.")
-      }
-
+    if (result.success) {
       toast.success("Convite enviado.")
       setEmail("")
       setRole("broker")
       await loadTeam()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao enviar convite."
+    } else {
+      const message = result.error || "Falha ao enviar convite."
+      setErrorMsg(message)
       toast.error(message)
-    } finally {
-      setSubmittingInvite(false)
     }
+    setSubmittingInvite(false)
   }
 
   async function handleStatusChange(profileId: string, isActive: boolean) {
     if (!canManage) return
-    setUpdatingMemberId(profileId)
-    try {
-      const response = await fetch("/api/settings/team/member-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile_id: profileId, is_active: isActive }),
-      })
-      const data = (await response.json()) as { ok?: boolean; message?: string; code?: string }
-      if (!response.ok || !data.ok) {
-        if (data.code === "broker_seat_limit_reached") {
-          throw new Error(data.message || "Limite de corretores atingido.")
-        }
-        throw new Error(data.message || "Falha ao atualizar status do corretor.")
-      }
 
+    setUpdatingMemberId(profileId)
+    setErrorMsg(null)
+    const result = await updateBrokerMemberStatus({ profileId, isActive })
+
+    if (result.success) {
       toast.success(isActive ? "Corretor reativado." : "Corretor desativado.")
       await loadTeam()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao atualizar status."
+    } else {
+      const message = result.error || "Falha ao atualizar status do corretor."
+      setErrorMsg(message)
       toast.error(message)
-    } finally {
-      setUpdatingMemberId(null)
     }
+    setUpdatingMemberId(null)
+  }
+
+  function updatePublicProfileDraft(
+    profileId: string,
+    field: "public_display_name" | "creci" | "public_whatsapp" | "avatar_url" | "public_profile_enabled",
+    value: string | boolean
+  ) {
+    setPublicProfiles((current) => {
+      const currentDraft = current[profileId] ?? {
+        public_display_name: "",
+        creci: "",
+        public_whatsapp: "",
+        avatar_url: "",
+        public_profile_enabled: false,
+      }
+
+      return {
+        ...current,
+        [profileId]: {
+          ...currentDraft,
+          [field]: value,
+        },
+      }
+    })
+  }
+
+  async function handlePublicProfileSave(profileId: string) {
+    if (!canManage) return
+
+    const draft = publicProfiles[profileId]
+    if (!draft) return
+
+    setSavingPublicProfileId(profileId)
+    setErrorMsg(null)
+    const result = await updateBrokerPublicProfile({
+      profileId,
+      public_display_name: draft.public_display_name,
+      creci: draft.creci,
+      public_whatsapp: draft.public_whatsapp,
+      avatar_url: draft.avatar_url,
+      public_profile_enabled: draft.public_profile_enabled,
+    })
+
+    if (result.success) {
+      toast.success("Perfil público salvo.")
+      await loadTeam()
+    } else {
+      const message = result.error || "Falha ao salvar perfil público."
+      setErrorMsg(message)
+      toast.error(message)
+    }
+
+    setSavingPublicProfileId(null)
   }
 
   return (
     <div className="space-y-6">
+      {errorMsg ? <p className="text-sm text-red-600">{errorMsg}</p> : null}
+
       <section className="rounded-md border p-4">
         <h2 className="text-sm font-semibold">Capacidade do plano</h2>
-        {usage ? (
+        {data?.usage ? (
           <p className="mt-2 text-sm text-muted-foreground">
-            Corretores ativos: <span className="font-medium text-foreground">{usage.used}</span> /{" "}
-            <span className="font-medium text-foreground">{usage.seat_limit}</span> (disponíveis:{" "}
-            <span className="font-medium text-foreground">{usage.available}</span>)
+            Corretores ativos: <span className="font-medium text-foreground">{data.usage.used}</span> /{" "}
+            <span className="font-medium text-foreground">{data.usage.seat_limit}</span> (disponíveis:{" "}
+            <span className="font-medium text-foreground">{data.usage.available}</span>)
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">Carregando capacidade...</p>
@@ -158,15 +224,19 @@ export function TeamSettingsForm({ canManage }: { canManage: boolean }) {
               type="email"
               placeholder="nome@empresa.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               disabled={!canManage || submittingInvite}
               required
             />
           </div>
           <div>
-            <Label>Perfil</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as UserRole)} disabled={!canManage || submittingInvite}>
-              <SelectTrigger>
+            <Label htmlFor="invite-role">Perfil</Label>
+            <Select
+              value={role}
+              onValueChange={(value) => setRole(value as InviteRole)}
+              disabled={!canManage || submittingInvite}
+            >
+              <SelectTrigger id="invite-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -197,27 +267,117 @@ export function TeamSettingsForm({ canManage }: { canManage: boolean }) {
             {sortedMembers.map((member) => {
               const isBroker = member.role === "broker"
               return (
-                <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-                  <div>
-                    <p className="text-sm font-medium">{member.full_name || "Sem nome"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {member.role} {member.is_active ? "· ativo" : "· inativo"}{" "}
-                      {member.consumes_seat ? "· consome assento" : ""}
-                    </p>
+                <div key={member.id} className="rounded-md border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">{member.full_name || "Sem nome"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {member.role} {member.is_active ? "· ativo" : "· inativo"}{" "}
+                        {member.consumes_seat ? "· consome assento" : ""}
+                      </p>
+                    </div>
+                    {isBroker ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!canManage || updatingMemberId === member.id}
+                        onClick={() => handleStatusChange(member.id, !member.is_active)}
+                      >
+                        {updatingMemberId === member.id
+                          ? "Salvando..."
+                          : member.is_active
+                            ? "Desativar"
+                            : "Reativar"}
+                      </Button>
+                    ) : null}
                   </div>
+
                   {isBroker ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!canManage || updatingMemberId === member.id}
-                      onClick={() => handleStatusChange(member.id, !member.is_active)}
-                    >
-                      {updatingMemberId === member.id
-                        ? "Salvando..."
-                        : member.is_active
-                          ? "Desativar"
-                          : "Reativar"}
-                    </Button>
+                    <div className="mt-4 rounded-md border bg-muted/10 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Perfil público do corretor
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Quando desativado, o detalhe público continua usando “Equipe da imobiliária”.
+                      </p>
+
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div>
+                          <Label htmlFor={`public-name-${member.id}`}>Nome público</Label>
+                          <Input
+                            id={`public-name-${member.id}`}
+                            value={publicProfiles[member.id]?.public_display_name ?? ""}
+                            onChange={(event) =>
+                              updatePublicProfileDraft(member.id, "public_display_name", event.target.value)
+                            }
+                            placeholder={member.full_name || "Nome do corretor"}
+                            disabled={!canManage || savingPublicProfileId === member.id}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`public-creci-${member.id}`}>CRECI</Label>
+                          <Input
+                            id={`public-creci-${member.id}`}
+                            value={publicProfiles[member.id]?.creci ?? ""}
+                            onChange={(event) =>
+                              updatePublicProfileDraft(member.id, "creci", event.target.value)
+                            }
+                            placeholder="Ex.: 123456-F"
+                            disabled={!canManage || savingPublicProfileId === member.id}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`public-whatsapp-${member.id}`}>WhatsApp público</Label>
+                          <Input
+                            id={`public-whatsapp-${member.id}`}
+                            value={publicProfiles[member.id]?.public_whatsapp ?? ""}
+                            onChange={(event) =>
+                              updatePublicProfileDraft(member.id, "public_whatsapp", event.target.value)
+                            }
+                            placeholder="Ex.: (11) 99999-9999"
+                            disabled={!canManage || savingPublicProfileId === member.id}
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`public-avatar-${member.id}`}>Avatar público (URL)</Label>
+                          <Input
+                            id={`public-avatar-${member.id}`}
+                            type="url"
+                            value={publicProfiles[member.id]?.avatar_url ?? ""}
+                            onChange={(event) =>
+                              updatePublicProfileDraft(member.id, "avatar_url", event.target.value)
+                            }
+                            placeholder="https://..."
+                            disabled={!canManage || savingPublicProfileId === member.id}
+                          />
+                        </div>
+                      </div>
+
+                      <label className="mt-3 flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(publicProfiles[member.id]?.public_profile_enabled)}
+                          onChange={(event) =>
+                            updatePublicProfileDraft(member.id, "public_profile_enabled", event.target.checked)
+                          }
+                          disabled={!canManage || savingPublicProfileId === member.id}
+                        />
+                        Exibir corretor no site público
+                      </label>
+
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          size="sm"
+                          disabled={!canManage || savingPublicProfileId === member.id}
+                          onClick={() => handlePublicProfileSave(member.id)}
+                        >
+                          {savingPublicProfileId === member.id ? "Salvando..." : "Salvar perfil público"}
+                        </Button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
               )
@@ -230,11 +390,11 @@ export function TeamSettingsForm({ canManage }: { canManage: boolean }) {
         <h2 className="text-sm font-semibold">Convites pendentes</h2>
         {loading ? (
           <p className="mt-3 text-sm text-muted-foreground">Carregando convites...</p>
-        ) : invites.length === 0 ? (
+        ) : !data?.invites || data.invites.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">Nenhum convite pendente.</p>
         ) : (
           <div className="mt-3 space-y-2">
-            {invites.map((invite) => (
+            {data.invites.map((invite) => (
               <div key={invite.id} className="rounded-md border p-3">
                 <p className="text-sm font-medium">{invite.email}</p>
                 <p className="text-xs text-muted-foreground">
@@ -251,11 +411,11 @@ export function TeamSettingsForm({ canManage }: { canManage: boolean }) {
         <h2 className="text-sm font-semibold">Auditoria recente</h2>
         {loading ? (
           <p className="mt-3 text-sm text-muted-foreground">Carregando auditoria...</p>
-        ) : auditEvents.length === 0 ? (
+        ) : !data?.audit_events || data.audit_events.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">Sem eventos recentes.</p>
         ) : (
           <div className="mt-3 space-y-2">
-            {auditEvents.map((event) => (
+            {data.audit_events.map((event) => (
               <div key={event.id} className="rounded-md border p-3">
                 <p className="text-sm font-medium">{event.message || event.action}</p>
                 <p className="text-xs text-muted-foreground">

@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { PropertyForm } from '@/components/properties/property-form'
+import { PropertyRecordSummary } from '@/components/properties/property-record-summary'
+import { getPropertyVitrineStatus } from '@/lib/property-vitrine-status'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -14,7 +16,11 @@ export default async function EditPropertyPage({
 
     const { data: property, error } = await supabase
         .from('properties')
-        .select('*')
+        .select(`
+            *,
+            owner_contact:contacts!properties_owner_contact_id_fkey(id, name),
+            broker:profiles(full_name)
+        `)
         .eq('id', id)
         .single()
 
@@ -29,7 +35,11 @@ export default async function EditPropertyPage({
         .eq('id', property.organization_id)
         .single()
 
-    const publicUrl = org?.slug ? `/s/${org.slug}/imovel/${property.id}` : null
+    const organizationSlug = org?.slug ?? null
+    const publicUrl = organizationSlug ? `/s/${organizationSlug}/imovel/${property.id}` : null
+    const publicListUrl = organizationSlug ? `/s/${organizationSlug}` : null
+    const vitrine = getPropertyVitrineStatus(property)
+    const canOpenOnSite = Boolean(publicUrl && vitrine.canOpenPublicLink)
 
     return (
         <div className="space-y-6">
@@ -39,24 +49,30 @@ export default async function EditPropertyPage({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-                {publicUrl ? (
+                {publicListUrl ? (
+                    <Link href={publicListUrl} target="_blank" rel="noreferrer">
+                        <Button variant="outline">Abrir vitrine</Button>
+                    </Link>
+                ) : null}
+                {publicUrl && canOpenOnSite ? (
                     <Link href={publicUrl} target="_blank" rel="noreferrer">
-                        <Button variant="outline">Abrir no site</Button>
+                        <Button variant="outline">Conferir imóvel no site</Button>
                     </Link>
                 ) : (
                     <Button variant="outline" disabled>
-                        Abrir no site
+                        Link público indisponível
                     </Button>
                 )}
                 <div className="text-xs text-muted-foreground">
-                    Dica: se <span className="font-medium">Exibir no site</span> estiver desativado, o imóvel não aparece no site público.
+                    O link público só abre quando o imóvel está <span className="font-medium">disponível</span>, com <span className="font-medium">site liberado</span> e sem bloqueios de vitrine.
                 </div>
                 <div className="text-xs text-muted-foreground">
                     Referência pública: <span className="font-medium">{property.public_code || property.id.slice(0, 8)}</span>
                 </div>
             </div>
 
-            <div className="p-6 border rounded-lg bg-card text-card-foreground shadow-sm">
+            <div className="space-y-6">
+                <PropertyRecordSummary property={property} organizationSlug={organizationSlug} />
                 <PropertyForm initialData={property} />
             </div>
         </div>

@@ -61,7 +61,6 @@ export default async function PortalsSettingsPage() {
             </div>
 
             <PortalIntegrationsClient
-                organizationId={organizationId}
                 orgSlug={org?.slug || ''}
                 initialIntegrations={integrations || []}
             />

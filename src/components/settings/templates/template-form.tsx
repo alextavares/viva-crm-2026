@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { createClient } from "@/lib/supabase/client"
+import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -12,10 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { messageTemplateSchema, MessageTemplateFormValues, MessageTemplate } from "@/lib/types"
 import { toast } from "sonner"
+import { saveMessageTemplate } from "@/app/actions/settings"
+
+type MessageTemplateFormInput = z.input<typeof messageTemplateSchema>
+
+function resolveTemplateChannel(channel?: string | null): MessageTemplateFormValues["channel"] {
+    return channel === "email" ? "email" : "whatsapp"
+}
 
 interface TemplateFormProps {
     template: MessageTemplate | null
-    organizationId: string
     onClose: () => void
     onSaved: (template: MessageTemplate) => void
 }
@@ -25,16 +31,16 @@ const AVAILABLE_VARIABLES = [
     { key: "{{broker_name}}", label: "Seu Nome (Corretor)" },
 ]
 
-export function TemplateForm({ template, organizationId, onClose, onSaved }: TemplateFormProps) {
-    const [isLoading, setIsLoading] = useState(false)
-    const supabase = createClient()
+export function TemplateForm({ template, onClose, onSaved }: TemplateFormProps) {
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+    const [isPending, startTransition] = useTransition()
 
-    const form = useForm<MessageTemplateFormValues>({
+    const form = useForm<MessageTemplateFormInput, unknown, MessageTemplateFormValues>({
         resolver: zodResolver(messageTemplateSchema),
         defaultValues: {
             title: template?.title || "",
             content: template?.content || "",
-            channel: template?.channel || "whatsapp",
+            channel: resolveTemplateChannel(template?.channel),
             variables: template?.variables || [],
         },
     })
@@ -46,48 +52,32 @@ export function TemplateForm({ template, organizationId, onClose, onSaved }: Tem
     }
 
     const onSubmit = async (data: MessageTemplateFormValues) => {
-        setIsLoading(true)
+        setErrorMsg(null)
 
-        // Extract variables used in the content
         const usedVariables = AVAILABLE_VARIABLES
             .filter(v => data.content.includes(v.key))
             .map(v => v.key)
 
-        const payload = {
-            ...data,
-            variables: usedVariables,
-            organization_id: organizationId,
-        }
+        startTransition(() => {
+            void (async () => {
+                const result = await saveMessageTemplate({
+                    id: template?.id,
+                    title: data.title,
+                    content: data.content,
+                    channel: data.channel,
+                    variables: usedVariables,
+                })
 
-        try {
-            if (template?.id) {
-                const { data: updated, error } = await supabase
-                    .from("message_templates")
-                    .update(payload)
-                    .eq("id", template.id)
-                    .select()
-                    .single()
+                if (!result.success) {
+                    setErrorMsg(result.error)
+                    toast.error(result.error)
+                    return
+                }
 
-                if (error) throw error
-                toast.success("Template atualizado com sucesso!")
-                onSaved(updated as MessageTemplate)
-            } else {
-                const { data: inserted, error } = await supabase
-                    .from("message_templates")
-                    .insert([payload])
-                    .select()
-                    .single()
-
-                if (error) throw error
-                toast.success("Template criado com sucesso!")
-                onSaved(inserted as MessageTemplate)
-            }
-        } catch (error: any) {
-            console.error(error)
-            toast.error(error.message || "Erro ao salvar template")
-        } finally {
-            setIsLoading(false)
-        }
+                toast.success(template?.id ? "Template atualizado com sucesso!" : "Template criado com sucesso!")
+                onSaved(result.data.template)
+            })()
+        })
     }
 
     return (
@@ -164,13 +154,14 @@ export function TemplateForm({ template, organizationId, onClose, onSaved }: Tem
                     </div>
 
                     <DialogFooter className=" pt-4">
-                        <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+                        <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
                             Cancelar
                         </Button>
-                        <Button type="submit" disabled={isLoading}>
-                            {isLoading ? "Salvando..." : "Salvar Template"}
+                        <Button type="submit" disabled={isPending}>
+                            {isPending ? "Salvando..." : "Salvar Template"}
                         </Button>
                     </DialogFooter>
+                    {errorMsg ? <p className="text-sm text-red-600">{errorMsg}</p> : null}
                 </form>
             </DialogContent>
         </Dialog>

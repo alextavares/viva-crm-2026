@@ -42,6 +42,12 @@ describe('ContactForm', () => {
     it('renders correctly', () => {
         render(<ContactForm />)
         expect(screen.getByLabelText(/Nome/i)).toBeInTheDocument()
+        expect(screen.getByText(/Dados básicos/i)).toBeInTheDocument()
+        expect(screen.getByText(/Perfil de interesse/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/Cidade/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/Tipo de imóvel/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/Quartos desejados/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/Preço máximo/i)).toBeInTheDocument()
     })
 
     // This test is simplified as full form submission involves complex async & hook interactions

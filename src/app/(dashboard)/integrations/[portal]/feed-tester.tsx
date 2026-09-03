@@ -137,7 +137,7 @@ export function FeedTester({ feedUrl, portal }: { feedUrl: string; portal: strin
           setState({
             kind: "error",
             message:
-              "O XML respondeu, mas não está no formato OpenNavent esperado pelo Imovelweb.",
+              "O XML respondeu, mas não está no formato esperado pelo Imovelweb.",
           })
           await logRun({
             portal,
@@ -145,7 +145,7 @@ export function FeedTester({ feedUrl, portal }: { feedUrl: string; portal: strin
             properties_count: propertiesCount,
             bytes,
             content_type: contentType,
-            message: "XML não está no formato OpenNavent",
+            message: "XML não está no formato esperado pelo portal",
           })
           return
         }

@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
+import { saveAppointment } from "@/app/actions/appointments"
 import { Button } from "@/components/ui/button"
 import {
     Form,
@@ -15,10 +16,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { appointmentSchema, type AppointmentFormValues, type SelectOption } from "@/lib/types"
 
@@ -26,82 +25,68 @@ interface AppointmentFormProps {
     properties: SelectOption[]
     contacts: SelectOption[]
     initialData?: AppointmentFormValues & { id: string }
+    defaultValues?: Partial<AppointmentFormValues>
+    returnTo?: string | null
 }
 
-export function AppointmentForm({ properties, contacts, initialData }: AppointmentFormProps) {
-    const { user } = useAuth()
+export function AppointmentForm({ properties, contacts, initialData, defaultValues, returnTo }: AppointmentFormProps) {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
-    const supabase = createClient()
+    const defaultPropertyId = initialData?.property_id ?? defaultValues?.property_id ?? ""
+    const defaultContactId = initialData?.contact_id ?? defaultValues?.contact_id ?? ""
+    const defaultDate = initialData
+        ? new Date(initialData.date).toISOString().slice(0, 16)
+        : defaultValues?.date ?? ""
+    const defaultNotes = initialData?.notes ?? defaultValues?.notes ?? ""
+    const defaultStatus = initialData?.status ?? defaultValues?.status ?? "scheduled"
+    const resolvedDefaultValues = useMemo(
+        () =>
+            ({
+                property_id: defaultPropertyId,
+                contact_id: defaultContactId,
+                date: defaultDate,
+                notes: defaultNotes,
+                status: defaultStatus,
+            }) satisfies AppointmentFormValues,
+        [
+            defaultContactId,
+            defaultDate,
+            defaultNotes,
+            defaultPropertyId,
+            defaultStatus,
+        ]
+    )
 
     const form = useForm({
         resolver: zodResolver(appointmentSchema),
-        defaultValues: initialData ? {
-            property_id: initialData.property_id,
-            contact_id: initialData.contact_id,
-            date: new Date(initialData.date).toISOString().slice(0, 16), // datetime-local format
-            notes: initialData.notes || "",
-            status: initialData.status,
-        } : {
-            property_id: "",
-            contact_id: "",
-            date: "",
-            notes: "",
-            status: "scheduled",
-        },
+        defaultValues: resolvedDefaultValues,
     })
 
-    async function onSubmit(data: AppointmentFormValues) {
-        if (!user) return
+    useEffect(() => {
+        form.reset(resolvedDefaultValues)
+    }, [form, resolvedDefaultValues])
 
+    async function onSubmit(data: AppointmentFormValues) {
         setIsLoading(true)
         try {
-            // 1. Get organization_id from profile (only needed for create, but safe to fetch)
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('organization_id')
-                .eq('id', user.id)
-                .single()
+            const result = await saveAppointment({
+                ...data,
+                id: initialData?.id,
+            })
 
-            if (!profile?.organization_id) throw new Error("Organization not found")
-
-            // 2. Prepare payload
-            const payload = {
-                organization_id: profile.organization_id, // Keep org_id consistent
-                // broker_id: user.id, // Don't change broker on edit unless intended? RLS handles logic. 
-                // For edit, we might strictly check RLS. 
-                // Let's assume user editing is the broker or manager.
-                // If creating, set broker_id.
-                ...(initialData ? {} : { broker_id: user.id }),
-                property_id: data.property_id,
-                contact_id: data.contact_id,
-                date: new Date(data.date).toISOString(),
-                status: data.status,
-                notes: data.notes,
+            if (!result.success) {
+                toast.error(result.error || "Erro ao salvar visita. Tente novamente.")
+                return
             }
-
-            let error;
-            if (initialData) {
-                const { error: updateError } = await supabase
-                    .from('appointments')
-                    .update(payload)
-                    .eq('id', initialData.id)
-                error = updateError
-            } else {
-                const { error: insertError } = await supabase
-                    .from('appointments')
-                    .insert(payload)
-                error = insertError
-            }
-
-            if (error) throw error
 
             toast.success(initialData ? "Visita atualizada!" : "Visita agendada com sucesso!")
-            router.push('/appointments')
-            router.refresh()
+            router.push(returnTo || '/appointments')
         } catch (error) {
             console.error('Error saving appointment:', error)
-            toast.error("Erro ao salvar visita. Tente novamente.")
+            const message = error instanceof Error && error.message
+                ? error.message
+                : "Erro ao salvar visita. Tente novamente."
+            toast.error(message)
         } finally {
             setIsLoading(false)
         }
@@ -117,7 +102,7 @@ export function AppointmentForm({ properties, contacts, initialData }: Appointme
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Imóvel</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Selecione um imóvel" />
@@ -142,7 +127,7 @@ export function AppointmentForm({ properties, contacts, initialData }: Appointme
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Contato (Cliente/Lead)</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Selecione um contato" />
@@ -181,7 +166,7 @@ export function AppointmentForm({ properties, contacts, initialData }: Appointme
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Status</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Selecione" />

@@ -1,4 +1,5 @@
 import type { CRMProperty } from "./zap-mapper"
+import { isKnownPropertyType, type PropertyTypeValue } from "@/lib/types"
 
 export type CharacteristicValue = {
   id: string
@@ -26,7 +27,7 @@ type FlagCharacteristicDescriptor = {
   aliases: string[]
 }
 
-export const IMOVELWEB_PROPERTY_TYPE_MAP: Record<string, PropertyTypeMapping> = {
+export const IMOVELWEB_PROPERTY_TYPE_MAP: Record<PropertyTypeValue, PropertyTypeMapping> = {
   apartment: { idTipo: "2", tipo: "Apartamento", idSubTipo: "1", subTipo: "Padrão" },
   house: { idTipo: "1", tipo: "Casa", idSubTipo: "5", subTipo: "Padrão" },
   condominium_house: { idTipo: "1", tipo: "Casa", idSubTipo: "6", subTipo: "Casa de Condomínio" },
@@ -36,7 +37,9 @@ export const IMOVELWEB_PROPERTY_TYPE_MAP: Record<string, PropertyTypeMapping> = 
   commercial_space: { idTipo: "1005", tipo: "Comercial", idSubTipo: "19", subTipo: "Loja/Salão" },
 }
 
-export const SUPPORTED_IMOVELWEB_PROPERTY_TYPES = new Set(Object.keys(IMOVELWEB_PROPERTY_TYPE_MAP))
+export const SUPPORTED_IMOVELWEB_PROPERTY_TYPES = new Set<PropertyTypeValue>(
+  Object.keys(IMOVELWEB_PROPERTY_TYPE_MAP) as PropertyTypeValue[]
+)
 
 const NUMERIC_CHARACTERISTICS: NumericCharacteristicDescriptor[] = [
   { id: "CFT2", nome: "PRINCIPALES|QUARTO", aliases: ["bedrooms", "quartos"] },
@@ -128,7 +131,9 @@ function addFlagCharacteristic(target: CharacteristicValue[], id: string, nome: 
 }
 
 export function resolveImovelwebPropertyType(crmType: string | null | undefined): PropertyTypeMapping {
-  return IMOVELWEB_PROPERTY_TYPE_MAP[crmType ?? ""] ?? IMOVELWEB_PROPERTY_TYPE_MAP.apartment
+  return isKnownPropertyType(crmType)
+    ? IMOVELWEB_PROPERTY_TYPE_MAP[crmType]
+    : IMOVELWEB_PROPERTY_TYPE_MAP.apartment
 }
 
 export function buildImovelwebCharacteristics(property: CRMProperty): CharacteristicValue[] {

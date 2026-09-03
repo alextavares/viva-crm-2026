@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 export type ActionResult<T = void> =
-    | { success: true; data?: T }
+    | (T extends void ? { success: true; data?: T } : { success: true; data: T })
     | { success: false; error: string }
 
 export const PROPERTY_PORTAL_BULK_ACTIONS = [
@@ -178,8 +178,8 @@ export const contactSchema = z.object({
     email: z.string().email("Email inválido").optional().or(z.literal("")),
     phone: z.string().min(8, "Telefone inválido").optional().or(z.literal("")),
     city: z.string().optional().or(z.literal("")),
-    type: z.string().default("lead"),
-    status: z.string().default("new"),
+    type: z.string(),
+    status: z.string(),
     interest_type: z.enum(PROPERTY_TYPES).optional().or(z.literal("")),
     interest_bedrooms: z.number().int().min(0).nullable().optional(),
     interest_price_max: z.number().min(0).nullable().optional(),
@@ -420,6 +420,10 @@ export interface Profile {
     role: UserRole
     is_active?: boolean
     avatar_url?: string | null
+    creci?: string | null
+    public_whatsapp?: string | null
+    public_profile_enabled?: boolean
+    public_display_name?: string | null
     created_at?: string
     updated_at?: string
 }
@@ -466,6 +470,11 @@ export interface TeamMember {
     role: UserRole | string
     is_active: boolean
     consumes_seat: boolean
+    avatar_url?: string | null
+    creci?: string | null
+    public_whatsapp?: string | null
+    public_profile_enabled?: boolean
+    public_display_name?: string | null
     created_at?: string | null
     updated_at?: string | null
 }

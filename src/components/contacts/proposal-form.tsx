@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { CalendarIcon, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -30,38 +31,46 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { cn, displayEmptyForZero, parseNumberInput } from "@/lib/utils"
 
-import { DealProposal, proposalSchema, ProposalFormValues } from "@/lib/types"
+import { DealProposal, PROPOSAL_STATUSES, proposalSchema, ProposalFormValues, type ProposalStatus } from "@/lib/types"
 import { saveProposal } from "@/app/actions/proposals"
 import { createClient } from "@/lib/supabase/client"
 
 interface ProposalFormProps {
     contactId: string
     organizationId: string
-    brokerId?: string | null
+    assignedTo?: string | null
     initialData?: DealProposal
     onSuccess?: () => void
     onCancel?: () => void
 }
 
+type ProposalFormInput = z.input<typeof proposalSchema>
+
+function resolveProposalStatus(status?: string | null): ProposalStatus {
+    return PROPOSAL_STATUSES.includes(status as ProposalStatus) ? (status as ProposalStatus) : "pending"
+}
+
 export function ProposalForm({
     contactId,
     organizationId,
-    brokerId,
+    assignedTo,
     initialData,
     onSuccess,
     onCancel
 }: ProposalFormProps) {
     const [isPending, startTransition] = useTransition()
     const [properties, setProperties] = useState<{ id: string; title: string; public_code: string | null }[]>([])
+    const [propertiesError, setPropertiesError] = useState<string | null>(null)
+    const [submitError, setSubmitError] = useState<string | null>(null)
 
-    const form = useForm<ProposalFormValues>({
+    const form = useForm<ProposalFormInput, unknown, ProposalFormValues>({
         resolver: zodResolver(proposalSchema),
         defaultValues: {
             property_id: initialData?.property_id || "",
             proposed_value: initialData?.proposed_value || 0,
             payment_conditions: initialData?.payment_conditions || "",
             valid_until: initialData?.valid_until || "",
-            status: initialData?.status || "pending",
+            status: resolveProposalStatus(initialData?.status),
             notes: initialData?.notes || ""
         }
     })
@@ -69,15 +78,30 @@ export function ProposalForm({
     // Search properties for select
     useEffect(() => {
         async function fetchProperties() {
-            const supabase = createClient()
-            const { data } = await supabase
-                .from('properties')
-                .select('id, title, public_code')
-                .eq('organization_id', organizationId)
-                .order('created_at', { ascending: false })
+            setPropertiesError(null)
+            try {
+                const supabase = createClient()
+                const { data, error } = await supabase
+                    .from('properties')
+                    .select('id, title, public_code')
+                    .eq('organization_id', organizationId)
+                    .order('created_at', { ascending: false })
 
-            if (data) {
-                setProperties(data)
+                if (error) throw error
+
+                if (data) {
+                    setProperties(data)
+                }
+            } catch (error) {
+                console.error("Erro ao carregar imóveis da proposta:", error)
+                const message =
+                    typeof error === "object" &&
+                    error !== null &&
+                    "message" in error &&
+                    typeof (error as { message?: unknown }).message === "string"
+                        ? (error as { message: string }).message
+                        : "Não foi possível carregar imóveis para a proposta."
+                setPropertiesError(message)
             }
         }
         fetchProperties()
@@ -85,11 +109,13 @@ export function ProposalForm({
 
     function onSubmit(data: ProposalFormValues) {
         startTransition(async () => {
+            setSubmitError(null)
             const formData = new FormData()
             if (initialData?.id) formData.append("id", initialData.id)
             formData.append("organization_id", organizationId)
             formData.append("contact_id", contactId)
-            if (brokerId) formData.append("broker_id", brokerId)
+            const proposalAssignedTo = initialData?.assigned_to || assignedTo || ""
+            if (proposalAssignedTo) formData.append("assigned_to", proposalAssignedTo)
 
             if (data.property_id) formData.append("property_id", data.property_id)
             formData.append("proposed_value", data.proposed_value.toString())
@@ -100,18 +126,26 @@ export function ProposalForm({
 
             const result = await saveProposal(formData)
 
-            if (result.error) {
+            if (!result.success) {
+                setSubmitError(result.error)
                 toast.error(result.error)
-            } else {
-                toast.success(initialData ? "Proposta atualizada" : "Proposta criada com sucesso")
-                onSuccess?.()
+                return
             }
+
+            setSubmitError(null)
+            toast.success(initialData ? "Proposta atualizada" : "Proposta criada com sucesso")
+            onSuccess?.()
         })
     }
 
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {propertiesError ? (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                        {propertiesError}
+                    </div>
+                ) : null}
 
                 <FormField
                     control={form.control}
@@ -243,6 +277,12 @@ export function ProposalForm({
                         )}
                     />
                 )}
+
+                {submitError ? (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                        {submitError}
+                    </div>
+                ) : null}
 
                 <div className="flex justify-end gap-2 pt-4">
                     {onCancel && (

@@ -1,18 +1,26 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { usePathname } from "next/navigation"
 import type { SitePublicBanner } from "@/lib/site"
 import { resolveMediaPathUrl, resolveMediaUrl } from "@/lib/media"
 
 export function PopupBanner({ banner }: { banner: SitePublicBanner }) {
+  const pathname = usePathname()
   const imageSrc =
     resolveMediaPathUrl("site-assets", banner.image_path) ??
     resolveMediaUrl(banner.image_url) ??
     banner.image_url
   const storageKey = useMemo(() => `site:popup:${banner.id}`, [banner.id])
   const [open, setOpen] = useState<boolean | null>(null)
+  const isPropertyDetail = /^\/s\/[^/]+\/imovel\/[^/]+\/?$/.test(pathname)
 
   useEffect(() => {
+    if (isPropertyDetail) {
+      const t = setTimeout(() => setOpen(false), 0)
+      return () => clearTimeout(t)
+    }
+
     const t = setTimeout(() => {
       try {
         const dismissed = sessionStorage.getItem(storageKey)
@@ -23,7 +31,7 @@ export function PopupBanner({ banner }: { banner: SitePublicBanner }) {
     }, 0)
 
     return () => clearTimeout(t)
-  }, [storageKey])
+  }, [isPropertyDetail, storageKey])
 
   if (open !== true) return null
 

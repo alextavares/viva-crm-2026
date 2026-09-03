@@ -41,7 +41,7 @@ export default async function BillingSettingsPage() {
 
       {!canManage ? (
         <div className="rounded-md border p-4 text-sm text-muted-foreground">
-          Apenas <span className="font-medium text-foreground">owner/manager</span> podem gerenciar cobrança.
+          Apenas gestores podem gerenciar cobrança.
         </div>
       ) : (
         <div className="rounded-lg border bg-muted/10 p-4">

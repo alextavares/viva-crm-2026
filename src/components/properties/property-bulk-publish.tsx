@@ -12,6 +12,8 @@ import { toast } from "sonner"
 import { Loader2, CheckSquare, Square, Eye, EyeOff, ExternalLink } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { buildPropertyFixHref, getPropertyPublishIssues, isPropertyPublishReady } from "@/lib/property-publish-readiness"
+import { updateBulkPropertySiteVisibility } from "@/app/actions/properties"
+import { getPropertyTypeLabel } from "@/lib/types"
 
 type Row = {
   id: string
@@ -31,31 +33,51 @@ type Row = {
   external_id: string | null
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
-}
-
 function formatMoneyBRL(v: number | null | undefined) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)
+  if (!v || v <= 0) {
+    return {
+      label: "Sem preço",
+      className: "text-red-700",
+    }
+  }
+
+  return {
+    label: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v),
+    className: "",
+  }
 }
 
 function typeLabel(t?: string | null) {
-  if (!t) return "-"
-  if (t === "apartment") return "Apartamento"
-  if (t === "house") return "Casa"
-  if (t === "land") return "Terreno"
-  if (t === "commercial") return "Comercial"
-  return t
+  return getPropertyTypeLabel(t)
 }
 
 function statusLabel(s?: string | null) {
-  if (!s) return "-"
+  if (!s) return "Indefinido"
   if (s === "available") return "Disponível"
+  if (s === "inactive") return "Inativo"
+  if (s === "pending_approval") return "Aguardando aprovação"
   if (s === "sold") return "Vendido"
   if (s === "rented") return "Alugado"
   return s
+}
+
+function getSiteVisibility(row: Pick<Row, "status" | "hide_from_site">) {
+  const visible = !row.hide_from_site && row.status === "available"
+
+  return {
+    visible,
+    label: visible ? "Site: Publicado" : "Site: Oculto",
+  }
+}
+
+function refLabel(row: Pick<Row, "id" | "public_code" | "external_id">) {
+  const publicCode = row.public_code?.trim()
+  if (publicCode) return publicCode
+
+  const externalId = row.external_id?.trim()
+  if (externalId) return externalId
+
+  return row.id.slice(0, 8)
 }
 
 function isUuid(v: string) {
@@ -86,18 +108,32 @@ export function PropertyBulkPublish() {
   const selectedIds = Object.entries(selected)
     .filter(([, v]) => v)
     .map(([k]) => k)
-  const hiddenCount = rows.filter((r) => r.hide_from_site).length
+  const hiddenCount = rows.filter((r) => !getSiteVisibility(r).visible).length
   const publishedCount = rows.length - hiddenCount
   const readinessById = useMemo(
     () => new Map(rows.map((row) => [row.id, getPropertyPublishIssues(row)])),
     [rows]
   )
-  const pendingCount = rows.filter((row) => (readinessById.get(row.id) ?? []).length > 0).length
-  const readyCount = rows.filter((row) => isPropertyPublishReady(row)).length
+  const rowById = useMemo(
+    () => new Map(rows.map((row) => [row.id, row])),
+    [rows]
+  )
+  const pendingCount = rows.filter((row) => {
+    const issues = readinessById.get(row.id) ?? []
+    return issues.length > 0 || row.status !== "available"
+  }).length
+  const readyCount = rows.filter((row) => isPropertyPublishReady(row) && row.status === "available").length
   const selectedBlockingCount = selectedIds.filter((id) =>
     (readinessById.get(id) ?? []).some((issue) => issue.severity === "blocking")
   ).length
-  const canPublishSelection = isAdmin && selectedIds.length > 0 && !loading && !saving && selectedBlockingCount === 0
+  const selectedUnavailableCount = selectedIds.filter((id) => rowById.get(id)?.status !== "available").length
+  const canPublishSelection =
+    isAdmin &&
+    selectedIds.length > 0 &&
+    !loading &&
+    !saving &&
+    selectedBlockingCount === 0 &&
+    selectedUnavailableCount === 0
 
   const allSelected = rows.length > 0 && rows.every((r) => selected[r.id])
 
@@ -179,9 +215,16 @@ export function PropertyBulkPublish() {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
+  const resetFilters = () => {
+    setSearch("")
+    setStatus("available")
+    setOnlyHidden(true)
+    setOnlyPendingIssues(false)
+  }
+
   const applyVisibility = async (hide_from_site: boolean) => {
     if (!isAdmin) {
-      toast.error("Apenas owner/manager podem publicar.")
+      toast.error("Apenas gestores podem publicar.")
       return
     }
     if (!organizationId) return
@@ -190,25 +233,36 @@ export function PropertyBulkPublish() {
       toast.error("Há imóveis selecionados com bloqueios de qualidade. Corrija antes de publicar.")
       return
     }
+    if (!hide_from_site && selectedUnavailableCount > 0) {
+      toast.error("Há imóveis selecionados que não estão disponíveis. Ajuste o status antes de publicar.")
+      return
+    }
 
     setSaving(true)
+    setLastError(null)
     try {
-      const batches = chunk(selectedIds, 200)
-      for (const ids of batches) {
-        const { error } = await supabase
-          .from("properties")
-          .update({ hide_from_site })
-          .in("id", ids)
-          .eq("organization_id", organizationId)
+      const result = await updateBulkPropertySiteVisibility({
+        propertyIds: selectedIds,
+        hideFromSite: hide_from_site,
+      })
 
-        if (error) throw error
+      if (!result.success) {
+        setLastError(result.error)
+        toast.error(result.error)
+        return
       }
 
-      toast.success(hide_from_site ? "Imóveis ocultados do site." : "Imóveis publicados no site.")
+      toast.success(
+        hide_from_site
+          ? `${result.data?.updatedCount ?? selectedIds.length} imóvel(is) ocultado(s) do site.`
+          : `${result.data?.updatedCount ?? selectedIds.length} imóvel(is) publicado(s) no site.`
+      )
       await load()
     } catch (err) {
       console.error("Bulk publish save error:", err)
-      toast.error("Erro ao salvar. Tente novamente.")
+      const message = err instanceof Error ? err.message : "Erro ao salvar. Tente novamente."
+      setLastError(message)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -218,7 +272,7 @@ export function PropertyBulkPublish() {
     <div className="space-y-4">
       {!isAdmin ? (
         <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-          Você precisa ser <span className="font-medium">owner/manager</span> para publicar imóveis em massa.
+          Você precisa ser gestor para publicar imóveis em massa.
         </div>
       ) : null}
 
@@ -232,8 +286,8 @@ export function PropertyBulkPublish() {
         <CardContent className="p-4 space-y-3">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Buscar por título, código ou UUID</div>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex.: V-1200, Apartamento, 77848263, UUID" />
+              <div className="text-xs text-muted-foreground">Buscar por título, código, referência ou UUID</div>
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex.: V-1200, Apartamento, 77848263, referência externa ou UUID" />
             </div>
 
             <div className="space-y-1">
@@ -251,27 +305,27 @@ export function PropertyBulkPublish() {
                   variant={status === "all" ? "default" : "outline"}
                   onClick={() => setStatus("all")}
                 >
-                  Todos
+                  Todos os status
                 </Button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">Visibilidade</div>
+              <div className="text-xs text-muted-foreground">Visibilidade no site</div>
               <div className="flex gap-2">
                 <Button
                   type="button"
                   variant={onlyHidden ? "default" : "outline"}
                   onClick={() => setOnlyHidden(true)}
                 >
-                  Ocultos
+                  Ocultos no site
                 </Button>
                 <Button
                   type="button"
                   variant={!onlyHidden ? "default" : "outline"}
                   onClick={() => setOnlyHidden(false)}
                 >
-                  Todos
+                  Visíveis e ocultos
                 </Button>
               </div>
             </div>
@@ -291,7 +345,7 @@ export function PropertyBulkPublish() {
                   variant={!onlyPendingIssues ? "default" : "outline"}
                   onClick={() => setOnlyPendingIssues(false)}
                 >
-                  Todos
+                  Com e sem pendências
                 </Button>
               </div>
             </div>
@@ -303,19 +357,19 @@ export function PropertyBulkPublish() {
               Atualizar lista
             </Button>
             <div className="text-xs text-muted-foreground">
-              Mostrando <span className="font-medium">{rows.length}</span> imóveis (limite 2000).
+              Mostrando <span className="font-medium">{rows.length}</span> imóveis nesta consulta.
             </div>
             <Badge variant="outline" className="text-xs">
-              Publicados: {publishedCount}
+              Visíveis no site: {publishedCount}
             </Badge>
             <Badge variant="outline" className="text-xs">
-              Ocultos: {hiddenCount}
+              Ocultos no site: {hiddenCount}
             </Badge>
             <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
               Publicáveis: {readyCount}
             </Badge>
             <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
-              Com pendências: {pendingCount}
+              Exigem revisão: {pendingCount}
             </Badge>
           </div>
         </CardContent>
@@ -326,13 +380,18 @@ export function PropertyBulkPublish() {
           {allSelected ? <CheckSquare className="mr-2 h-4 w-4" /> : <Square className="mr-2 h-4 w-4" />}
           {allSelected ? "Desmarcar todos" : "Selecionar todos"}
         </Button>
+        {selectedIds.length > 0 ? (
+          <Badge variant="outline" className="text-xs">
+            Selecionados: {selectedIds.length}
+          </Badge>
+        ) : null}
         <Button
           type="button"
           onClick={() => applyVisibility(false)}
           disabled={!canPublishSelection}
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
-          Publicar selecionados ({selectedIds.length})
+          {selectedIds.length > 0 ? `Publicar selecionados (${selectedIds.length})` : "Publicar selecionados"}
         </Button>
         <Button
           type="button"
@@ -341,9 +400,18 @@ export function PropertyBulkPublish() {
           disabled={!isAdmin || selectedIds.length === 0 || loading || saving}
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <EyeOff className="mr-2 h-4 w-4" />}
-          Ocultar selecionados
+          {selectedIds.length > 0 ? `Ocultar selecionados (${selectedIds.length})` : "Ocultar selecionados"}
         </Button>
       </div>
+      {selectedIds.length > 0 && !loading && !saving && !canPublishSelection ? (
+        <div className="text-xs text-muted-foreground">
+          {selectedBlockingCount > 0 ? (
+            <span>{selectedBlockingCount} selecionado(s) ainda exigem correção antes de publicar.</span>
+          ) : selectedUnavailableCount > 0 ? (
+            <span>{selectedUnavailableCount} selecionado(s) ainda não estão disponíveis para publicação.</span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-lg border">
         <div className="grid grid-cols-[44px_1fr_140px_120px_120px_140px] gap-0 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
@@ -360,7 +428,14 @@ export function PropertyBulkPublish() {
               <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
             </div>
           ) : rows.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground">Nenhum imóvel encontrado para os filtros atuais.</div>
+            <div className="p-6 text-sm text-muted-foreground flex flex-col gap-3">
+              <div>Nenhum imóvel encontrado para os filtros atuais.</div>
+              <div>
+                <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
+                  Limpar filtros
+                </Button>
+              </div>
+            </div>
           ) : (
             rows.map((r) => (
               (() => {
@@ -369,7 +444,9 @@ export function PropertyBulkPublish() {
                 const warningIssues = issues.filter((issue) => issue.severity === "warning")
                 const hasIssues = issues.length > 0
                 const firstIssue = blockingIssues[0] ?? warningIssues[0]
-                const canPublishRow = blockingIssues.length === 0
+                const canPublishRow = blockingIssues.length === 0 && r.status === "available"
+                const priceSummary = formatMoneyBRL(r.price)
+                const siteVisibility = getSiteVisibility(r)
 
                 return (
                   <div
@@ -387,7 +464,7 @@ export function PropertyBulkPublish() {
                     <div className="min-w-0">
                       <div className="truncate font-medium">{r.title}</div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {r.public_code ? r.public_code : `ID: ${r.id.slice(0, 8)}`}
+                        {refLabel(r)}
                       </div>
                       {hasIssues ? (
                         <div className="space-y-1 pt-1 text-xs">
@@ -402,27 +479,29 @@ export function PropertyBulkPublish() {
                             </div>
                           ) : null}
                         </div>
-                      ) : (
-                        <div className="truncate text-xs text-emerald-700">Pronto para site/feed</div>
-                      )}
+                      ) : null}
                     </div>
-                    <div className="text-sm">{formatMoneyBRL(typeof r.price === "number" ? r.price : 0)}</div>
+                    <div className={`text-sm ${priceSummary.className}`}>{priceSummary.label}</div>
                     <div className="text-sm">{typeLabel(r.type)}</div>
                     <div className="text-sm">{statusLabel(r.status)}</div>
                     <div className="flex items-center gap-2">
                       <Badge
-                        variant={r.hide_from_site ? "outline" : "secondary"}
-                        className={r.hide_from_site ? "text-xs" : "text-xs bg-emerald-100 text-emerald-800 border-emerald-200"}
+                        variant={siteVisibility.visible ? "secondary" : "outline"}
+                        className={siteVisibility.visible ? "text-xs bg-emerald-100 text-emerald-800 border-emerald-200" : "text-xs"}
                       >
-                        {r.hide_from_site ? "Site: Oculto" : "Site: Publicado"}
+                        {siteVisibility.label}
                       </Badge>
                       {blockingIssues.length > 0 ? (
                         <Badge variant="destructive" className="text-xs">
-                          Bloqueado
+                          Corrigir bloqueios
+                        </Badge>
+                      ) : r.status !== "available" ? (
+                        <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700 border-slate-200">
+                          Status impede publicação
                         </Badge>
                       ) : warningIssues.length > 0 ? (
                         <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
-                          Aviso
+                          Com aviso
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-200">
@@ -433,10 +512,14 @@ export function PropertyBulkPublish() {
                         href={hasIssues && firstIssue ? buildPropertyFixHref(r.id, firstIssue.focusFieldId) : `/properties/${r.id}`}
                         className="text-xs underline inline-flex items-center gap-1"
                       >
-                        {hasIssues ? "Corrigir" : "Editar"} <ExternalLink className="h-3 w-3" />
+                        {blockingIssues.length > 0 ? "Corrigir bloqueio" : warningIssues.length > 0 ? "Revisar aviso" : "Editar"} <ExternalLink className="h-3 w-3" />
                       </Link>
                       {r.hide_from_site && !canPublishRow ? (
-                        <span className="text-[11px] text-red-700">Não publica até corrigir bloqueios</span>
+                        <span className="text-[11px] text-red-700">
+                          {blockingIssues.length > 0
+                            ? "Não publica até corrigir bloqueios"
+                            : "Não publica enquanto não estiver disponível"}
+                        </span>
                       ) : null}
                     </div>
                   </div>

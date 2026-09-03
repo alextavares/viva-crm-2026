@@ -16,8 +16,6 @@ export default async function SettingsPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Middleware should already redirect unauthenticated users,
-  // but keep a safe fallback to avoid rendering a broken page.
   if (!user) {
     return (
       <div className="flex flex-col gap-2">
@@ -35,6 +33,7 @@ export default async function SettingsPage() {
 
   const organizationId = profile?.organization_id ?? null
   const role = (profile?.role as string | null) ?? null
+  const isAdmin = role === "owner" || role === "manager"
 
   let org: OrgInfo | null = null
   if (organizationId) {
@@ -46,202 +45,173 @@ export default async function SettingsPage() {
     org = (data as OrgInfo) ?? null
   }
 
-  const isAdmin = role === "owner" || role === "manager"
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-semibold md:text-3xl">Configurações</h1>
+          <p className="text-muted-foreground">
+            Ajustes de site, portais, WhatsApp, equipe e cobrança ficam com os gestores da operação.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Seu espaço operacional</CardTitle>
+            <CardDescription>
+              Use os atalhos abaixo para continuar atendendo leads, visitas e negociações.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href="/contacts">Abrir contatos</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/appointments">Abrir agenda</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/ai-leads">Abrir Leads IA</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const sections = [
+    {
+      title: "Operação",
+      description: "Regras de atendimento, metas e rotina comercial.",
+      cards: [
+        {
+          title: "Follow-up automático",
+          description: "Configure a régua de 5 min, 24 h e 3 dias para não deixar lead esfriar.",
+          href: "/settings/followup",
+          button: "Configurar follow-up",
+        },
+        {
+          title: "Distribuição de leads e SLA",
+          description: "Distribuição automática para corretores, prazo de resposta e redistribuição de leads parados.",
+          href: "/settings/leads",
+          button: "Configurar distribuição",
+        },
+        {
+          title: "Metas do corretor",
+          description: "Metas semanais ou mensais de captação, resposta rápida e visitas.",
+          href: "/settings/goals",
+          button: "Configurar metas",
+        },
+      ],
+    },
+    {
+      title: "Site e portais",
+      description: "Vitrine pública, importação de carteira e integrações de publicação.",
+      cards: [
+        {
+          title: "Site público",
+          description: "Configure marca, páginas e banners. O site recebe leads direto no CRM.",
+          href: "/settings/site",
+          button: "Configurar site",
+          secondaryHref: org?.slug ? `/s/${org.slug}` : null,
+          secondaryButton: "Abrir site",
+        },
+        {
+          title: "Importar dados",
+          description: "Migre imóveis do CRM antigo. Itens importados entram fora da vitrine pública até revisão.",
+          href: "/properties/import",
+          button: "Importar imóveis",
+          secondaryHref: "/properties/publish",
+          secondaryButton: "Publicar em massa",
+        },
+        {
+          title: "Portais imobiliários",
+          description: "Acompanhe prontidão, publicação e recebimento de leads dos portais conectados.",
+          href: "/integrations",
+          button: "Abrir integrações",
+        },
+      ],
+    },
+    {
+      title: "WhatsApp e IA",
+      description: "Canal oficial, add-on e pré-atendimento assistido.",
+      cards: [
+        {
+          title: "WhatsApp add-on",
+          description: "Defina ativação, quota mensal e política de uso do canal oficial.",
+          href: "/settings/whatsapp-addon",
+          button: "Configurar add-on",
+        },
+        {
+          title: "Canal WhatsApp oficial",
+          description: "Conecte Meta WhatsApp, teste o canal e acompanhe o status da conexão.",
+          href: "/settings/whatsapp-channel",
+          button: "Configurar canal",
+        },
+        {
+          title: "Leads IA",
+          description: "Acompanhe pré-atendimentos, qualificação e handoff para a equipe.",
+          href: "/ai-leads",
+          button: "Abrir fila IA",
+        },
+      ],
+    },
+    {
+      title: "Conta",
+      description: "Equipe, permissões e cobrança.",
+      cards: [
+        {
+          title: "Equipe",
+          description: "Usuários, permissões e corretores ativos da imobiliária.",
+          href: "/settings/team",
+          button: "Gerenciar equipe",
+        },
+        {
+          title: "Cobrança",
+          description: "Plano, assinatura e dados comerciais da conta.",
+          href: "/settings/billing",
+          button: "Gerenciar cobrança",
+        },
+      ],
+    },
+  ]
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold md:text-3xl">Configurações</h1>
         <p className="text-muted-foreground">
-          Ajuste o site público, integrações e preferências da sua operação.
+          Ajuste a operação em grupos: atendimento, site e portais, WhatsApp/IA e conta.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Site Público</CardTitle>
-            <CardDescription>
-              Configure marca, páginas e banners. O site recebe leads direto no CRM.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/site" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin}>Configurar</Button>
-            </Link>
-            {org?.slug ? (
-              <Link href={`/s/${org.slug}`} target="_blank" rel="noreferrer">
-                <Button variant="outline">Abrir site</Button>
-              </Link>
-            ) : (
-              <Button variant="outline" disabled>
-                Abrir site
-              </Button>
-            )}
-            {!isAdmin ? (
-              <div className="text-xs text-muted-foreground">
-                Apenas <span className="font-medium">owner/manager</span> podem editar o site.
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Importar Dados</CardTitle>
-            <CardDescription>
-              Migre imóveis do seu CRM antigo. Importações entram ocultas do site por padrão, com publicação intencional depois.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/properties/import" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin} variant="outline">
-                Importar imóveis
-              </Button>
-            </Link>
-            <Link href="/properties/publish" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin} variant="outline">
-                Publicar em massa
-              </Button>
-            </Link>
-            <div className="text-xs text-muted-foreground">
-              Import de imóveis será <span className="font-medium">hide_from_site=true</span> por padrão, com publicação intencional depois.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Follow-up Automático</CardTitle>
-            <CardDescription>
-              Configure a régua de 5min, 24h e 3dias para não deixar lead esfriar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/followup" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin}>Configurar follow-up</Button>
-            </Link>
-            <div className="text-xs text-muted-foreground">
-              Templates por organização e disparo automático para novos leads.
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Distribuição de Leads + SLA</CardTitle>
-            <CardDescription>
-              Round-robin para brokers, SLA visível e redistribuição automática de leads parados.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/leads" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin}>Configurar distribuição</Button>
-            </Link>
-            <div className="text-xs text-muted-foreground">
-              Foco em resposta rápida e menos lead esquecido.
-            </div>
-          </CardContent>
-        </Card>
-
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Metas do Corretor</CardTitle>
-            <CardDescription>
-              Metas semanais/mensais de captação e resposta rápida, com exceções por corretor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/goals" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin}>Configurar metas</Button>
-            </Link>
-            <div className="text-xs text-muted-foreground">
-              Owner/manager escolhe o padrão e pode ativar/desativar por corretor.
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>WhatsApp Add-on</CardTitle>
-            <CardDescription>
-              Defina o modelo comercial por organização: ativa/desativa, quota mensal e excedente.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/whatsapp-addon" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin}>Configurar add-on</Button>
-            </Link>
-            <div className="text-xs text-muted-foreground">
-              Separa CRM base do custo de WhatsApp oficial sem forçar aumento para todos os clientes.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Canal WhatsApp Oficial</CardTitle>
-            <CardDescription>
-              Conecte Meta WhatsApp por tenant, teste conexão e acompanhe status do canal.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/whatsapp-channel" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin}>Configurar canal</Button>
-            </Link>
-            <div className="text-xs text-muted-foreground">
-              Exige add-on ativo. Segredos não são exibidos no painel.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Equipe</CardTitle>
-            <CardDescription>Usuários, permissões e corretores.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/team" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin} variant="outline">
-                Gerenciar equipe
-              </Button>
-            </Link>
-            {!isAdmin ? (
-              <div className="text-xs text-muted-foreground">
-                Apenas <span className="font-medium">owner/manager</span> podem alterar equipe.
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card className="h-full">
-          <CardHeader>
-            <CardTitle>Cobrança</CardTitle>
-            <CardDescription>Plano, assinaturas e notas.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Link href="/settings/billing" className={!isAdmin ? "pointer-events-none opacity-60" : ""}>
-              <Button disabled={!isAdmin} variant="outline">
-                Gerenciar cobrança
-              </Button>
-            </Link>
-            {!isAdmin ? (
-              <div className="text-xs text-muted-foreground">
-                Apenas <span className="font-medium">owner/manager</span> podem alterar cobrança.
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+      {sections.map((section) => (
+        <section key={section.title} className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">{section.title}</h2>
+            <p className="text-sm text-muted-foreground">{section.description}</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {section.cards.map((card) => (
+              <Card key={card.title} className="h-full">
+                <CardHeader>
+                  <CardTitle>{card.title}</CardTitle>
+                  <CardDescription>{card.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap items-center gap-2">
+                  <Button asChild>
+                    <Link href={card.href}>{card.button}</Link>
+                  </Button>
+                  {card.secondaryHref ? (
+                    <Button asChild variant="outline">
+                      <Link href={card.secondaryHref}>{card.secondaryButton}</Link>
+                    </Button>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   )
 }

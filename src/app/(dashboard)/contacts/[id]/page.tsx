@@ -11,6 +11,18 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/server"
 import {
+    buildLeadPropertyContext,
+    collectLeadPropertyIds,
+    extractLeadPropertyReference,
+    type LeadPropertyContext,
+    type PropertyLookupRecord,
+} from "@/lib/contacts/lead-property-context"
+import { loadLeadPropertyLookupById } from "@/lib/contacts/lead-property-lookup"
+import {
+    buildBrokerWhatsAppMessage,
+    buildExternalWhatsAppTraceSummary,
+} from "@/lib/whatsapp-context"
+import {
     canCreateProposalForContact,
     canEditContactDealStage,
     isAdmin,
@@ -65,6 +77,16 @@ export default async function ContactEditPage({ params }: PageProps) {
     const canSendOfficial = role === "owner" || role === "manager"
     const canCreateProposal = canCreateProposalForContact(role, user?.id ?? null, contact.assigned_to)
     const canEditDealStage = canEditContactDealStage(role, user?.id ?? null, contact.assigned_to)
+    const assignedProfileName =
+        contact.assigned_to
+            ? (
+                await supabase
+                    .from("profiles")
+                    .select("full_name")
+                    .eq("id", contact.assigned_to)
+                    .maybeSingle()
+            ).data?.full_name ?? null
+            : null
 
     let followupJobs: Array<{
         id: string
@@ -264,7 +286,7 @@ export default async function ContactEditPage({ params }: PageProps) {
     }
 
     if (!interactionsResult.error) {
-        recentInteractions = (interactionsResult.data as typeof recentInteractions) || []
+        recentInteractions = (interactionsResult.data as unknown as typeof recentInteractions) || []
     }
 
     if (leadSettingsResult.data) {
@@ -355,12 +377,6 @@ export default async function ContactEditPage({ params }: PageProps) {
         }
     }
 
-    const waHref = contact.phone
-        ? buildWhatsAppUrl({
-            phone: contact.phone,
-            message: contact.name ? `Olá ${contact.name}, tudo bem?` : "Olá, tudo bem?",
-          })
-        : null
     const financingWaHref = contact.phone
         ? buildWhatsAppUrl({
             phone: contact.phone,
@@ -373,7 +389,7 @@ export default async function ContactEditPage({ params }: PageProps) {
     // Extract siteMeta and latestLeadAt from events
     let siteMeta = null
     let latestLeadAt = null
-    let leadPropertyContext = null
+    let leadPropertyContext: LeadPropertyContext | null = null
 
     const leadEvents = recentEvents.filter((e) => e.type === "lead_received")
     if (leadEvents.length > 0) {
@@ -391,14 +407,41 @@ export default async function ContactEditPage({ params }: PageProps) {
             domain: sourceDomain,
             lastEventAt: lastLead.created_at,
         }
-
-        if (typeof payload.property_id === "string" && typeof payload.property_title === "string") {
-            leadPropertyContext = {
-                id: payload.property_id,
-                title: payload.property_title,
-            }
-        }
     }
+
+    const leadPropertyReference = leadEvents
+        .map((event) => extractLeadPropertyReference(event.payload))
+        .find((reference) => Boolean(reference))
+    const leadPropertyId = leadPropertyReference?.id ?? null
+
+    const leadPropertyIds = collectLeadPropertyIds([leadPropertyReference])
+    const propertyLookupById: Map<string, PropertyLookupRecord> =
+        leadPropertyIds.length > 0
+            ? await loadLeadPropertyLookupById(supabase, leadPropertyIds, contact.organization_id)
+            : new Map<string, PropertyLookupRecord>()
+
+    if (leadPropertyIds.length > 0) {
+        leadPropertyContext = buildLeadPropertyContext(
+            leadPropertyReference,
+            propertyLookupById
+        )
+    }
+
+    const leadPropertyLookup = leadPropertyId
+        ? propertyLookupById.get(leadPropertyId) ?? null
+        : null
+    const whatsappPropertyTitle = leadPropertyReference?.title ?? leadPropertyLookup?.title ?? null
+    const whatsappPropertyCode = leadPropertyLookup?.public_code ?? null
+    const waHref = contact.phone
+        ? buildWhatsAppUrl({
+            phone: contact.phone,
+            message: buildBrokerWhatsAppMessage({
+                contactName: contact.name,
+                propertyTitle: whatsappPropertyTitle,
+                propertyCode: whatsappPropertyCode,
+            }),
+          })
+        : null
 
     // Process last interaction from merged timeline
     let lastInteraction = null
@@ -449,12 +492,41 @@ export default async function ContactEditPage({ params }: PageProps) {
         }
     }
 
-    const newAppointmentHref = `/appointments/new?contactId=${contact.id}&returnTo=${encodeURIComponent(`/contacts/${contact.id}`)}`
+    const newAppointmentParams = new URLSearchParams({
+        contactId: contact.id,
+        returnTo: `/contacts/${contact.id}`,
+    })
+    if (leadPropertyId) {
+        newAppointmentParams.set("propertyId", leadPropertyId)
+    }
+    const newAppointmentHref = `/appointments/new?${newAppointmentParams.toString()}`
     const interestProfileRaw = (contact as Record<string, unknown>).interest_profile
     const interestProfileInitial =
         interestProfileRaw && typeof interestProfileRaw === "object" && !Array.isArray(interestProfileRaw)
             ? (interestProfileRaw as InterestProfile)
             : {}
+    const detailNow = new Date()
+    const upcomingAppointment = [...appointments]
+        .filter(
+            (appointment) =>
+                appointment.status === "scheduled" &&
+                new Date(appointment.date).getTime() >= detailNow.getTime()
+        )
+        .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime())[0] ?? null
+    const nextActionLabel = upcomingAppointment
+        ? `Confirmar visita agendada para ${new Intl.DateTimeFormat("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        }).format(new Date(upcomingAppointment.date))}`
+        : contact.status === "new"
+            ? contact.phone
+                ? "Fazer primeiro contato e registrar atendimento"
+                : "Cadastrar telefone ou registrar primeiro contato"
+            : contact.status === "contacted"
+                ? "Qualificar lead e propor próxima visita"
+                : "Registrar o próximo passo do atendimento"
 
     return (
         <div className="flex flex-col gap-6">
@@ -474,7 +546,9 @@ export default async function ContactEditPage({ params }: PageProps) {
                 interestPriceMax={contact.interest_price_max}
                 siteMeta={siteMeta}
                 latestLeadAt={latestLeadAt}
+                responsibleName={assignedProfileName}
                 leadPropertyContext={leadPropertyContext}
+                nextActionLabel={nextActionLabel}
                 leadDistributionSettings={leadDistributionSettings}
                 linkedPropertiesCount={linkedPropertiesCount}
                 lastInteraction={lastInteraction}
@@ -574,13 +648,22 @@ export default async function ContactEditPage({ params }: PageProps) {
                         <ContactWhatsAppActions
                             contactId={id}
                             canSendOfficial={canSendOfficial}
-                            waHref={waHref}
-                            defaultMessage={contact.name ? `Olá ${contact.name}, tudo bem?` : "Olá, tudo bem?"}
+                            phone={contact.phone}
+                            defaultMessage={buildBrokerWhatsAppMessage({
+                                contactName: contact.name,
+                                propertyTitle: whatsappPropertyTitle,
+                                propertyCode: whatsappPropertyCode,
+                            })}
+                            traceSummary={buildExternalWhatsAppTraceSummary({
+                                propertyTitle: whatsappPropertyTitle,
+                                propertyCode: whatsappPropertyCode,
+                            })}
                         />
                     </div>
 
                     <ContactAiPanel
                         contactId={id}
+                        propertyId={leadPropertyId}
                         canManage={isAdmin(role) || (role === "broker" && contact.assigned_to === user?.id)}
                         canRequestHandoff={isAdmin(role)}
                         waHref={waHref}
@@ -593,22 +676,28 @@ export default async function ContactEditPage({ params }: PageProps) {
 
                     <ContactFollowupPanel contactId={id} canManage={canManageFollowup} jobs={followupJobs} />
 
-                    <div className="border rounded-xl p-4 bg-card shadow-sm">
-                        <h2 className="text-sm font-semibold mb-4">Dados Cadastrais</h2>
-                        <ContactForm initialData={contact} />
-                    </div>
+                    <details className="border rounded-xl bg-card p-4 shadow-sm">
+                        <summary className="cursor-pointer text-sm font-semibold">
+                            Dados cadastrais e responsável
+                        </summary>
+                        <div className="mt-4">
+                            <ContactForm initialData={contact} />
+                        </div>
+                    </details>
                 </div>
             </div>
 
-            <div className="border rounded-xl p-4 bg-card shadow-sm">
-                <div className="mb-4">
-                    <h2 className="text-sm font-semibold">Perfil de interesse do contato</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Registre rapidamente o que este contato está buscando.
+            <details className="border rounded-xl bg-card p-4 shadow-sm">
+                <summary className="cursor-pointer text-sm font-semibold">
+                    Perfil de interesse do contato
+                </summary>
+                <div className="mt-4">
+                    <p className="mb-4 text-sm text-muted-foreground">
+                        Registre o que este contato está buscando.
                     </p>
+                    <InterestProfileForm contactId={contact.id} initial={interestProfileInitial} />
                 </div>
-                <InterestProfileForm contactId={contact.id} initial={interestProfileInitial} />
-            </div>
+            </details>
         </div>
     )
 }

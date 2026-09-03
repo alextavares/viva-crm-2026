@@ -33,7 +33,7 @@ export default async function PublicContactPage({
               {content}
             </div>
             <div className="mt-3 text-sm text-muted-foreground">
-              Sua mensagem entra direto no CRM da imobiliária/corretor responsável.
+              Sua mensagem chega direto para a equipe responsável pelo atendimento.
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
@@ -95,7 +95,7 @@ export async function generateMetadata({
 
   const page = site.pages.find((p) => p.key === "contact") ?? null
   const title = page?.title || "Contato"
-  const description = truncate(page?.content || `Fale com ${site.settings?.brand_name || site.slug} e envie sua mensagem direto para o CRM.`)
+  const description = truncate(page?.content || `Fale com ${site.settings?.brand_name || site.slug} e envie sua mensagem direto para a equipe.`)
 
   return withBase({
     title,

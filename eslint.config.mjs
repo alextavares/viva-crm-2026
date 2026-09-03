@@ -17,6 +17,10 @@ const eslintConfig = defineConfig([
     "coverage/**",
     // Temporary: ignore ad-hoc operational scripts from QA/debug flows.
     "scripts/**",
+    "tmp/**",
+    "qa_script*.mjs",
+    "test_query*.js",
+    "test-xml.ts",
   ]),
 ]);
 

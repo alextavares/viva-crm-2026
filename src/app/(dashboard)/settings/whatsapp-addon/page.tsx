@@ -2,6 +2,7 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { WhatsAppAddonPricingForm } from "@/components/whatsapp-addon/whatsapp-addon-pricing-form"
+import { AiReengagementSettingsForm } from "@/components/ai-leads/ai-reengagement-settings-form"
 import type { WhatsAppAddonUsageSnapshot } from "@/lib/types"
 
 type WhatsAppAddonPricingRow = {
@@ -13,12 +14,41 @@ type WhatsAppAddonPricingRow = {
   billing_timezone: string
 }
 
+type AiReengagementSettingsRow = {
+  organization_id: string
+  enabled: boolean
+  first_delay_minutes: number
+  second_delay_minutes: number
+  third_delay_minutes: number
+  inactive_message_template: string
+  handoff_message_template: string
+  sla_minutes: number
+  final_escalation_delay_minutes: number
+  notify_broker: boolean
+  notify_manager: boolean
+}
+
 const DEFAULTS: Omit<WhatsAppAddonPricingRow, "organization_id"> = {
   addon_enabled: false,
   included_quota: 0,
   overage_price: 0,
   currency_code: "BRL",
   billing_timezone: "America/Sao_Paulo",
+}
+
+const AI_REENGAGEMENT_DEFAULTS: Omit<AiReengagementSettingsRow, "organization_id"> = {
+  enabled: false,
+  first_delay_minutes: 15,
+  second_delay_minutes: 120,
+  third_delay_minutes: 1440,
+  inactive_message_template:
+    "Olá {{first_name}}, seguimos por aqui para te ajudar com sua busca. Se quiser, posso retomar seu atendimento agora.",
+  handoff_message_template:
+    "Olá {{first_name}}, seu atendimento segue em andamento por aqui. Se quiser continuar agora, me responda nesta conversa.",
+  sla_minutes: 30,
+  final_escalation_delay_minutes: 30,
+  notify_broker: true,
+  notify_manager: true,
 }
 
 export default async function WhatsAppAddonSettingsPage() {
@@ -80,6 +110,42 @@ export default async function WhatsAppAddonSettingsPage() {
     billing_timezone: data?.billing_timezone ?? DEFAULTS.billing_timezone,
   }
 
+  const { data: aiReengagementData, error: aiReengagementError } = await supabase
+    .from("ai_lead_reengagement_settings")
+    .select(
+      "organization_id, enabled, first_delay_minutes, second_delay_minutes, third_delay_minutes, inactive_message_template, handoff_message_template, message_template, sla_minutes, final_escalation_delay_minutes, notify_broker, notify_manager"
+    )
+    .eq("organization_id", organizationId)
+    .maybeSingle()
+
+  const aiReengagementReady =
+    !aiReengagementError || !["42P01", "42703", "PGRST205"].includes(aiReengagementError.code ?? "")
+
+  const initialAiReengagement: AiReengagementSettingsRow = {
+    organization_id: organizationId,
+    enabled: aiReengagementData?.enabled ?? AI_REENGAGEMENT_DEFAULTS.enabled,
+    first_delay_minutes:
+      aiReengagementData?.first_delay_minutes ?? AI_REENGAGEMENT_DEFAULTS.first_delay_minutes,
+    second_delay_minutes:
+      aiReengagementData?.second_delay_minutes ?? AI_REENGAGEMENT_DEFAULTS.second_delay_minutes,
+    third_delay_minutes:
+      aiReengagementData?.third_delay_minutes ?? AI_REENGAGEMENT_DEFAULTS.third_delay_minutes,
+    inactive_message_template:
+      aiReengagementData?.inactive_message_template ??
+      aiReengagementData?.message_template ??
+      AI_REENGAGEMENT_DEFAULTS.inactive_message_template,
+    handoff_message_template:
+      aiReengagementData?.handoff_message_template ??
+      aiReengagementData?.message_template ??
+      AI_REENGAGEMENT_DEFAULTS.handoff_message_template,
+    sla_minutes: aiReengagementData?.sla_minutes ?? AI_REENGAGEMENT_DEFAULTS.sla_minutes,
+    final_escalation_delay_minutes:
+      aiReengagementData?.final_escalation_delay_minutes ??
+      AI_REENGAGEMENT_DEFAULTS.final_escalation_delay_minutes,
+    notify_broker: aiReengagementData?.notify_broker ?? AI_REENGAGEMENT_DEFAULTS.notify_broker,
+    notify_manager: aiReengagementData?.notify_manager ?? AI_REENGAGEMENT_DEFAULTS.notify_manager,
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -101,6 +167,22 @@ export default async function WhatsAppAddonSettingsPage() {
           usageReady={usageReady}
           initial={initial}
           initialUsage={initialUsage}
+        />
+      </div>
+
+      <div className="rounded-lg border bg-muted/10 p-4">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Cadência de retomada IA</h2>
+          <p className="text-sm text-muted-foreground">
+            Define as tentativas automáticas de retomada e o escalonamento interno quando o lead some
+            ou quando o handoff fica parado.
+          </p>
+        </div>
+
+        <AiReengagementSettingsForm
+          canManage={isAdmin}
+          tableReady={aiReengagementReady}
+          initial={initialAiReengagement}
         />
       </div>
     </div>

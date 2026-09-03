@@ -23,6 +23,12 @@ type FormState = {
     city: string
 }
 
+function optionalNumber(value: string) {
+    if (!value.trim()) return undefined
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+}
+
 function toFormState(initial: InterestProfile): FormState {
     return {
         transaction: initial.transaction ?? "",
@@ -45,10 +51,10 @@ export function InterestProfileForm({ contactId, initial }: InterestProfileFormP
             const result = await saveContactInterestProfile({
                 contact_id: contactId,
                 profile: {
-                    transaction: form.transaction || undefined,
-                    property_type: form.property_type || undefined,
-                    price_min: form.price_min,
-                    price_max: form.price_max,
+                    transaction: (form.transaction || undefined) as InterestProfile["transaction"],
+                    property_type: (form.property_type || undefined) as InterestProfile["property_type"],
+                    price_min: optionalNumber(form.price_min),
+                    price_max: optionalNumber(form.price_max),
                     city: form.city,
                 },
             })

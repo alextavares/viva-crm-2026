@@ -1,28 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2, Mail, MessageSquare } from "lucide-react"
 import { TemplateForm } from "./template-form"
 import { MessageTemplate } from "@/lib/types"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
+import { deleteMessageTemplate } from "@/app/actions/settings"
 
 interface TemplatesClientProps {
     initialTemplates: MessageTemplate[]
     isAdmin: boolean
-    organizationId: string
 }
 
-export function TemplatesClient({ initialTemplates, isAdmin, organizationId }: TemplatesClientProps) {
+export function TemplatesClient({ initialTemplates, isAdmin }: TemplatesClientProps) {
     const [templates, setTemplates] = useState<MessageTemplate[]>(initialTemplates)
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null)
-    const [isLoading, setIsLoading] = useState(false)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+    const [isPending, startTransition] = useTransition()
     const router = useRouter()
-    const supabase = createClient()
 
     const handleDelete = async (id: string) => {
         if (!isAdmin) {
@@ -34,21 +33,22 @@ export function TemplatesClient({ initialTemplates, isAdmin, organizationId }: T
             return
         }
 
-        setIsLoading(true)
-        try {
-            const { error } = await supabase.from("message_templates").delete().eq("id", id)
+        setErrorMsg(null)
+        startTransition(() => {
+            void (async () => {
+                const result = await deleteMessageTemplate(id)
 
-            if (error) throw error
+                if (!result.success) {
+                    setErrorMsg(result.error)
+                    toast.error(result.error)
+                    return
+                }
 
-            setTemplates(templates.filter((t) => t.id !== id))
-            toast.success("Template excluído com sucesso")
-            router.refresh()
-        } catch (error: any) {
-            console.error(error)
-            toast.error(error.message || "Erro ao excluir template")
-        } finally {
-            setIsLoading(false)
-        }
+                setTemplates((prev) => prev.filter((t) => t.id !== id))
+                toast.success("Template excluído com sucesso")
+                router.refresh()
+            })()
+        })
     }
 
     const handleEdit = (template: MessageTemplate) => {
@@ -62,6 +62,7 @@ export function TemplatesClient({ initialTemplates, isAdmin, organizationId }: T
     }
 
     const onSaved = (template: MessageTemplate) => {
+        setErrorMsg(null)
         setTemplates((prev) => {
             const exists = prev.find((t) => t.id === template.id)
             if (exists) {
@@ -82,6 +83,7 @@ export function TemplatesClient({ initialTemplates, isAdmin, organizationId }: T
                     Novo Template
                 </Button>
             </div>
+            {errorMsg ? <p className="text-sm text-red-600">{errorMsg}</p> : null}
 
             {templates.length === 0 ? (
                 <Card>
@@ -134,7 +136,7 @@ export function TemplatesClient({ initialTemplates, isAdmin, organizationId }: T
                                             size="icon"
                                             className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                                             onClick={() => handleDelete(template.id)}
-                                            disabled={isLoading}
+                                            disabled={isPending}
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -149,7 +151,6 @@ export function TemplatesClient({ initialTemplates, isAdmin, organizationId }: T
             {isFormOpen && (
                 <TemplateForm
                     template={editingTemplate}
-                    organizationId={organizationId}
                     onClose={() => setIsFormOpen(false)}
                     onSaved={onSaved}
                 />

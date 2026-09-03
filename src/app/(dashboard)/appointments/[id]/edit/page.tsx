@@ -5,10 +5,13 @@ import { SelectOption } from '@/lib/types'
 
 export default async function EditAppointmentPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ id: string }>
+    searchParams?: Promise<{ returnTo?: string }>
 }) {
     const { id } = await params
+    const resolvedSearchParams = searchParams ? await searchParams : undefined
     const supabase = await createClient()
 
     // Fetch appointment
@@ -55,6 +58,7 @@ export default async function EditAppointmentPage({
                 properties={propertyOptions}
                 contacts={contactOptions}
                 initialData={appointment}
+                returnTo={resolvedSearchParams?.returnTo || null}
             />
         </div>
     )

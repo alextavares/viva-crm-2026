@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PublicContactIdentityCard } from "@/components/public/public-contact-identity-card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,12 +16,23 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "sonner"
 import { CheckCircle2, Circle } from "lucide-react"
 import {
+  createSiteBanner,
+  deleteSiteBanner,
+  saveSiteDomain,
+  saveSitePages,
+  saveSiteSettings,
+  saveSiteTrackingSettings,
+  updateSiteBanner,
+  verifyCustomDomain,
+} from "@/app/actions/settings"
+import {
   createMediaUploadPath,
   extractStoragePathForBucket,
   resolveMediaPathUrl,
   resolveMediaUrl,
   uploadPublicMedia,
 } from "@/lib/media"
+import type { ActionResult } from "@/lib/types"
 
 type OrgInfo = { id: string; name: string; slug: string }
 
@@ -210,7 +223,7 @@ function humanizeSupabaseError(err: unknown): string {
 
   // RLS / permissions
   if (/row level security|row-level security|permission denied|not allowed/i.test(msg)) {
-    return "Sem permissão para salvar. Entre com um usuário owner/manager desta organização."
+    return "Sem permissão para salvar. Entre com um usuário gestor desta organização."
   }
 
   // Missing column / schema mismatch (common when migrations weren't applied)
@@ -221,6 +234,32 @@ function humanizeSupabaseError(err: unknown): string {
   // Fallback to raw message when available (useful for debugging)
   if (msg) return msg
   return "Não foi possível salvar. Tente novamente."
+}
+
+function humanizeDomainErrorText(message: string | null): string | null {
+  if (!message) return null
+
+  if (/ENOTFOUND/i.test(message)) {
+    return "Não encontramos o CNAME do domínio. Verifique se o registro DNS foi criado e aguarde a propagação."
+  }
+
+  if (/ENODATA|NODATA/i.test(message)) {
+    return "O domínio ainda não retornou um CNAME válido. Confira o DNS e tente novamente em alguns minutos."
+  }
+
+  if (/ETIMEOUT|TIMEOUT/i.test(message)) {
+    return "O DNS demorou para responder. Aguarde a propagação e tente novamente em alguns minutos."
+  }
+
+  if (/ECONNREFUSED/i.test(message)) {
+    return "A consulta DNS falhou temporariamente. Tente novamente em alguns minutos."
+  }
+
+  if (/queryCname|dns/i.test(message)) {
+    return "Não foi possível validar o DNS agora. Confira o CNAME configurado e tente novamente em alguns minutos."
+  }
+
+  return message
 }
 
 function asPageRow(v: Record<string, unknown>): SitePageRow | null {
@@ -236,7 +275,8 @@ function asPageRow(v: Record<string, unknown>): SitePageRow | null {
   }
 }
 
-function asBannerRow(v: Record<string, unknown>): SiteBannerRow | null {
+function asBannerRow(v: Record<string, unknown> | null | undefined): SiteBannerRow | null {
+  if (!v) return null
   const id = typeof v.id === "string" ? v.id : null
   const placement =
     v.placement === "topbar" || v.placement === "popup" || v.placement === "hero" || v.placement === "footer"
@@ -273,7 +313,9 @@ function asDomainRow(v: Record<string, unknown> | null | undefined): CustomDomai
     domain,
     status,
     last_checked_at: typeof v.last_checked_at === "string" ? v.last_checked_at : null,
-    last_error: typeof v.last_error === "string" ? v.last_error : v.last_error == null ? null : String(v.last_error),
+    last_error: humanizeDomainErrorText(
+      typeof v.last_error === "string" ? v.last_error : v.last_error == null ? null : String(v.last_error)
+    ),
   }
 }
 
@@ -291,10 +333,6 @@ function ensureDefaultPages(existing: SitePageRow[]): SitePageRow[] {
     byKey.get("contact") ?? mk("contact", "Contato"),
     byKey.get("lgpd") ?? mk("lgpd", "LGPD"),
   ]
-}
-
-function nowIso() {
-  return new Date().toISOString()
 }
 
 function validateTrackingValues(settings: SiteSettingsRow): string | null {
@@ -359,10 +397,12 @@ function validateSiteAssetFile(file: File, kind: "logo" | "banner") {
 }
 
 export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
+  const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [inFlight, setInFlight] = useState(0)
   const pending = inFlight > 0
   const [busyMsg, setBusyMsg] = useState<string | null>(null)
+  const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({})
 
   useEffect(() => {
     // Safety net: never keep the UI stuck on an old busy message when no operations are running.
@@ -402,41 +442,40 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
     }
   }
 
-  const run = async (
-    fn: (signal: AbortSignal) => Promise<void>,
-    errorMessage: string,
-    opts?: { busy?: string; timeoutMs?: number }
+  const runAction = async <T,>(
+    sectionKey: string,
+    fn: () => Promise<ActionResult<T>>,
+    successMessage: string,
+    opts?: {
+      busy?: string
+      onSuccess?: (data: T | undefined) => void
+      refresh?: boolean
+    }
   ) => {
     setInFlight((c) => c + 1)
+    setSectionErrors((prev) => ({ ...prev, [sectionKey]: null }))
     if (opts?.busy) setBusyMsg(opts.busy)
-    const ac = new AbortController()
-    const timeoutMs = opts?.timeoutMs ?? 30000
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
-        try {
-          ac.abort()
-        } catch {
-          // ignore
-        }
-        reject(new Error("timeout"))
-      }, timeoutMs)
-    })
     try {
-      await Promise.race([fn(ac.signal), timeoutPromise])
-    } catch (err) {
-      if (err instanceof Error && err.message === "timeout") {
-        toast.error("Demorou demais para salvar. Tente novamente.")
-        return
+      const result = await fn()
+      if (!result.success) {
+        setSectionErrors((prev) => ({ ...prev, [sectionKey]: result.error }))
+        toast.error(result.error)
+        return false
       }
-      if (ac.signal.aborted || isAbortLikeError(err)) {
-        toast.error("Demorou demais para salvar. Tente novamente.")
-        return
+
+      opts?.onSuccess?.(result.data)
+      toast.success(successMessage)
+      if (opts?.refresh ?? true) {
+        router.refresh()
       }
-      console.error(errorMessage, err)
-      toast.error(humanizeSupabaseError(err))
+      return true
+    } catch (error) {
+      console.error(`Error running ${sectionKey} action:`, error)
+      const message = humanizeSupabaseError(error)
+      setSectionErrors((prev) => ({ ...prev, [sectionKey]: message }))
+      toast.error(message)
+      return false
     } finally {
-      if (timeoutHandle) clearTimeout(timeoutHandle)
       setInFlight((c) => Math.max(0, c - 1))
       setBusyMsg((m) => (opts?.busy && m === opts.busy ? null : m))
     }
@@ -590,56 +629,53 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
 
   const saveSettings = () => {
     if (!canSaveSettings) {
-      toast.error("Preencha Nome da marca, WhatsApp e E-mail.")
+      const message = "Preencha Nome da marca, WhatsApp e E-mail."
+      setSectionErrors((prev) => ({ ...prev, settings: message }))
+      toast.error(message)
       return
     }
 
-    void run(async (signal) => {
-      const payload = {
-        organization_id: org.id,
-        theme: settings.theme,
-        brand_name: settings.brand_name?.trim() || null,
-        logo_url: settings.logo_url?.trim() || null,
-        logo_path: settings.logo_path?.trim() || extractStoragePathForBucket(settings.logo_url, "site-assets"),
-        primary_color: settings.primary_color?.trim() || null,
-        secondary_color: settings.secondary_color?.trim() || null,
-        whatsapp: settings.whatsapp?.trim() || null,
-        phone: settings.phone?.trim() || null,
-        email: settings.email?.trim() || null,
-        updated_at: nowIso(),
-      }
-
-      const { error } = await supabase.from("site_settings").upsert(payload).abortSignal(signal)
-      if (error) throw error
-
-      toast.success("Configurações do site salvas.")
-    }, "Error saving site_settings:", { busy: "Salvando configurações..." })
+    void runAction(
+      "settings",
+      () =>
+        saveSiteSettings({
+          theme: settings.theme,
+          brandName: settings.brand_name?.trim() || "",
+          logoUrl: settings.logo_url?.trim() || null,
+          logoPath: settings.logo_path?.trim() || extractStoragePathForBucket(settings.logo_url, "site-assets"),
+          primaryColor: settings.primary_color?.trim() || null,
+          secondaryColor: settings.secondary_color?.trim() || null,
+          whatsapp: settings.whatsapp?.trim() || "",
+          phone: settings.phone?.trim() || null,
+          email: settings.email?.trim() || "",
+        }),
+      "Configurações do site salvas.",
+      { busy: "Salvando configurações..." }
+    )
   }
 
   const saveTrackingSettings = () => {
     const trackingError = validateTrackingValues(settings)
     if (trackingError) {
+      setSectionErrors((prev) => ({ ...prev, tracking: trackingError }))
       toast.error(trackingError)
       return
     }
 
-    void run(async (signal) => {
-      const payload = {
-        organization_id: org.id,
-        ga4_measurement_id: settings.ga4_measurement_id?.trim() || null,
-        meta_pixel_id: settings.meta_pixel_id?.trim() || null,
-        google_site_verification: settings.google_site_verification?.trim() || null,
-        facebook_domain_verification: settings.facebook_domain_verification?.trim() || null,
-        google_ads_conversion_id: settings.google_ads_conversion_id?.trim() || null,
-        google_ads_conversion_label: settings.google_ads_conversion_label?.trim() || null,
-        updated_at: nowIso(),
-      }
-
-      const { error } = await supabase.from("site_settings").upsert(payload).abortSignal(signal)
-      if (error) throw error
-
-      toast.success("Rastreamento salvo.")
-    }, "Error saving tracking settings:", { busy: "Salvando rastreamento..." })
+    void runAction(
+      "tracking",
+      () =>
+        saveSiteTrackingSettings({
+          ga4MeasurementId: settings.ga4_measurement_id?.trim() || null,
+          metaPixelId: settings.meta_pixel_id?.trim() || null,
+          googleSiteVerification: settings.google_site_verification?.trim() || null,
+          facebookDomainVerification: settings.facebook_domain_verification?.trim() || null,
+          googleAdsConversionId: settings.google_ads_conversion_id?.trim() || null,
+          googleAdsConversionLabel: settings.google_ads_conversion_label?.trim() || null,
+        }),
+      "Rastreamento salvo.",
+      { busy: "Salvando rastreamento..." }
+    )
   }
 
   const normalizeDomain = (raw: string) => {
@@ -653,59 +689,55 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const saveDomain = () => {
     const domain = normalizeDomain(domainInput)
     if (!domain) {
-      toast.error("Informe um domínio (ex.: www.seudominio.com.br).")
+      const message = "Informe um domínio (ex.: www.seudominio.com.br)."
+      setSectionErrors((prev) => ({ ...prev, domain: message }))
+      toast.error(message)
       return
     }
     if (!domain.startsWith("www.")) {
-      toast.error("No MVP, use um domínio começando com www. (ex.: www.seudominio.com.br).")
+      const message = "No MVP, use um domínio começando com www. (ex.: www.seudominio.com.br)."
+      setSectionErrors((prev) => ({ ...prev, domain: message }))
+      toast.error(message)
       return
     }
 
-    void run(async (signal) => {
-      const payload = {
-        organization_id: org.id,
-        domain,
-        status: "pending" as const,
-        last_error: null,
-        updated_at: nowIso(),
+    void runAction(
+      "domain",
+      () => saveSiteDomain({ domain }),
+      "Domínio salvo. Agora configure o CNAME e clique em Verificar.",
+      {
+        busy: "Salvando domínio...",
+        onSuccess: (data) => {
+          const parsed = asDomainRow((data as { domain?: Record<string, unknown> } | undefined)?.domain ?? null)
+          setDomainRow(parsed)
+          if (parsed) setDomainInput(parsed.domain)
+        },
       }
-      const { data, error } = await supabase
-        .from("custom_domains")
-        .upsert(payload)
-        .select("*")
-        .single()
-        .abortSignal(signal)
-      if (error) throw error
-      const parsed = asDomainRow(data as unknown as Record<string, unknown>)
-      setDomainRow(parsed)
-      if (parsed) setDomainInput(parsed.domain)
-      toast.success("Domínio salvo. Agora configure o CNAME e clique em Verificar.")
-    }, "Error saving custom_domains:", { busy: "Salvando domínio..." })
+    )
   }
 
   const verifyDomain = () => {
-    void runPlain(async () => {
-      const res = await fetch("/api/site/verify-domain", { method: "POST" })
-      const data = (await res.json()) as { ok?: boolean; message?: string; domain?: string }
-      if (!data.ok) {
-        toast.error(data.message || "Não foi possível verificar.")
-        // Reload row to reflect error state (if any).
-        const { data: row } = await supabase
-          .from("custom_domains")
-          .select("*")
-          .eq("organization_id", org.id)
-          .maybeSingle()
-        setDomainRow(asDomainRow((row ?? null) as unknown as Record<string, unknown> | null))
-        return
+    void (async () => {
+      const ok = await runAction(
+        "domain",
+        () => verifyCustomDomain(),
+        "Domínio verificado com sucesso.",
+        {
+          busy: "Verificando DNS...",
+          onSuccess: (data) => {
+            const parsed = asDomainRow(
+              (data as { domain?: Record<string, unknown> } | undefined)?.domain ?? null
+            )
+            setDomainRow(parsed)
+            if (parsed) setDomainInput(parsed.domain)
+          },
+        }
+      )
+
+      if (!ok) {
+        router.refresh()
       }
-      toast.success(data.message || "Domínio verificado.")
-      const { data: row } = await supabase
-        .from("custom_domains")
-        .select("*")
-        .eq("organization_id", org.id)
-        .maybeSingle()
-      setDomainRow(asDomainRow((row ?? null) as unknown as Record<string, unknown> | null))
-    }, "Error verifying domain:", { busy: "Verificando DNS...", timeoutMs: 60000 })
+    })()
   }
 
   const uploadLogo = async (file: File) => {
@@ -727,82 +759,74 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   }
 
   const savePages = () => {
-    void run(async (signal) => {
-      const rows = pages.map((p) => ({
-        organization_id: org.id,
-        key: p.key,
-        title: p.title?.trim() || null,
-        content: p.content?.trim() || null,
-        is_published: Boolean(p.is_published),
-        updated_at: nowIso(),
-      }))
-
-      const { error } = await supabase
-        .from("site_pages")
-        .upsert(rows, { onConflict: "organization_id,key" })
-        .abortSignal(signal)
-      if (error) throw error
-
-      toast.success("Páginas salvas.")
-    }, "Error saving site_pages:", { busy: "Salvando páginas..." })
+    void runAction(
+      "pages",
+      () =>
+        saveSitePages({
+          pages: pages.map((p) => ({
+            key: p.key,
+            title: p.title?.trim() || null,
+            content: p.content?.trim() || null,
+            is_published: Boolean(p.is_published),
+          })),
+        }),
+      "Páginas salvas.",
+      { busy: "Salvando páginas..." }
+    )
   }
 
   const createBanner = () => {
-    void run(async (signal) => {
-      const normalizedVariant: BannerVariant =
-        newBanner.placement === "hero" && newBanner.variant === "destaque" ? "destaque" : "compact"
-      const payload = {
-        organization_id: org.id,
-        placement: newBanner.placement,
-        variant: normalizedVariant,
-        title: newBanner.title?.trim() || null,
-        body: newBanner.body?.trim() || null,
-        image_url: newBanner.image_url?.trim() || null,
-        image_path: newBanner.image_path?.trim() || extractStoragePathForBucket(newBanner.image_url, "site-assets"),
-        link_url: newBanner.link_url?.trim() || null,
-        starts_at: newBanner.starts_at?.trim() || null,
-        ends_at: newBanner.ends_at?.trim() || null,
-        is_active: Boolean(newBanner.is_active),
-        priority: Number.isFinite(newBanner.priority) ? newBanner.priority : 0,
-        updated_at: nowIso(),
+    void runAction(
+      "newBanner",
+      () =>
+        createSiteBanner({
+          placement: newBanner.placement,
+          variant: newBanner.placement === "hero" && newBanner.variant === "destaque" ? "destaque" : "compact",
+          title: newBanner.title?.trim() || null,
+          body: newBanner.body?.trim() || null,
+          image_url: newBanner.image_url?.trim() || null,
+          image_path: newBanner.image_path?.trim() || extractStoragePathForBucket(newBanner.image_url, "site-assets"),
+          link_url: newBanner.link_url?.trim() || null,
+          starts_at: newBanner.starts_at?.trim() || null,
+          ends_at: newBanner.ends_at?.trim() || null,
+          is_active: Boolean(newBanner.is_active),
+          priority: Number.isFinite(newBanner.priority) ? newBanner.priority : 0,
+        }),
+      "Banner criado.",
+      {
+        busy: "Criando banner...",
+        onSuccess: (data) => {
+          const created = asBannerRow((data as { banner?: Record<string, unknown> } | undefined)?.banner ?? undefined)
+          if (created) setBanners((prev) => [created, ...prev])
+          setNewBannerOpen(false)
+          setNewBanner({
+            placement: "topbar",
+            variant: "compact",
+            title: "",
+            body: "",
+            image_url: "",
+            image_path: "",
+            link_url: "",
+            starts_at: "",
+            ends_at: "",
+            is_active: true,
+            priority: 10,
+          })
+        },
       }
-
-      const { data, error } = await supabase
-        .from("site_banners")
-        .insert(payload)
-        .select("*")
-        .single()
-        .abortSignal(signal)
-      if (error) throw error
-
-      const created = asBannerRow(data as unknown as Record<string, unknown>)
-      if (created) setBanners((prev) => [created, ...prev])
-
-      setNewBannerOpen(false)
-      setNewBanner({
-        placement: "topbar",
-        variant: "compact",
-        title: "",
-        body: "",
-        image_url: "",
-        image_path: "",
-        link_url: "",
-        starts_at: "",
-        ends_at: "",
-        is_active: true,
-        priority: 10,
-      })
-      toast.success("Banner criado.")
-    }, "Error creating banner:", { busy: "Criando banner..." })
+    )
   }
 
   const deleteBanner = (id: string) => {
-    void run(async (signal) => {
-      const { error } = await supabase.from("site_banners").delete().eq("id", id).abortSignal(signal)
-      if (error) throw error
-      setBanners((prev) => prev.filter((b) => b.id !== id))
-      toast.success("Banner excluído.")
-    }, "Error deleting banner:", { busy: "Excluindo banner..." })
+    void runAction(
+      "bannerList",
+      () => deleteSiteBanner({ id }),
+      "Banner excluído.",
+      {
+        busy: "Excluindo banner...",
+        onSuccess: () => setBanners((prev) => prev.filter((b) => b.id !== id)),
+      }
+    )
   }
 
   const openEditBanner = (b: SiteBannerRow) => {
@@ -826,41 +850,37 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
   const saveEditBanner = () => {
     if (!editBannerId || !editBanner) return
 
-    void run(async (signal) => {
-      const normalizedVariant: BannerVariant =
-        editBanner.placement === "hero" && editBanner.variant === "destaque" ? "destaque" : "compact"
-      const payload = {
-        placement: editBanner.placement,
-        variant: normalizedVariant,
-        title: editBanner.title?.trim() || null,
-        body: editBanner.body?.trim() || null,
-        image_url: editBanner.image_url?.trim() || null,
-        image_path: editBanner.image_path?.trim() || extractStoragePathForBucket(editBanner.image_url, "site-assets"),
-        link_url: editBanner.link_url?.trim() || null,
-        starts_at: editBanner.starts_at?.trim() || null,
-        ends_at: editBanner.ends_at?.trim() || null,
-        is_active: Boolean(editBanner.is_active),
-        priority: Number.isFinite(editBanner.priority) ? editBanner.priority : 0,
-        updated_at: nowIso(),
+    void runAction(
+      "editBanner",
+      () =>
+        updateSiteBanner({
+          id: editBannerId,
+          banner: {
+            placement: editBanner.placement,
+            variant: editBanner.placement === "hero" && editBanner.variant === "destaque" ? "destaque" : "compact",
+            title: editBanner.title?.trim() || null,
+            body: editBanner.body?.trim() || null,
+            image_url: editBanner.image_url?.trim() || null,
+            image_path: editBanner.image_path?.trim() || extractStoragePathForBucket(editBanner.image_url, "site-assets"),
+            link_url: editBanner.link_url?.trim() || null,
+            starts_at: editBanner.starts_at?.trim() || null,
+            ends_at: editBanner.ends_at?.trim() || null,
+            is_active: Boolean(editBanner.is_active),
+            priority: Number.isFinite(editBanner.priority) ? editBanner.priority : 0,
+          },
+        }),
+      "Banner atualizado.",
+      {
+        busy: "Salvando banner...",
+        onSuccess: (data) => {
+          const updated = asBannerRow((data as { banner?: Record<string, unknown> } | undefined)?.banner ?? undefined)
+          if (updated) setBanners((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+          setEditBannerOpen(false)
+          setEditBannerId(null)
+          setEditBanner(null)
+        },
       }
-
-      const { data, error } = await supabase
-        .from("site_banners")
-        .update(payload)
-        .eq("id", editBannerId)
-        .select("*")
-        .single()
-        .abortSignal(signal)
-      if (error) throw error
-
-      const updated = asBannerRow(data as unknown as Record<string, unknown>)
-      if (updated) setBanners((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
-
-      setEditBannerOpen(false)
-      setEditBannerId(null)
-      setEditBanner(null)
-      toast.success("Banner atualizado.")
-    }, "Error updating banner:", { busy: "Salvando banner..." })
+    )
   }
 
   const uploadEditBannerImage = async (file: File) => {
@@ -1074,6 +1094,53 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                 </div>
               </div>
 
+              <div className="grid gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Variações do card de atendimento no detalhe</div>
+                  <div className="text-xs text-muted-foreground">
+                    O site público usa fallback institucional quando não houver corretor configurado e passa a mostrar dados reais do corretor quando esse vínculo existir.
+                  </div>
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="grid gap-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Com corretor configurado
+                    </div>
+                    <PublicContactIdentityCard
+                      theme={settings.theme}
+                      state={{
+                        mode: "broker",
+                        name: "Nome do corretor (exemplo)",
+                        creci: "000000-F (exemplo)",
+                        whatsapp: settings.whatsapp?.trim() || null,
+                        responseTimeLabel: "Tempo médio de resposta disponível quando configurado",
+                        note: "Use dados reais do corretor quando esse vínculo existir no CRM.",
+                        exampleLabel: "Exemplo",
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Sem corretor configurado
+                    </div>
+                    <PublicContactIdentityCard
+                      theme={settings.theme}
+                      state={{
+                        mode: "team",
+                        organizationName: settings.brand_name?.trim() || org.name,
+                        avatarUrl:
+                          resolveMediaPathUrl("site-assets", settings.logo_path) ??
+                          resolveMediaUrl(settings.logo_url) ??
+                          settings.logo_url ??
+                          null,
+                        whatsapp: settings.whatsapp?.trim() || null,
+                        note: "Fallback institucional para não prometer um corretor específico quando esse dado não existir.",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="grid gap-2">
                   <Label>WhatsApp (obrigatório)</Label>
@@ -1153,6 +1220,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                   {pending ? busyMsg ?? "Processando..." : "Salvar configurações"}
                 </Button>
               </div>
+              {sectionErrors.settings ? <p className="text-sm text-red-600">{sectionErrors.settings}</p> : null}
             </CardContent>
           </Card>
 
@@ -1193,6 +1261,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                   Verificar DNS
                 </Button>
               </div>
+              {sectionErrors.domain ? <p className="text-sm text-red-600">{sectionErrors.domain}</p> : null}
             </CardContent>
           </Card>
 
@@ -1312,6 +1381,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                   {pending ? busyMsg ?? "Processando..." : "Salvar rastreamento"}
                 </Button>
               </div>
+              {sectionErrors.tracking ? <p className="text-sm text-red-600">{sectionErrors.tracking}</p> : null}
             </CardContent>
           </Card>
 
@@ -1363,6 +1433,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                   {pending ? busyMsg ?? "Processando..." : "Salvar páginas"}
                 </Button>
               </div>
+              {sectionErrors.pages ? <p className="text-sm text-red-600">{sectionErrors.pages}</p> : null}
             </CardContent>
           </Card>
 
@@ -1525,9 +1596,11 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                         {pending ? busyMsg ?? "Processando..." : "Criar banner"}
                       </Button>
                     </DialogFooter>
+                    {sectionErrors.newBanner ? <p className="text-sm text-red-600">{sectionErrors.newBanner}</p> : null}
                   </DialogContent>
                 </Dialog>
               </div>
+              {sectionErrors.bannerList ? <p className="text-sm text-red-600">{sectionErrors.bannerList}</p> : null}
 
               <Dialog
                 open={editBannerOpen}
@@ -1713,6 +1786,7 @@ export function SiteAdmin({ org, initial, previewUrl, checklist }: Props) {
                       {pending ? busyMsg ?? "Processando..." : "Salvar banner"}
                     </Button>
                   </DialogFooter>
+                  {sectionErrors.editBanner ? <p className="text-sm text-red-600">{sectionErrors.editBanner}</p> : null}
                 </DialogContent>
               </Dialog>
 

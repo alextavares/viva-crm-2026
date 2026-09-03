@@ -52,7 +52,6 @@ export default async function TemplatesPage() {
             <TemplatesClient
                 initialTemplates={templates || []}
                 isAdmin={isAdmin}
-                organizationId={profile.organization_id}
             />
         </div>
     )

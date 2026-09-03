@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ContactActions } from "@/components/contacts/contact-card-actions"
+import { DealStageBadge } from "@/components/contacts/deal-stage-badge"
 import { SiteContactQuickActions } from "@/components/contacts/site-contact-quick-actions"
 import { Building, Globe, Mail, Phone } from "lucide-react"
 
@@ -16,6 +17,7 @@ export type EnrichedContactRow = {
     phone: string | null
     status: string
     type: string
+    deal_stage?: string | null
     assigned_to?: string | null
     organization_id: string
     city?: string | null
@@ -27,6 +29,11 @@ export type EnrichedContactRow = {
         lastEventAt: string | null
     } | null
     latestLeadAt?: string | null
+    assignedProfileName?: string | null
+    leadPropertyContext?: {
+        id: string
+        title: string
+    } | null
 }
 
 export type LeadDistributionSettings = {
@@ -60,7 +67,7 @@ export function getStatusLabel(status: string) {
         case "new":
             return "Novo"
         case "contacted":
-            return "Contactado"
+            return "Em atendimento"
         case "qualified":
             return "Qualificado"
         case "lost":
@@ -87,6 +94,30 @@ export function getStatusColor(status: string) {
         default:
             return "outline"
     }
+}
+
+export function getContactSourceLabel(source: string | null) {
+    if (!source) return "Origem externa"
+
+    switch (source) {
+        case "site":
+            return "Site"
+        case "whatsapp":
+            return "WhatsApp"
+        case "imovelweb":
+            return "Imovelweb"
+        case "zap":
+            return "ZAP"
+        default:
+            return source
+                .replace(/[_-]+/g, " ")
+                .replace(/\b\w/g, (char) => char.toUpperCase())
+    }
+}
+
+export function getContactDomainLabel(domain: string | null) {
+    const normalizedDomain = domain?.trim()
+    return normalizedDomain ? normalizedDomain : "Sem domínio"
 }
 
 export function formatDateTime(value: string) {
@@ -182,7 +213,9 @@ function ContactCard({
                         </Avatar>
                         <div className="flex flex-col">
                             <CardTitle className="text-base">{contact.name}</CardTitle>
-                            <p className="text-xs text-muted-foreground">{getTypeLabel(contact.type)}</p>
+                            {contact.type !== "lead" ? (
+                                <p className="text-xs text-muted-foreground">{getTypeLabel(contact.type)}</p>
+                            ) : null}
                         </div>
                         <div className="ml-auto flex flex-col items-end gap-1">
                             <Badge
@@ -190,6 +223,7 @@ function ContactCard({
                             >
                                 {getStatusLabel(optimisticStatus)}
                             </Badge>
+                            <DealStageBadge stage={contact.deal_stage} className="text-[10px] px-2 py-0.5" />
                             {slaBadge ? (
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${slaBadge.className}`}>
                                     SLA: {slaBadge.label} ({slaBadge.elapsed})
@@ -198,29 +232,49 @@ function ContactCard({
                         </div>
                     </CardHeader>
                     <CardContent className="grid gap-2 text-sm">
-                        {contact.email && (
+                        {contact.email ? (
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <Mail className="h-4 w-4" />
                                 <span className="truncate">{contact.email}</span>
                             </div>
+                        ) : (
+                            <div className="flex items-center gap-2 text-muted-foreground italic">
+                                <Mail className="h-4 w-4" />
+                                <span>Sem email</span>
+                            </div>
                         )}
-                        {contact.phone && (
+                        {contact.phone ? (
                             <div className="flex items-center gap-2 text-muted-foreground">
                                 <Phone className="h-4 w-4" />
                                 <span>{contact.phone}</span>
                             </div>
+                        ) : (
+                            <div className="flex items-center gap-2 text-muted-foreground italic">
+                                <Phone className="h-4 w-4" />
+                                <span>Sem telefone</span>
+                            </div>
                         )}
                         {siteMeta ? (
                             siteMeta.source === 'site' ? (
-                                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground border-t pt-2">
-                                    <Badge variant="secondary">Site</Badge>
-                                    <Globe className="h-3 w-3" />
-                                    <span className="truncate">{siteMeta.domain || "sem domínio informado"}</span>
+                                <div className="mt-2 space-y-2 border-t pt-2">
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <Badge variant="secondary">Site</Badge>
+                                        <Globe className="h-3 w-3" />
+                                        <span className="truncate">{getContactDomainLabel(siteMeta.domain)}</span>
+                                    </div>
+                                    <div className="space-y-1 text-xs">
+                                        <div className="font-medium text-foreground">
+                                            Imóvel: {contact.leadPropertyContext?.title || "Interesse não identificado"}
+                                        </div>
+                                        <div className="text-muted-foreground">
+                                            Responsável: {contact.assignedProfileName || "Sem responsável"}
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground border-t pt-2">
-                                    <Badge variant="outline" className="capitalize">
-                                        {siteMeta.source || "Origem"}
+                                    <Badge variant="outline">
+                                        {getContactSourceLabel(siteMeta.source)}
                                     </Badge>
                                 </div>
                             )
@@ -241,7 +295,9 @@ function ContactCard({
                                 contactId={contact.id}
                                 phone={contact.phone}
                                 status={optimisticStatus}
-                                onOptimisticUpdate={(newStatus) => setOptimisticStatus(newStatus)}
+                                contactName={contact.name}
+                                propertyTitle={contact.leadPropertyContext?.title ?? null}
+                                onOptimisticUpdate={(newStatus: string) => setOptimisticStatus(newStatus)}
                                 onRevertUpdate={() => setOptimisticStatus(contact.status)}
                             />
                         )}

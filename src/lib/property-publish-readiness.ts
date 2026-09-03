@@ -1,3 +1,5 @@
+import type { PropertyOperationalFocusFieldId } from "@/lib/property-operational-readiness"
+
 type PublishIssueKey =
   | "missing_city"
   | "missing_photo"
@@ -111,6 +113,6 @@ export function isPropertyPublishReady(property: PublishReadinessInput): boolean
   return !getPropertyPublishIssues(property).some((issue) => issue.severity === "blocking")
 }
 
-export function buildPropertyFixHref(propertyId: string, focusFieldId: PropertyPublishIssue["focusFieldId"]): string {
+export function buildPropertyFixHref(propertyId: string, focusFieldId: PropertyOperationalFocusFieldId): string {
   return `/properties/${propertyId}?focus=${encodeURIComponent(focusFieldId)}`
 }

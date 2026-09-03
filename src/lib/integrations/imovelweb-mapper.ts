@@ -1,4 +1,4 @@
-import { create, type XMLBuilder } from "xmlbuilder2"
+import { create } from "xmlbuilder2"
 import { CRMProperty } from "./zap-mapper"
 import {
   buildImovelwebCharacteristics,
@@ -6,6 +6,13 @@ import {
   type CharacteristicValue,
 } from "./imovelweb-catalog"
 import { getAddressLocalidadeName, resolveMappedLocalidadeId } from "./imovelweb-localidade"
+
+type XMLBuilder = {
+  ele(name: string): XMLBuilder
+  txt(value: string): XMLBuilder
+  dat(value: string): XMLBuilder
+  up(): XMLBuilder
+}
 
 export type ImovelwebFeedConfig = {
   codigoImobiliaria?: string

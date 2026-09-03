@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Phone, Mail, MapPin, FileText, MessageSquare, Loader2, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { saveContactInteraction } from '@/app/actions/contacts'
 
 type InteractionType = 'call' | 'email' | 'visit' | 'note' | 'whatsapp'
 type Direction = 'inbound' | 'outbound'
@@ -22,44 +22,41 @@ const TYPE_OPTIONS: { value: InteractionType; label: string; icon: React.Element
 
 interface Props {
     contactId: string
-    organizationId: string
     onSuccess?: () => void
 }
 
-export function ContactInteractionForm({ contactId, organizationId, onSuccess }: Props) {
-    const supabase = createClient()
+export function ContactInteractionForm({ contactId, onSuccess }: Props) {
     const router = useRouter()
     const [open, setOpen] = useState(false)
     const [type, setType] = useState<InteractionType>('call')
     const [direction, setDirection] = useState<Direction>('outbound')
     const [summary, setSummary] = useState('')
-    const [saving, setSaving] = useState(false)
+    const [isPending, startTransition] = useTransition()
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!summary.trim()) {
             toast.error('Preencha o resumo da interação.')
             return
         }
-        setSaving(true)
-        const { error } = await supabase.from('contact_interactions').insert({
-            contact_id: contactId,
-            organization_id: organizationId,
-            type,
-            direction: type === 'note' ? null : direction,
-            summary: summary.trim(),
-            happened_at: new Date().toISOString(),
+        startTransition(async () => {
+            try {
+                await saveContactInteraction({
+                    contactId,
+                    type,
+                    direction: type === 'note' ? null : direction,
+                    summary,
+                })
+                toast.success('Interação registrada.')
+                setSummary('')
+                setOpen(false)
+                onSuccess?.()
+                router.refresh()
+            } catch (error) {
+                toast.error('Erro ao registrar interação.')
+                console.error(error)
+            }
         })
-        setSaving(false)
-        if (error) {
-            toast.error('Erro ao registrar interação.')
-            return
-        }
-        toast.success('Interação registrada.')
-        setSummary('')
-        setOpen(false)
-        onSuccess?.()
-        router.refresh()
     }
 
     if (!open) {
@@ -112,11 +109,11 @@ export function ContactInteractionForm({ contactId, organizationId, onSuccess }:
             />
 
             <div className="flex gap-2 justify-end">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={isPending}>
                     Cancelar
                 </Button>
-                <Button type="submit" size="sm" disabled={saving}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                <Button type="submit" size="sm" disabled={isPending}>
+                    {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Salvar
                 </Button>
             </div>

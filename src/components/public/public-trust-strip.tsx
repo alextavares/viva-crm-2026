@@ -3,7 +3,7 @@ import { PublicSurfacePanel } from "@/components/public/public-section-blocks"
 const TRUST_ITEMS = [
   "Equipe local com atendimento consultivo",
   "Suporte para compra, locação e captação",
-  "Contato rápido por WhatsApp e CRM integrado",
+  "Contato rápido por WhatsApp e atendimento organizado",
 ]
 
 export function PublicTrustStrip() {

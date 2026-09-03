@@ -1,10 +1,28 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
+import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, FileCheck2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { DealProposal } from "@/lib/types"
+import { Badge } from "@/components/ui/badge"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+    canDeleteProposalRecord,
+    canEditProposalRecord,
+    type DealContract,
+    type DealProposal,
+} from "@/lib/types"
 import {
     Dialog,
     DialogContent,
@@ -13,30 +31,85 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import { deleteProposal } from "@/app/actions/proposals"
 import { ProposalForm } from "./proposal-form"
-
-type ContractRef = { contractId: string; contractStatus: string }
+import { ContractForm } from "@/components/contracts/contract-form"
 
 interface ContactProposalsProps {
     contactId: string
     organizationId: string
-    brokerId?: string | null
+    assignedTo?: string | null
     initialProposals: DealProposal[]
-    proposalContractMap?: Map<string, ContractRef>
-    canEdit?: boolean
+    proposalContracts?: Record<string, DealContract>
+    currentUserId?: string | null
+    currentUserRole?: string | null
+    canCreateProposal?: boolean
 }
 
 export function ContactProposals({
     contactId,
     organizationId,
-    brokerId,
+    assignedTo,
     initialProposals,
-    proposalContractMap = new Map(),
-    canEdit = false,
+    proposalContracts = {},
+    currentUserId = null,
+    currentUserRole = null,
+    canCreateProposal = false,
 }: ContactProposalsProps) {
-    const [proposals] = useState<DealProposal[]>(initialProposals)
+    const router = useRouter()
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     const [editingProposal, setEditingProposal] = useState<DealProposal | null>(null)
+    const [deletingProposalId, setDeletingProposalId] = useState<string | null>(null)
+    const [reviewingContract, setReviewingContract] = useState<DealContract | null>(null)
+    const canEditContracts = currentUserRole === "owner" || currentUserRole === "manager"
+
+    function handleSuccess() {
+        setIsCreateOpen(false)
+        setEditingProposal(null)
+        setReviewingContract(null)
+        router.refresh()
+    }
+
+    const contractStatusMeta = useMemo(
+        () => ({
+            draft: {
+                label: "Rascunho",
+                className: "border-amber-200 bg-amber-50 text-amber-800",
+            },
+            active: {
+                label: "Ativo",
+                className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+            },
+            completed: {
+                label: "Concluído",
+                className: "border-blue-200 bg-blue-50 text-blue-800",
+            },
+            canceled: {
+                label: "Cancelado",
+                className: "border-rose-200 bg-rose-50 text-rose-800",
+            },
+            default: {
+                label: "Indefinido",
+                className: "border-muted bg-muted/50 text-foreground",
+            },
+        }),
+        []
+    )
+
+    async function handleDelete(proposalId: string) {
+        setDeletingProposalId(proposalId)
+        try {
+            const result = await deleteProposal(proposalId, contactId)
+            if (result.error) {
+                toast.error(result.error)
+                return
+            }
+            toast.success("Proposta excluída com sucesso")
+            router.refresh()
+        } finally {
+            setDeletingProposalId(null)
+        }
+    }
 
     return (
         <div className="space-y-4">
@@ -48,7 +121,7 @@ export function ContactProposals({
                     </p>
                 </div>
 
-                {canEdit && (
+                {canCreateProposal && (
                     <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                         <DialogTrigger asChild>
                             <Button size="sm">
@@ -66,8 +139,8 @@ export function ContactProposals({
                             <ProposalForm
                                 contactId={contactId}
                                 organizationId={organizationId}
-                                brokerId={brokerId}
-                                onSuccess={() => setIsCreateOpen(false)}
+                                assignedTo={assignedTo}
+                                onSuccess={handleSuccess}
                                 onCancel={() => setIsCreateOpen(false)}
                             />
                         </DialogContent>
@@ -75,12 +148,12 @@ export function ContactProposals({
                 )}
             </div>
 
-            {proposals.length === 0 ? (
+            {initialProposals.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 text-center border rounded-lg border-dashed">
                     <p className="text-muted-foreground mb-4">
                         Nenhuma proposta registrada para este cliente.
                     </p>
-                    {canEdit && (
+                    {canCreateProposal && (
                         <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
                             Criar a primeira proposta
                         </Button>
@@ -88,8 +161,16 @@ export function ContactProposals({
                 </div>
             ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {proposals.map((proposal) => {
-                        const contractRef = proposalContractMap.get(proposal.id)
+                    {initialProposals.map((proposal) => {
+                        const contractRef = proposalContracts[proposal.id]
+                        const canEditProposal =
+                            !contractRef &&
+                            canEditProposalRecord(currentUserRole, currentUserId, proposal.assigned_to)
+                        const canDeleteProposal =
+                            !contractRef && canDeleteProposalRecord(currentUserRole)
+                        const contractStatus =
+                            (contractRef?.status && contractStatusMeta[contractRef.status as keyof typeof contractStatusMeta]) ||
+                            contractStatusMeta.default
                         return (
                         <div key={proposal.id} className="border rounded-lg p-4 flex flex-col gap-2 relative">
                             <div className="flex items-start justify-between">
@@ -104,33 +185,62 @@ export function ContactProposals({
                                                 'Pendente'}
                                 </span>
 
-                                {canEdit && !contractRef && (
-                                    <Dialog open={editingProposal?.id === proposal.id} onOpenChange={(open) => {
-                                        if (!open) setEditingProposal(null)
-                                    }}>
-                                        <DialogTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingProposal(proposal)}>
-                                                Editar
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="sm:max-w-[500px]">
-                                            <DialogHeader>
-                                                <DialogTitle>Editar Proposta</DialogTitle>
-                                                <DialogDescription>
-                                                    Atualize as condições ou o status da proposta.
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            <ProposalForm
-                                                contactId={contactId}
-                                                organizationId={organizationId}
-                                                brokerId={brokerId}
-                                                initialData={proposal}
-                                                onSuccess={() => setEditingProposal(null)}
-                                                onCancel={() => setEditingProposal(null)}
-                                            />
-                                        </DialogContent>
-                                    </Dialog>
-                                )}
+                                <div className="flex items-center gap-1">
+                                    {canEditProposal && (
+                                        <Dialog open={editingProposal?.id === proposal.id} onOpenChange={(open) => {
+                                            if (!open) setEditingProposal(null)
+                                        }}>
+                                            <DialogTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingProposal(proposal)}>
+                                                    Editar
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="sm:max-w-[500px]">
+                                                <DialogHeader>
+                                                    <DialogTitle>Editar Proposta</DialogTitle>
+                                                    <DialogDescription>
+                                                        Atualize as condições ou o status da proposta.
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                <ProposalForm
+                                                    contactId={contactId}
+                                                    organizationId={organizationId}
+                                                    assignedTo={assignedTo}
+                                                    initialData={proposal}
+                                                    onSuccess={handleSuccess}
+                                                    onCancel={() => setEditingProposal(null)}
+                                                />
+                                            </DialogContent>
+                                        </Dialog>
+                                    )}
+                                    {canDeleteProposal ? (
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-destructive hover:text-destructive">
+                                                    Excluir
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Excluir proposta?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Essa ação remove a proposta da ficha do contato e não pode ser desfeita.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => void handleDelete(proposal.id)}
+                                                        className="bg-destructive hover:bg-destructive/90"
+                                                        disabled={deletingProposalId === proposal.id}
+                                                    >
+                                                        {deletingProposalId === proposal.id ? "Excluindo..." : "Excluir"}
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    ) : null}
+                                </div>
                             </div>
 
                             <div className="mt-2">
@@ -163,25 +273,59 @@ export function ContactProposals({
                             {/* Contract indicator: shown when an auto-drafted contract exists for this proposal */}
                             {contractRef && (
                                 <div className="mt-4 pt-3 border-t">
-                                    <div className="flex items-center justify-between p-2.5 rounded-md bg-emerald-50 border border-emerald-100">
-                                        <div className="flex items-center gap-2 text-emerald-800">
+                                    <div className="flex items-center justify-between gap-3 p-2.5 rounded-md bg-muted/30 border">
+                                        <div className="flex items-center gap-2 text-foreground min-w-0">
                                             <FileCheck2 className="h-4 w-4" />
-                                            <div className="flex flex-col pt-0.5">
-                                                <span className="text-xs font-semibold leading-none">Contrato Gerado</span>
-                                                <span className="text-[10px] opacity-80 mt-1 capitalize">
-                                                    Status: {contractRef.contractStatus === 'draft' ? 'Rascunho' : 
-                                                             contractRef.contractStatus === 'active' ? 'Ativo' : 
-                                                             contractRef.contractStatus === 'completed' ? 'Concluído' : 
-                                                             contractRef.contractStatus === 'canceled' ? 'Cancelado' : 
-                                                             contractRef.contractStatus}
+                                            <div className="flex flex-col pt-0.5 min-w-0">
+                                                <span className="text-xs font-semibold leading-none">Contrato vinculado</span>
+                                                <span className="text-[10px] opacity-80 mt-1">
+                                                    Contrato: {contractRef.id.slice(0, 8)}
+                                                    {contractRef.contract_type
+                                                        ? ` · ${contractRef.contract_type === "sale" ? "Venda" : "Locação"}`
+                                                        : ""}
                                                 </span>
                                             </div>
                                         </div>
-                                        <Link href="/contracts">
-                                            <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-200 hover:bg-emerald-100 hover:text-emerald-900 bg-white">
-                                                Ver Contratos
-                                            </Button>
-                                        </Link>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Badge variant="outline" className={contractStatus.className}>
+                                                {contractStatus.label}
+                                            </Badge>
+                                            {canEditContracts ? (
+                                                <Dialog
+                                                    open={reviewingContract?.id === contractRef.id}
+                                                    onOpenChange={(open) => {
+                                                        if (!open) setReviewingContract(null)
+                                                    }}
+                                                >
+                                                    <DialogTrigger asChild>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-xs"
+                                                            onClick={() => setReviewingContract(contractRef)}
+                                                        >
+                                                            Revisar contrato
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                                                        <DialogHeader>
+                                                            <DialogTitle>Revisar contrato</DialogTitle>
+                                                            <DialogDescription>
+                                                                Revise o contrato vinculado a esta proposta sem sair da ficha do contato.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <ContractForm
+                                                            organizationId={organizationId}
+                                                            contactId={contactId}
+                                                            assignedTo={assignedTo}
+                                                            initialData={contractRef}
+                                                            onSuccess={handleSuccess}
+                                                            onCancel={() => setReviewingContract(null)}
+                                                        />
+                                                    </DialogContent>
+                                                </Dialog>
+                                            ) : null}
+                                        </div>
                                     </div>
                                 </div>
                             )}

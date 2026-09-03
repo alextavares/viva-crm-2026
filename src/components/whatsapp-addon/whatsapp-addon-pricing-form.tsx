@@ -1,7 +1,12 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import {
+  loadWhatsAppAddonUsage,
+  saveWhatsAppAddonPricing,
+} from "@/app/actions/whatsapp"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { WhatsAppAddonUsageSnapshot } from "@/lib/types"
@@ -24,10 +29,6 @@ type Props = {
   initialUsage: WhatsAppAddonUsageSnapshot | null
 }
 
-const SAVE_TIMEOUT_MS = 45_000
-const SAVE_WATCHDOG_MS = 60_000
-const USAGE_TIMEOUT_MS = 20_000
-
 function toInt(value: unknown, fallback: number, min: number, max: number) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return fallback
@@ -39,6 +40,14 @@ function toDecimal(value: unknown, fallback: number, min: number, max: number) {
   if (!Number.isFinite(parsed)) return fallback
   const clamped = Math.min(max, Math.max(min, parsed))
   return Number(clamped.toFixed(4))
+}
+
+function parseDecimalInput(value: string, fallback: number) {
+  const normalized = value.replace(",", ".").trim()
+  if (!normalized) return fallback
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed)) return fallback
+  return parsed
 }
 
 function toCurrencyLabel(value: number, currencyCode: string) {
@@ -84,11 +93,15 @@ function toPeriodLabel(periodStart: string | null, periodEnd: string | null) {
 }
 
 export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, initial, initialUsage }: Props) {
+  const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
   const [isRefreshingUsage, setIsRefreshingUsage] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [addonEnabled, setAddonEnabled] = useState(Boolean(initial.addon_enabled))
   const [includedQuota, setIncludedQuota] = useState(toInt(initial.included_quota, 0, 0, 1000000))
-  const [overagePrice, setOveragePrice] = useState(toDecimal(initial.overage_price, 0, 0, 999999))
+  const [overagePriceInput, setOveragePriceInput] = useState(
+    initial.overage_price > 0 ? String(initial.overage_price) : ""
+  )
   const [currencyCode, setCurrencyCode] = useState((initial.currency_code || "BRL").toUpperCase())
   const [billingTimezone, setBillingTimezone] = useState(initial.billing_timezone || "America/Sao_Paulo")
   const [usage, setUsage] = useState<WhatsAppAddonUsageSnapshot | null>(normalizeUsage(initialUsage))
@@ -99,8 +112,8 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
     : "border-amber-300 bg-amber-50 text-amber-700"
 
   const overageLabel = useMemo(
-    () => toCurrencyLabel(toDecimal(overagePrice, 0, 0, 999999), currencyCode),
-    [currencyCode, overagePrice]
+    () => toCurrencyLabel(toDecimal(parseDecimalInput(overagePriceInput, 0), 0, 0, 999999), currencyCode),
+    [currencyCode, overagePriceInput]
   )
   const usagePercent = Math.min(100, Math.max(0, Number(usage?.usage_percent || 0)))
   const usageAlert = usage?.alert_level || "ok"
@@ -121,43 +134,20 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
           ? "Add-on inativo"
           : "Consumo normal"
 
-  async function withTimeout<T>(promise: Promise<T>, ms = SAVE_TIMEOUT_MS): Promise<T> {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        const err = new Error("RequestTimeout")
-        err.name = "TimeoutError"
-        reject(err)
-      }, ms)
-    })
-
-    try {
-      return await Promise.race([promise, timeoutPromise])
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId)
-    }
-  }
-
   const refreshUsage = async () => {
     if (!tableReady || !usageReady || isRefreshingUsage) return
     setIsRefreshingUsage(true)
+    setErrorMsg(null)
     try {
-      const response = await withTimeout(fetch("/api/settings/whatsapp-addon/usage", { cache: "no-store" }), USAGE_TIMEOUT_MS)
-      if (!response.ok) {
-        let msg = "Erro ao atualizar consumo."
-        try {
-          const data = (await response.json()) as { message?: string }
-          if (data?.message) msg = data.message
-        } catch {
-          // keep fallback message
-        }
-        throw new Error(msg)
+      const result = await loadWhatsAppAddonUsage()
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao atualizar consumo.")
       }
-      const data = (await response.json()) as { usage?: WhatsAppAddonUsageSnapshot | null }
-      setUsage(normalizeUsage(data.usage ?? null))
+      setUsage(normalizeUsage(result.data.usage ?? null))
     } catch (error) {
-      console.warn("Error refreshing whatsapp usage snapshot:", error)
-      toast.error("Não foi possível atualizar o consumo agora.")
+      const message = error instanceof Error ? error.message : "Não foi possível atualizar o consumo agora."
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
       setIsRefreshingUsage(false)
     }
@@ -167,65 +157,38 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
     if (!canManage || !tableReady || isSaving) return
 
     setIsSaving(true)
-    const uiWatchdog = setTimeout(() => {
-      setIsSaving(false)
-      toast.error("Demorou demais para salvar o add-on. Tente novamente.")
-    }, SAVE_WATCHDOG_MS)
+    setErrorMsg(null)
 
     try {
-      const safeQuota = toInt(includedQuota, 0, 0, 1000000)
-      const safeOverage = toDecimal(overagePrice, 0, 0, 999999)
+      const safeQuota = Number.isFinite(Number(includedQuota)) ? Math.trunc(Number(includedQuota)) : 0
+      const safeOverage = toDecimal(parseDecimalInput(overagePriceInput, 0), 0, 0, 999999)
       const safeCurrency = (currencyCode || "BRL").trim().toUpperCase()
       const safeTimezone = (billingTimezone || "America/Sao_Paulo").trim()
 
-      const response = await withTimeout(
-        fetch("/api/settings/whatsapp-addon", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          cache: "no-store",
-          body: JSON.stringify({
-            addon_enabled: addonEnabled,
-            included_quota: safeQuota,
-            overage_price: safeOverage,
-            currency_code: safeCurrency,
-            billing_timezone: safeTimezone,
-          }),
-        })
-      )
+      const result = await saveWhatsAppAddonPricing({
+        addon_enabled: addonEnabled,
+        included_quota: safeQuota,
+        overage_price: safeOverage,
+        currency_code: safeCurrency,
+        billing_timezone: safeTimezone,
+      })
 
-      if (!response.ok) {
-        let msg = "Erro ao salvar add-on WhatsApp."
-        try {
-          const data = (await response.json()) as { message?: string }
-          if (data?.message) msg = data.message
-        } catch {
-          // keep fallback error message
-        }
-        throw new Error(msg)
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao salvar add-on WhatsApp.")
       }
 
       setIncludedQuota(safeQuota)
-      setOveragePrice(safeOverage)
+      setOveragePriceInput(safeOverage > 0 ? String(safeOverage) : "")
       setCurrencyCode(safeCurrency)
       setBillingTimezone(safeTimezone)
       await refreshUsage()
       toast.success("Configuração de pricing do add-on salva.")
+      router.refresh()
     } catch (error) {
-      console.warn("Error saving whatsapp add-on settings:", error)
-      const isTimeout =
-        typeof error === "object" &&
-        error !== null &&
-        "name" in error &&
-        ((error as { name?: unknown }).name === "TimeoutError" ||
-          (error as { name?: unknown }).name === "AbortError")
-      toast.error(
-        isTimeout
-          ? "Demorou demais para salvar o add-on. Tente novamente."
-          : "Erro ao salvar add-on WhatsApp."
-      )
+      const message = error instanceof Error ? error.message : "Erro ao salvar add-on WhatsApp."
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
-      clearTimeout(uiWatchdog)
       setIsSaving(false)
     }
   }
@@ -242,6 +205,10 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           Migração pendente: execute a migration de consumo do add-on WhatsApp para habilitar o painel de uso.
         </div>
+      ) : null}
+
+      {errorMsg ? (
+        <div className="rounded-lg border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">{errorMsg}</div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -333,7 +300,10 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
             <Input
               type="checkbox"
               checked={addonEnabled}
-              onChange={(e) => setAddonEnabled(e.target.checked)}
+              onChange={(e) => {
+                setErrorMsg(null)
+                setAddonEnabled(e.target.checked)
+              }}
               className="h-4 w-4"
               disabled={!canManage || !tableReady || isSaving}
             />
@@ -352,7 +322,10 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
             min={0}
             max={1000000}
             value={displayEmptyForZero(includedQuota)}
-            onChange={(e) => setIncludedQuota(toInt(e.target.value, 0, 0, 1000000))}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setIncludedQuota(toInt(e.target.value, 0, 0, 1000000))
+            }}
             disabled={!canManage || !tableReady || isSaving}
           />
         </div>
@@ -360,13 +333,15 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
         <div className="space-y-2">
           <label className="text-sm font-medium">Preço por excedente</label>
           <Input
-            type="number"
-            min={0}
-            max={999999}
-            step="0.01"
-            value={displayEmptyForZero(overagePrice)}
-            onChange={(e) => setOveragePrice(toDecimal(e.target.value, 0, 0, 999999))}
+            type="text"
+            inputMode="decimal"
+            value={overagePriceInput}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setOveragePriceInput(e.target.value)
+            }}
             disabled={!canManage || !tableReady || isSaving}
+            placeholder="0,05"
           />
         </div>
 
@@ -374,7 +349,10 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
           <label className="text-sm font-medium">Moeda</label>
           <Input
             value={currencyCode}
-            onChange={(e) => setCurrencyCode(e.target.value.toUpperCase().slice(0, 3))}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setCurrencyCode(e.target.value.toUpperCase().slice(0, 3))
+            }}
             maxLength={3}
             disabled={!canManage || !tableReady || isSaving}
           />
@@ -385,7 +363,10 @@ export function WhatsAppAddonPricingForm({ canManage, tableReady, usageReady, in
           <label className="text-sm font-medium">Timezone de faturamento</label>
           <Input
             value={billingTimezone}
-            onChange={(e) => setBillingTimezone(e.target.value)}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setBillingTimezone(e.target.value)
+            }}
             disabled={!canManage || !tableReady || isSaving}
             placeholder="America/Sao_Paulo"
           />

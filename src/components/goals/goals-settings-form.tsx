@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { saveGoalBrokerOverrides, saveGoalSettings } from "@/app/actions/goals"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { displayEmptyForZero } from "@/lib/utils"
@@ -50,28 +52,26 @@ type BrokerFormRow = {
 }
 
 type Props = {
-  organizationId: string
   canManage: boolean
   tableReady: boolean
   initial: GoalSettings
   initialOverrides: BrokerOverrideDraft[]
 }
 
-const GOALS_SAVE_TIMEOUT_MS = 45_000
-const GOALS_SAVE_WATCHDOG_MS = 60_000
-
-function toOptionalInt(value: string, min: number, max: number) {
+function toOptionalInt(value: string) {
   const trimmed = value.trim()
   if (!trimmed) return null
   const parsed = Number(trimmed)
   if (!Number.isFinite(parsed)) return null
-  return Math.min(max, Math.max(min, Math.trunc(parsed)))
+  return String(Math.trunc(parsed))
 }
 
-function toSafeInt(value: unknown, fallback: number, min: number, max: number) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.min(max, Math.max(min, Math.trunc(parsed)))
+function toInitialNumberInput(value: number, options?: { emptyWhenZero?: boolean }) {
+  if (options?.emptyWhenZero && value === 0) {
+    return ""
+  }
+
+  return String(value)
 }
 
 function overrideBoolToForm(v: boolean | null | undefined): "global" | "on" | "off" {
@@ -86,9 +86,11 @@ function formBoolToOverride(v: "global" | "on" | "off"): boolean | null {
   return null
 }
 
-export function GoalsSettingsForm({ organizationId, canManage, tableReady, initial, initialOverrides }: Props) {
+export function GoalsSettingsForm({ canManage, tableReady, initial, initialOverrides }: Props) {
+  const router = useRouter()
   const [isSavingGlobal, setIsSavingGlobal] = useState(false)
   const [isSavingOverrides, setIsSavingOverrides] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const [enabled, setEnabled] = useState(Boolean(initial.enabled))
   const [periodType, setPeriodType] = useState<"weekly" | "monthly">(
@@ -97,12 +99,16 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
   const [metricCaptacoesEnabled, setMetricCaptacoesEnabled] = useState(Boolean(initial.metric_captacoes_enabled))
   const [metricRespostasEnabled, setMetricRespostasEnabled] = useState(Boolean(initial.metric_respostas_enabled))
   const [metricVisitasEnabled, setMetricVisitasEnabled] = useState(Boolean(initial.metric_visitas_enabled))
-  const [responseSlaMinutes, setResponseSlaMinutes] = useState(
-    toSafeInt(initial.response_sla_minutes, 15, 1, 1440)
+  const [responseSlaMinutes, setResponseSlaMinutes] = useState(toInitialNumberInput(initial.response_sla_minutes))
+  const [targetCaptacoes, setTargetCaptacoes] = useState(
+    toInitialNumberInput(initial.target_captacoes, { emptyWhenZero: true })
   )
-  const [targetCaptacoes, setTargetCaptacoes] = useState(toSafeInt(initial.target_captacoes, 4, 0, 100000))
-  const [targetRespostas, setTargetRespostas] = useState(toSafeInt(initial.target_respostas, 20, 0, 100000))
-  const [targetVisitas, setTargetVisitas] = useState(toSafeInt(initial.target_visitas, 6, 0, 100000))
+  const [targetRespostas, setTargetRespostas] = useState(
+    toInitialNumberInput(initial.target_respostas, { emptyWhenZero: true })
+  )
+  const [targetVisitas, setTargetVisitas] = useState(
+    toInitialNumberInput(initial.target_visitas, { emptyWhenZero: true })
+  )
 
   const [rows, setRows] = useState<BrokerFormRow[]>(
     initialOverrides.map((row) => ({
@@ -125,24 +131,8 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
   const isSavingAny = isSavingGlobal || isSavingOverrides
 
   const setRow = (profileId: string, patch: Partial<BrokerFormRow>) => {
+    setErrorMsg(null)
     setRows((prev) => prev.map((row) => (row.profile_id === profileId ? { ...row, ...patch } : row)))
-  }
-
-  async function withTimeout<T>(promise: Promise<T>, ms = GOALS_SAVE_TIMEOUT_MS): Promise<T> {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        const err = new Error("RequestTimeout")
-        err.name = "TimeoutError"
-        reject(err)
-      }, ms)
-    })
-
-    try {
-      return await Promise.race([promise, timeoutPromise])
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId)
-    }
   }
 
   const buildOverridePayload = () =>
@@ -150,17 +140,16 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
       .map((row) => {
         const period = row.period_type === "weekly" || row.period_type === "monthly" ? row.period_type : null
         const override = {
-          organization_id: organizationId,
           profile_id: row.profile_id,
           enabled: row.enabled,
           period_type: period,
           metric_captacoes_enabled: formBoolToOverride(row.metric_captacoes_enabled),
           metric_respostas_enabled: formBoolToOverride(row.metric_respostas_enabled),
           metric_visitas_enabled: formBoolToOverride(row.metric_visitas_enabled),
-          response_sla_minutes: toOptionalInt(row.response_sla_minutes, 1, 1440),
-          target_captacoes: toOptionalInt(row.target_captacoes, 0, 100000),
-          target_respostas: toOptionalInt(row.target_respostas, 0, 100000),
-          target_visitas: toOptionalInt(row.target_visitas, 0, 100000),
+          response_sla_minutes: toOptionalInt(row.response_sla_minutes),
+          target_captacoes: toOptionalInt(row.target_captacoes),
+          target_respostas: toOptionalInt(row.target_respostas),
+          target_visitas: toOptionalInt(row.target_visitas),
           updated_at: new Date().toISOString(),
         }
 
@@ -183,70 +172,46 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
     if (!canManage || !tableReady || isSavingAny) return
 
     setIsSavingGlobal(true)
-    const uiWatchdog = setTimeout(() => {
-      setIsSavingGlobal(false)
-      toast.error("Demorou demais para salvar configurações globais. Tente novamente.")
-    }, GOALS_SAVE_WATCHDOG_MS)
+    setErrorMsg(null)
 
     try {
-      const safeSla = toSafeInt(responseSlaMinutes, 15, 1, 1440)
-      const safeTargetCap = toSafeInt(targetCaptacoes, 4, 0, 100000)
-      const safeTargetResp = toSafeInt(targetRespostas, 20, 0, 100000)
-      const safeTargetVisitas = toSafeInt(targetVisitas, 6, 0, 100000)
+      const result = await saveGoalSettings({
+        enabled,
+        period_type: periodType,
+        metric_captacoes_enabled: metricCaptacoesEnabled,
+        metric_respostas_enabled: metricRespostasEnabled,
+        metric_visitas_enabled: metricVisitasEnabled,
+        response_sla_minutes: responseSlaMinutes,
+        target_captacoes: targetCaptacoes,
+        target_respostas: targetRespostas,
+        target_visitas: targetVisitas,
+      })
 
-      const response = await withTimeout(
-        fetch("/api/settings/goals", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          cache: "no-store",
-          body: JSON.stringify({
-            organization_id: organizationId,
-            section: "global",
-            enabled,
-            period_type: periodType,
-            metric_captacoes_enabled: metricCaptacoesEnabled,
-            metric_respostas_enabled: metricRespostasEnabled,
-            metric_visitas_enabled: metricVisitasEnabled,
-            response_sla_minutes: safeSla,
-            target_captacoes: safeTargetCap,
-            target_respostas: safeTargetResp,
-            target_visitas: safeTargetVisitas,
-          }),
-        })
-      )
-      if (!response.ok) {
-        let msg = "Erro ao salvar metas."
-        try {
-          const data = (await response.json()) as { message?: string }
-          if (data?.message) msg = data.message
-        } catch {
-          // ignore parse errors, keep fallback message
-        }
-        throw new Error(msg)
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao salvar metas.")
       }
 
-      setResponseSlaMinutes(safeSla)
-      setTargetCaptacoes(safeTargetCap)
-      setTargetRespostas(safeTargetResp)
-      setTargetVisitas(safeTargetVisitas)
+      const normalizedSla = Math.trunc(Number(responseSlaMinutes))
+      const normalizedTargetCaptacoes = Math.trunc(Number(targetCaptacoes || "0"))
+      const normalizedTargetRespostas = Math.trunc(Number(targetRespostas || "0"))
+      const normalizedTargetVisitas = Math.trunc(Number(targetVisitas || "0"))
+
+      setResponseSlaMinutes(String(normalizedSla))
+      setTargetCaptacoes(normalizedTargetCaptacoes === 0 ? "" : String(normalizedTargetCaptacoes))
+      setTargetRespostas(normalizedTargetRespostas === 0 ? "" : String(normalizedTargetRespostas))
+      setTargetVisitas(normalizedTargetVisitas === 0 ? "" : String(normalizedTargetVisitas))
 
       toast.success("Configurações globais salvas.")
+      router.refresh()
     } catch (error) {
       console.warn("Error saving goals settings:", error)
-      const isTimeout =
-        typeof error === "object" &&
-        error !== null &&
-        "name" in error &&
-        ((error as { name?: unknown }).name === "TimeoutError" ||
-          (error as { name?: unknown }).name === "AbortError")
-      toast.error(
-        isTimeout
-          ? "Demorou demais para salvar configurações globais. Tente novamente."
+      const message =
+        error instanceof Error && error.message
+          ? error.message
           : "Erro ao salvar configurações globais."
-      )
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
-      clearTimeout(uiWatchdog)
       setIsSavingGlobal(false)
     }
   }
@@ -255,60 +220,42 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
     if (!canManage || !tableReady || isSavingAny) return
 
     setIsSavingOverrides(true)
-    const uiWatchdog = setTimeout(() => {
-      setIsSavingOverrides(false)
-      toast.error("Demorou demais para salvar exceções por corretor. Tente novamente.")
-    }, GOALS_SAVE_WATCHDOG_MS)
+    setErrorMsg(null)
 
     try {
       const overridePayload = buildOverridePayload()
 
-      const response = await withTimeout(
-        fetch("/api/settings/goals", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "include",
-          cache: "no-store",
-          body: JSON.stringify({
-            organization_id: organizationId,
-            section: "overrides",
-            overrides: overridePayload,
-          }),
-        })
-      )
-      if (!response.ok) {
-        let msg = "Erro ao salvar exceções por corretor."
-        try {
-          const data = (await response.json()) as { message?: string }
-          if (data?.message) msg = data.message
-        } catch {
-          // ignore parse errors, keep fallback message
-        }
-        throw new Error(msg)
+      const result = await saveGoalBrokerOverrides({
+        overrides: overridePayload,
+      })
+
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao salvar exceções por corretor.")
       }
 
       toast.success("Exceções por corretor salvas.")
+      router.refresh()
     } catch (error) {
       console.warn("Error saving goals overrides:", error)
-      const isTimeout =
-        typeof error === "object" &&
-        error !== null &&
-        "name" in error &&
-        ((error as { name?: unknown }).name === "TimeoutError" ||
-          (error as { name?: unknown }).name === "AbortError")
-      toast.error(
-        isTimeout
-          ? "Demorou demais para salvar exceções por corretor. Tente novamente."
+      const message =
+        error instanceof Error && error.message
+          ? error.message
           : "Erro ao salvar exceções por corretor."
-      )
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
-      clearTimeout(uiWatchdog)
       setIsSavingOverrides(false)
     }
   }
 
   return (
     <div className="space-y-6">
+      {errorMsg ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errorMsg}
+        </div>
+      ) : null}
+
       {!tableReady ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           Migração pendente: execute a migration de metas no Supabase para habilitar esta seção.
@@ -322,7 +269,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
               <Input
                 type="checkbox"
                 checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setErrorMsg(null)
+                  setEnabled(e.target.checked)
+                }}
                 className="h-4 w-4"
                 disabled={!canManage || !tableReady || isSavingAny}
               />
@@ -334,7 +284,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
           <label className="text-sm font-medium">Período padrão</label>
           <select
             value={periodType}
-            onChange={(e) => setPeriodType(e.target.value === "monthly" ? "monthly" : "weekly")}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setPeriodType(e.target.value === "monthly" ? "monthly" : "weekly")
+            }}
             className="w-full rounded-md border bg-white px-3 py-2 text-sm"
             disabled={!canManage || !tableReady || isSavingAny}
           >
@@ -352,7 +305,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
               <Input
                 type="checkbox"
                 checked={metricCaptacoesEnabled}
-                onChange={(e) => setMetricCaptacoesEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setErrorMsg(null)
+                  setMetricCaptacoesEnabled(e.target.checked)
+                }}
                 className="h-4 w-4"
                 disabled={!canManage || !tableReady || isSavingAny}
               />
@@ -362,7 +318,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
               <Input
                 type="checkbox"
                 checked={metricRespostasEnabled}
-                onChange={(e) => setMetricRespostasEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setErrorMsg(null)
+                  setMetricRespostasEnabled(e.target.checked)
+                }}
                 className="h-4 w-4"
                 disabled={!canManage || !tableReady || isSavingAny}
               />
@@ -372,7 +331,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
               <Input
                 type="checkbox"
                 checked={metricVisitasEnabled}
-                onChange={(e) => setMetricVisitasEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setErrorMsg(null)
+                  setMetricVisitasEnabled(e.target.checked)
+                }}
                 className="h-4 w-4"
                 disabled={!canManage || !tableReady || isSavingAny}
               />
@@ -388,7 +350,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             min={0}
             max={100000}
             value={displayEmptyForZero(targetCaptacoes)}
-            onChange={(e) => setTargetCaptacoes(toSafeInt(e.target.value, 0, 0, 100000))}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setTargetCaptacoes(e.target.value)
+            }}
             disabled={!canManage || !tableReady || isSavingAny}
           />
           <p className="text-xs text-muted-foreground">Captação = imóvel criado no período.</p>
@@ -401,7 +366,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             min={0}
             max={100000}
             value={displayEmptyForZero(targetRespostas)}
-            onChange={(e) => setTargetRespostas(toSafeInt(e.target.value, 0, 0, 100000))}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setTargetRespostas(e.target.value)
+            }}
             disabled={!canManage || !tableReady || isSavingAny}
           />
           <p className="text-xs text-muted-foreground">Conta 1ª mensagem de saída ou 1ª troca de status do lead.</p>
@@ -414,7 +382,10 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             min={0}
             max={100000}
             value={displayEmptyForZero(targetVisitas)}
-            onChange={(e) => setTargetVisitas(toSafeInt(e.target.value, 0, 0, 100000))}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setTargetVisitas(e.target.value)
+            }}
             disabled={!canManage || !tableReady || isSavingAny}
           />
           <p className="text-xs text-muted-foreground">Conta agendamentos da carteira no período.</p>
@@ -429,11 +400,20 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
             min={1}
             max={1440}
             value={displayEmptyForZero(responseSlaMinutes)}
-            onChange={(e) => setResponseSlaMinutes(toSafeInt(e.target.value, 15, 1, 1440))}
+            onChange={(e) => {
+              setErrorMsg(null)
+              setResponseSlaMinutes(e.target.value)
+            }}
             disabled={!canManage || !tableReady || isSavingAny}
           />
           <p className="text-xs text-muted-foreground">Usado para calcular “resposta rápida”.</p>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={saveGlobal} disabled={!canManage || !tableReady || isSavingAny}>
+          {isSavingGlobal ? "Salvando global..." : "Salvar global"}
+        </Button>
       </div>
 
       <div className="rounded-lg border p-4">
@@ -450,7 +430,7 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
         <div className="space-y-3">
           {rows.length === 0 ? (
             <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-              Nenhum corretor (role broker) encontrado na organização.
+              Nenhum corretor ativo encontrado na organização.
             </div>
           ) : null}
 
@@ -612,9 +592,6 @@ export function GoalsSettingsForm({ organizationId, canManage, tableReady, initi
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={saveGlobal} disabled={!canManage || !tableReady || isSavingAny}>
-          {isSavingGlobal ? "Salvando global..." : "Salvar global"}
-        </Button>
         <Button type="button" onClick={saveOverrides} disabled={!canManage || !tableReady || isSavingAny} variant="outline">
           {isSavingOverrides ? "Salvando exceções..." : "Salvar exceções por corretor"}
         </Button>

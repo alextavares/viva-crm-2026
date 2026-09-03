@@ -5,12 +5,15 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ContactActions } from "@/components/contacts/contact-card-actions"
+import { DealStageBadge } from "@/components/contacts/deal-stage-badge"
 import { ContactListPrimaryAction } from "@/components/contacts/contact-list-primary-action"
 import { Building, Globe, MapPin, Phone, Mail, ChevronRight } from "lucide-react"
 
 import {
+    getContactDomainLabel,
     type EnrichedContactRow,
     type LeadDistributionSettings,
+    getContactSourceLabel,
     getTypeLabel,
     getStatusLabel,
     getStatusColor,
@@ -69,10 +72,15 @@ function ContactListRow({
                     </Avatar>
                     <div className="flex flex-col overflow-hidden">
                         <span className="font-medium truncate text-base">{contact.name}</span>
-                        {contact.email && (
+                        {contact.email ? (
                             <span className="text-xs text-muted-foreground truncate flex items-center gap-1">
                                 <Mail className="h-3 w-3" />
                                 {contact.email}
+                            </span>
+                        ) : (
+                            <span className="text-xs text-muted-foreground italic truncate flex items-center gap-1">
+                                <Mail className="h-3 w-3" />
+                                Sem email
                             </span>
                         )}
                     </div>
@@ -81,13 +89,20 @@ function ContactListRow({
                 {/* 2. Tipo + Telefone + Local */}
                 <div className="flex flex-col gap-1.5 min-w-[140px]">
                     <div className="flex items-center gap-2">
-                        <span className={`text-xs font-semibold ${contact.type === 'lead' ? 'text-primary' : contact.type === 'owner' ? 'text-purple-600' : 'text-muted-foreground'}`}>
-                            {getTypeLabel(contact.type)}
-                        </span>
-                        {contact.city && (
+                        {contact.type !== 'lead' ? (
+                            <span className={`text-xs font-semibold ${contact.type === 'owner' ? 'text-purple-600' : 'text-muted-foreground'}`}>
+                                {getTypeLabel(contact.type)}
+                            </span>
+                        ) : null}
+                        {contact.city ? (
                             <span className="text-[10px] text-muted-foreground bg-muted px-1.5 rounded-sm flex items-center gap-1 border">
                                 <MapPin className="h-3 w-3" />
                                 {contact.city}
+                            </span>
+                        ) : (
+                            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 rounded-sm flex items-center gap-1 border italic">
+                                <MapPin className="h-3 w-3" />
+                                Sem cidade
                             </span>
                         )}
                     </div>
@@ -104,11 +119,14 @@ function ContactListRow({
                     )}
                 </div>
 
-                {/* 3. Status + SLA */}
-                <div className="flex flex-col items-start lg:items-center gap-1.5 min-w-[140px]">
-                    <Badge variant={getStatusColor(optimisticStatus) as "default" | "secondary" | "destructive" | "outline"} className="whitespace-nowrap">
-                        {getStatusLabel(optimisticStatus)}
-                    </Badge>
+                {/* 3. Status + Funil + SLA */}
+                <div className="flex flex-col items-start lg:items-center gap-1.5 min-w-[180px]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant={getStatusColor(optimisticStatus) as "default" | "secondary" | "destructive" | "outline"} className="whitespace-nowrap">
+                            {getStatusLabel(optimisticStatus)}
+                        </Badge>
+                        <DealStageBadge stage={contact.deal_stage} className="text-[10px] px-2 py-0.5" />
+                    </div>
                     {slaBadge && (
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${slaBadge.className}`}>
                             SLA: {slaBadge.label}
@@ -124,18 +142,24 @@ function ContactListRow({
                                 <div className="flex items-center gap-1.5 text-xs text-foreground">
                                     <Badge variant="secondary" className="px-1.5 text-[10px] h-4">Site</Badge>
                                     <Globe className="h-3 w-3 text-muted-foreground" />
-                                    <span className="truncate max-w-[100px]">{siteMeta.domain || "Geral"}</span>
+                                    <span className="truncate max-w-[100px]">{getContactDomainLabel(siteMeta.domain)}</span>
                                 </div>
                                 {siteMeta.lastEventAt && (
                                     <span className="text-[10px] text-muted-foreground">
                                         Último lead: {formatDateTime(siteMeta.lastEventAt)}
                                     </span>
                                 )}
+                                <span className="text-xs font-medium text-foreground truncate" title={contact.leadPropertyContext?.title || undefined}>
+                                    Imóvel: {contact.leadPropertyContext?.title || "Interesse não identificado"}
+                                </span>
+                                <span className="text-[11px] text-muted-foreground truncate" title={contact.assignedProfileName || undefined}>
+                                    Responsável: {contact.assignedProfileName || "Sem responsável"}
+                                </span>
                             </>
                         ) : (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Badge variant="outline" className="px-1.5 text-[10px] h-4 capitalize">
-                                    {siteMeta.source || "Origem"}
+                                <Badge variant="outline" className="px-1.5 text-[10px] h-4">
+                                    {getContactSourceLabel(siteMeta.source)}
                                 </Badge>
                                 {siteMeta.lastEventAt && (
                                     <span className="text-[10px]">

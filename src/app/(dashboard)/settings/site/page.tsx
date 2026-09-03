@@ -82,7 +82,7 @@ export default async function SiteSettingsPage() {
         <div>
           <h1 className="text-lg font-semibold md:text-2xl">Site Público</h1>
           <p className="text-muted-foreground">
-            Apenas <span className="font-medium">owner/manager</span> podem editar o site.
+            Apenas gestores podem editar o site.
           </p>
         </div>
         <Link href="/settings">
@@ -92,13 +92,63 @@ export default async function SiteSettingsPage() {
     )
   }
 
-  const [{ data: settings }, { data: pages }, { data: banners }, { data: domain }, { count: publicCount }, { count: siteLeadCount }, { data: news }, { data: links }] = await Promise.all([
-    supabase.from("site_settings").select("*").eq("organization_id", org.id).maybeSingle(),
-    supabase
-      .from("site_pages")
+  const loadSiteSettings = async () => {
+    const orgId = profile.organization_id as string
+    const preferred = await supabase
+      .from("site_settings")
       .select("*")
-      .eq("organization_id", org.id)
-      .order("key", { ascending: true }),
+      .eq("organization_id", orgId)
+      .maybeSingle()
+
+    if (!preferred.error) {
+      return preferred
+    }
+
+    const errorMessage =
+      `${preferred.error.code ?? ""} ${preferred.error.message ?? ""} ${preferred.error.details ?? ""} ${preferred.error.hint ?? ""}`.trim()
+
+    const isMissingColumn =
+      preferred.error.code === "42703" ||
+      errorMessage.includes("whatsapp_onboarding_collapsed") ||
+      errorMessage.includes("column")
+
+    if (isMissingColumn) {
+      console.warn("Schema drift detected in site_settings (missing whatsapp_onboarding_collapsed). Falling back.")
+      const fallback = await supabase
+        .from("site_settings")
+        .select(
+          "organization_id, theme, brand_name, logo_url, logo_path, primary_color, secondary_color, whatsapp, phone, email, ga4_measurement_id, meta_pixel_id, google_site_verification, facebook_domain_verification, google_ads_conversion_id, google_ads_conversion_label, onboarding_collapsed"
+        )
+        .eq("organization_id", orgId)
+        .maybeSingle()
+
+      if (fallback.data) {
+        return {
+          ...fallback,
+          data: {
+            ...fallback.data,
+            whatsapp_onboarding_collapsed: false,
+          },
+        }
+      }
+      return fallback
+    }
+
+    return preferred
+  }
+
+  const [
+    { data: settings },
+    { data: pages },
+    { data: banners },
+    { data: domain },
+    { count: publicCount },
+    { count: siteLeadCount },
+    { data: news },
+    { data: links },
+  ] = await Promise.all([
+    loadSiteSettings(),
+    supabase.from("site_pages").select("*").eq("organization_id", org.id).order("key", { ascending: true }),
     supabase
       .from("site_banners")
       .select("*")
@@ -149,7 +199,6 @@ export default async function SiteSettingsPage() {
         }}
       />
       <SiteContentAdmin
-        org={org as OrgInfo}
         initial={{
           news: (news ?? []) as unknown as Array<{
             id: string

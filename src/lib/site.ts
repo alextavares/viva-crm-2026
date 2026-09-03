@@ -4,7 +4,7 @@ import type {
   SupabaseClient,
 } from "@supabase/supabase-js"
 
-export type SiteTheme = "search_first" | "premium"
+export type SiteTheme = "search_first" | "search_highlights" | "premium" | "trust_first" | "compact_mobile"
 
 export type SitePageKey = "about" | "contact" | "lgpd"
 
@@ -111,6 +111,16 @@ export type SitePublicProperty = {
   images: string[] | null
   image_paths?: string[] | null
   address: { city: string | null; state: string | null; neighborhood: string | null } | null
+  responsible_broker?: SiteResponsibleBroker | null
+}
+
+export type SiteResponsibleBroker = {
+  full_name: string | null
+  avatar_url: string | null
+  avatar_path: string | null
+  creci: string | null
+  whatsapp: string | null
+  response_time_label: string | null
 }
 
 export type SiteCreateLeadResult = {

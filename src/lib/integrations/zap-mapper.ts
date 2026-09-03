@@ -1,4 +1,5 @@
 import { create } from 'xmlbuilder2';
+import type { PropertyTypeValue } from '@/lib/types';
 
 // Basic CRM types needed for the mapper
 export type CRMProperty = {
@@ -10,7 +11,7 @@ export type CRMProperty = {
     price: number | null;
     condo_fee?: number | null;
     iptu?: number | null;
-    type: string | null; // apartment, house, land, commercial
+    type: string | null; // apartment, house, condominium_house, land, commercial, commercial_space
     transaction_type?: string | null; // sale, rent, seasonal
     status: string | null; // available, sold, rented
     features: {
@@ -40,24 +41,19 @@ export type CRMProperty = {
     updated_at: string;
 };
 
+const ZAP_PROPERTY_TYPE_MAP: Record<PropertyTypeValue, string> = {
+    apartment: 'Apartamento',
+    house: 'Casa',
+    condominium_house: 'Casa de Condominio',
+    land: 'Lote/Terreno',
+    commercial: 'Comercial',
+    commercial_space: 'Comercial',
+}
+
 // Maps CRM internal property types to Zap/VivaReal Types
 export function mapPropertyType(crmType: string | null): string {
-    switch (crmType) {
-        case 'apartment':
-            return 'Apartamento';
-        case 'house':
-            return 'Casa';
-        case 'condominium_house':
-            return 'Casa de Condominio';
-        case 'land':
-            return 'Lote/Terreno';
-        case 'commercial':
-            return 'Comercial';
-        case 'commercial_space':
-            return 'Comercial';
-        default:
-            return 'Outros'; // Fallback
-    }
+    if (!crmType) return 'Outros'
+    return ZAP_PROPERTY_TYPE_MAP[crmType as PropertyTypeValue] ?? 'Outros'
 }
 
 export function mapTransactionType(property: CRMProperty): 'For Sale' | 'For Rent' {

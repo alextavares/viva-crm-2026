@@ -1,5 +1,6 @@
 import "server-only"
 import { createClient } from "@supabase/supabase-js"
+import type { Database } from "@/lib/supabase/database.types"
 
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -9,7 +10,7 @@ export function createAdminClient() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
   }
 
-  return createClient(url, serviceRoleKey, {
+  return createClient<Database>(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

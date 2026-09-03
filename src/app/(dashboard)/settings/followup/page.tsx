@@ -83,7 +83,6 @@ export default async function FollowupSettingsPage() {
 
       <div className="rounded-lg border bg-muted/10 p-4">
         <FollowupSettingsForm
-          organizationId={organizationId}
           canManage={isAdmin}
           tableReady={tableReady}
           initial={initial}

@@ -9,9 +9,11 @@ type ContactsFiltersInstantProps = {
   baseRoute: string
   view: string
   scope: string
+  hasActiveFilters: boolean
   initialValues: {
     q: string
     status: string
+    dealStage: string
     origin: string
     domain: string
     domainState: string
@@ -24,6 +26,7 @@ export function ContactsFiltersInstant({
   baseRoute,
   view,
   scope,
+  hasActiveFilters,
   initialValues,
 }: ContactsFiltersInstantProps) {
   const router = useRouter()
@@ -33,6 +36,7 @@ export function ContactsFiltersInstant({
 
   const [q, setQ] = useState(initialValues.q)
   const [status, setStatus] = useState(initialValues.status)
+  const [dealStage, setDealStage] = useState(initialValues.dealStage)
   const [origin, setOrigin] = useState(initialValues.origin)
   const [domain, setDomain] = useState(initialValues.domain)
   const [domainState, setDomainState] = useState(initialValues.domainState)
@@ -45,6 +49,7 @@ export function ContactsFiltersInstant({
     (values: {
       q: string
       status: string
+      dealStage: string
       origin: string
       domain: string
       domainState: string
@@ -59,6 +64,9 @@ export function ContactsFiltersInstant({
 
       if (values.status && values.status !== "all") params.set("status", values.status)
       else params.delete("status")
+
+      if (values.dealStage && values.dealStage !== "all") params.set("dealStage", values.dealStage)
+      else params.delete("dealStage")
 
       if (scope !== "site" && values.origin && values.origin !== "all") params.set("origin", values.origin)
       else params.delete("origin")
@@ -95,6 +103,7 @@ export function ContactsFiltersInstant({
     const nextQuery = buildQueryString({
       q: debouncedQ,
       status,
+      dealStage,
       origin,
       domain: debouncedDomain,
       domainState,
@@ -112,6 +121,7 @@ export function ContactsFiltersInstant({
     buildQueryString,
     debouncedDomain,
     debouncedQ,
+    dealStage,
     domainState,
     origin,
     pathname,
@@ -122,10 +132,10 @@ export function ContactsFiltersInstant({
   ])
 
   return (
-    <form method="get" className="grid gap-3 rounded-lg border bg-card p-3 md:grid-cols-6" action={baseRoute}>
+    <form method="get" className="grid gap-3 rounded-lg border bg-card p-3 md:grid-cols-7" action={baseRoute}>
       <input type="hidden" name="view" value={view} />
       <div className="md:col-span-2">
-        <label className="mb-1 block text-xs text-muted-foreground">Buscar</label>
+        <label className="mb-1 block text-xs text-muted-foreground">Buscar contato</label>
         <input
           name="q"
           value={q}
@@ -144,10 +154,29 @@ export function ContactsFiltersInstant({
         >
           <option value="all">Todos</option>
           <option value="new">Novo</option>
-          <option value="contacted">Contactado</option>
+          <option value="contacted">Em atendimento</option>
           <option value="qualified">Qualificado</option>
           <option value="lost">Perdido</option>
           <option value="won">Ganho</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">Funil comercial</label>
+        <select
+          name="dealStage"
+          value={dealStage}
+          onChange={(e) => setDealStage(e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="all">Todos</option>
+          <option value="lead">Lead</option>
+          <option value="interest">Interesse</option>
+          <option value="visit">Visita</option>
+          <option value="negotiation">Negociação</option>
+          <option value="closing">Fechamento</option>
+          <option value="won">Ganho</option>
+          <option value="lost">Perdido</option>
         </select>
       </div>
 
@@ -173,11 +202,12 @@ export function ContactsFiltersInstant({
             <option value="all">Todas</option>
             <option value="site">Site</option>
           </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">Outras origens aparecem direto na ficha do contato.</p>
         </div>
       )}
 
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">Domínio/Site</label>
+        <label className="mb-1 block text-xs text-muted-foreground">Domínio do site</label>
         <input
           name="domain"
           value={domain}
@@ -211,26 +241,26 @@ export function ContactsFiltersInstant({
               className="h-9 w-full rounded-md border bg-background px-3 text-sm"
             >
               <option value="all">Todos</option>
-              <option value="yes">Com WhatsApp</option>
+              <option value="yes">Com telefone</option>
             </select>
           </div>
         </>
       ) : null}
 
-      <div className="md:col-span-6 flex justify-end gap-2">
-        <Button type="submit" variant="outline">
-          Aplicar filtros
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            const href = view === "board" ? `${baseRoute}?view=board` : baseRoute
-            router.replace(href, { scroll: false })
-          }}
-        >
-          Limpar
-        </Button>
+      <div className="md:col-span-6 flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">Os filtros são aplicados automaticamente.</span>
+        {hasActiveFilters ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              const href = view === "board" ? `${baseRoute}?view=board` : baseRoute
+              router.replace(href, { scroll: false })
+            }}
+          >
+            Limpar filtros
+          </Button>
+        ) : null}
       </div>
     </form>
   )

@@ -41,7 +41,7 @@ export function PublicPremiumShowcase({
           </p>
           <div className="mt-3 text-lg font-semibold">Fale com a equipe e receba uma selecao alinhada ao seu perfil.</div>
           <p className="mt-2 text-sm text-muted-foreground">
-            O contato entra no CRM e o time retorna com abordagem consultiva via WhatsApp, telefone ou e-mail.
+            O contato segue para a equipe e o retorno acontece com abordagem consultiva via WhatsApp, telefone ou e-mail.
           </p>
           <Link
             href={`${homeHref === "/" ? "" : homeHref}/contact`}

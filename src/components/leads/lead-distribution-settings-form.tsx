@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase/client"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { displayEmptyForZero, parseNumberInput } from "@/lib/utils"
+import { saveLeadDistributionSettings } from "@/app/actions/settings"
+import { redistributeOverdueLeadsNow } from "@/app/actions/followups"
 
 type SettingsRow = {
   organization_id: string
@@ -16,65 +18,91 @@ type SettingsRow = {
 }
 
 type Props = {
-  organizationId: string
   canManage: boolean
   tableReady: boolean
   initial: SettingsRow
 }
 
-export function LeadDistributionSettingsForm({ organizationId, canManage, tableReady, initial }: Props) {
-  const supabase = createClient()
-  const [isSaving, setIsSaving] = useState(false)
+export function LeadDistributionSettingsForm({ canManage, tableReady, initial }: Props) {
+  const initialSlaMinutes = Math.min(Math.max(initial.sla_minutes || 15, 1), 1440)
+  const [savedSettings, setSavedSettings] = useState({
+    enabled: Boolean(initial.enabled),
+    slaMinutes: initialSlaMinutes,
+    redistributeOverdue: Boolean(initial.redistribute_overdue),
+  })
   const [isProcessing, setIsProcessing] = useState(false)
-  const [enabled, setEnabled] = useState(Boolean(initial.enabled))
-  const [slaMinutes, setSlaMinutes] = useState(Math.min(Math.max(initial.sla_minutes || 15, 1), 1440))
-  const [redistributeOverdue, setRedistributeOverdue] = useState(Boolean(initial.redistribute_overdue))
+  const [enabled, setEnabled] = useState(savedSettings.enabled)
+  const [slaMinutes, setSlaMinutes] = useState<string | number>(savedSettings.slaMinutes)
+  const [redistributeOverdue, setRedistributeOverdue] = useState(savedSettings.redistributeOverdue)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+  const isBusy = isPending || isProcessing
+  const normalizedSlaMinutes = Math.min(Math.max(Number(slaMinutes) || 15, 1), 1440)
+  const hasChanges =
+    enabled !== savedSettings.enabled ||
+    normalizedSlaMinutes !== savedSettings.slaMinutes ||
+    redistributeOverdue !== savedSettings.redistributeOverdue
 
   const save = async () => {
     if (!canManage || !tableReady) return
-    setIsSaving(true)
-    try {
-      const safeSla = Math.min(Math.max(Number(slaMinutes) || 15, 1), 1440)
+    setErrorMsg(null)
+    const safeSla = normalizedSlaMinutes
 
-      const { error } = await supabase.from("lead_distribution_settings").upsert({
-        organization_id: organizationId,
-        enabled,
-        mode: "round_robin",
-        sla_minutes: safeSla,
-        redistribute_overdue: redistributeOverdue,
-        updated_at: new Date().toISOString(),
-      })
+    startTransition(() => {
+      void (async () => {
+        const result = await saveLeadDistributionSettings({
+          enabled,
+          slaMinutes: safeSla,
+          redistributeOverdue,
+        })
 
-      if (error) throw error
-      setSlaMinutes(safeSla)
-      toast.success("Configuração de distribuição salva.")
-    } catch (error) {
-      console.error("Error saving lead distribution settings:", error)
-      toast.error("Erro ao salvar distribuição de leads.")
-    } finally {
-      setIsSaving(false)
-    }
+        if (!result.success) {
+          setErrorMsg(result.error)
+          toast.error(result.error)
+          return
+        }
+
+        setSlaMinutes(safeSla)
+        setSavedSettings({
+          enabled,
+          slaMinutes: safeSla,
+          redistributeOverdue,
+        })
+        toast.success("Configuração de distribuição salva.")
+        router.refresh()
+      })()
+    })
   }
 
   const redistributeNow = async () => {
+    if (!canManage || !tableReady) return
+    setErrorMsg(null)
     setIsProcessing(true)
     try {
-      const res = await fetch("/api/jobs/leads/redistribute", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ limit: 50 }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.message || "Falha ao redistribuir.")
+      const result = await redistributeOverdueLeadsNow(50)
+      if (!result.success) {
+        setErrorMsg(result.error)
+        toast.error(result.error)
+        return
+      }
 
-      const result = data?.result || {}
-      toast.success(`Verificados: ${result.checked ?? 0} | Redistribuídos: ${result.reassigned ?? 0}`)
+      toast.success(`Verificados: ${result.data?.checked ?? 0} | Redistribuídos: ${result.data?.reassigned ?? 0}`)
+      router.refresh()
     } catch (error) {
       console.error("Error redistributing overdue leads:", error)
-      toast.error("Erro ao redistribuir leads atrasados.")
+      const message = error instanceof Error ? error.message : "Erro ao redistribuir leads atrasados."
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  const resetChanges = () => {
+    setEnabled(savedSettings.enabled)
+    setSlaMinutes(savedSettings.slaMinutes)
+    setRedistributeOverdue(savedSettings.redistributeOverdue)
   }
 
   return (
@@ -87,22 +115,27 @@ export function LeadDistributionSettingsForm({ organizationId, canManage, tableR
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Distribuição automática de leads</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm font-medium">Distribuição automática de leads</label>
+            <Badge variant={enabled ? "default" : "secondary"}>{enabled ? "Ativa" : "Desligada"}</Badge>
+          </div>
           <div className="flex items-center gap-2">
             <Input
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
               className="h-4 w-4"
-              disabled={!canManage || !tableReady}
+              disabled={!canManage || !tableReady || isBusy}
             />
-            <span className="text-sm text-muted-foreground">Round-robin automático para corretores (broker).</span>
+            <span className="text-sm text-muted-foreground">Distribuição automática entre corretores ativos.</span>
           </div>
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Modo ativo</label>
-          <Input value="Round-robin (somente broker)" readOnly className="text-sm text-muted-foreground" />
+          <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+            Rodízio entre corretores
+          </div>
         </div>
       </div>
 
@@ -113,9 +146,10 @@ export function LeadDistributionSettingsForm({ organizationId, canManage, tableR
             type="number"
             min={1}
             max={1440}
-            value={displayEmptyForZero(slaMinutes)}
-            onChange={(e) => setSlaMinutes(parseNumberInput(e.target.value))}
-            disabled={!canManage || !tableReady}
+            value={slaMinutes}
+            onChange={(e) => setSlaMinutes(e.target.value)}
+            onBlur={() => setSlaMinutes(normalizedSlaMinutes)}
+            disabled={!canManage || !tableReady || isBusy}
           />
           <p className="text-xs text-muted-foreground">
             Verde/Amarelo/Vermelho no CRM será calculado com base neste SLA.
@@ -123,28 +157,71 @@ export function LeadDistributionSettingsForm({ organizationId, canManage, tableR
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Redistribuir leads atrasados</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm font-medium">Redistribuir leads atrasados</label>
+            <Badge variant={redistributeOverdue ? "default" : "secondary"}>
+              {redistributeOverdue ? "Ativa" : "Desligada"}
+            </Badge>
+          </div>
           <div className="flex items-center gap-2">
             <Input
               type="checkbox"
               checked={redistributeOverdue}
               onChange={(e) => setRedistributeOverdue(e.target.checked)}
               className="h-4 w-4"
-              disabled={!canManage || !tableReady}
+              disabled={!canManage || !tableReady || isBusy}
             />
-            <span className="text-sm text-muted-foreground">Permite tirar lead parado e passar para outro broker.</span>
+            <span className="text-sm text-muted-foreground">Permite tirar lead parado e passar para outro corretor.</span>
           </div>
         </div>
       </div>
 
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium">Resumo da configuração</p>
+          {hasChanges ? <Badge variant="outline">Alterações pendentes</Badge> : null}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Badge variant={enabled ? "default" : "secondary"}>
+            Distribuição {enabled ? "ativa" : "desligada"}
+          </Badge>
+          <Badge variant="outline">SLA: {normalizedSlaMinutes} min</Badge>
+          <Badge variant={redistributeOverdue ? "default" : "secondary"}>
+            Redistribuição {redistributeOverdue ? "ativa" : "desligada"}
+          </Badge>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-2">
-        <Button onClick={save} disabled={!canManage || !tableReady || isSaving}>
-          {isSaving ? "Salvando..." : "Salvar configurações"}
+        <Button onClick={save} disabled={!canManage || !tableReady || isBusy || !hasChanges}>
+          {isPending ? "Salvando..." : "Salvar configurações"}
         </Button>
-        <Button variant="outline" onClick={redistributeNow} disabled={!tableReady || isProcessing}>
+        {canManage && hasChanges ? (
+          <Button variant="outline" onClick={resetChanges} disabled={isBusy}>
+            Desfazer alterações
+          </Button>
+        ) : null}
+        <Button
+          variant="outline"
+          onClick={redistributeNow}
+          disabled={!canManage || !tableReady || isBusy || hasChanges}
+        >
           {isProcessing ? "Redistribuindo..." : "Redistribuir atrasados agora"}
         </Button>
       </div>
+      {errorMsg ? <p className="text-sm text-red-600">{errorMsg}</p> : null}
+
+      {!canManage ? (
+        <p className="text-xs text-muted-foreground">
+          Somente gestores podem alterar estas configurações e executar redistribuição manual.
+        </p>
+      ) : hasChanges ? (
+        <p className="text-xs text-muted-foreground">
+          Salve as alterações antes de executar uma redistribuição manual.
+        </p>
+      ) : !hasChanges ? (
+        <p className="text-xs text-muted-foreground">Nenhuma alteração pendente para salvar.</p>
+      ) : null}
     </div>
   )
 }

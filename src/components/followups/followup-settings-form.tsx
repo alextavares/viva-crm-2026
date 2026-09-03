@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { saveFollowupSettings } from "@/app/actions/settings"
+import { processFollowupsNow } from "@/app/actions/followups"
 
 type SettingsRow = {
   organization_id: string
@@ -16,7 +18,6 @@ type SettingsRow = {
 }
 
 type Props = {
-  organizationId: string
   canManage: boolean
   tableReady: boolean
   initial: SettingsRow
@@ -28,10 +29,12 @@ const DEFAULTS = {
   step3d: "Olá {{first_name}}, ainda tenho opções boas para você. Quer que eu te envie uma seleção atualizada?",
 }
 
-export function FollowupSettingsForm({ organizationId, canManage, tableReady, initial }: Props) {
-  const supabase = createClient()
-  const [isSaving, setIsSaving] = useState(false)
+export function FollowupSettingsForm({ canManage, tableReady, initial }: Props) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const isBusy = isPending || isProcessing
   const [enabled, setEnabled] = useState(Boolean(initial.enabled))
   const [step5m, setStep5m] = useState(initial.step_5m_template || DEFAULTS.step5m)
   const [step24h, setStep24h] = useState(initial.step_24h_template || DEFAULTS.step24h)
@@ -39,54 +42,55 @@ export function FollowupSettingsForm({ organizationId, canManage, tableReady, in
 
   const save = async () => {
     if (!canManage || !tableReady) return
-    setIsSaving(true)
-    try {
-      const { error } = await supabase.from("followup_settings").upsert({
-        organization_id: organizationId,
-        enabled,
-        step_5m_template: step5m.trim(),
-        step_24h_template: step24h.trim(),
-        step_3d_template: step3d.trim(),
-        updated_at: new Date().toISOString(),
-      })
+    setErrorMsg(null)
+    startTransition(() => {
+      void (async () => {
+        const result = await saveFollowupSettings({
+          enabled,
+          step5m: step5m.trim(),
+          step24h: step24h.trim(),
+          step3d: step3d.trim(),
+        })
 
-      if (error) throw error
-      toast.success("Configuração de follow-up salva.")
-    } catch (error) {
-      console.error("Error saving followup settings:", error)
-      toast.error("Erro ao salvar follow-up.")
-    } finally {
-      setIsSaving(false)
-    }
+        if (!result.success) {
+          setErrorMsg(result.error)
+          toast.error(result.error)
+          return
+        }
+
+        toast.success("Configuração de follow-up salva.")
+        router.refresh()
+      })()
+    })
   }
 
   const processNow = async () => {
+    if (!canManage || !tableReady) return
+    setErrorMsg(null)
     setIsProcessing(true)
     try {
-      const res = await fetch("/api/jobs/followups/process", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ limit: 50 }),
-      })
-
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data?.message || "Falha ao processar follow-ups.")
+      const result = await processFollowupsNow(50)
+      if (!result.success) {
+        setErrorMsg(result.error)
+        toast.error(result.error)
+        return
       }
 
-      const result = data?.result || {}
-      const processed = Number(result.processed ?? 0)
-      const sent = Number(result.sent ?? 0)
-      const failed = Number(result.failed ?? 0)
-      const blocked = Number(result.blocked ?? 0)
-      const officialSent = Number(result.official_sent ?? 0)
+      const processed = Number(result.data?.processed ?? 0)
+      const sent = Number(result.data?.sent ?? 0)
+      const failed = Number(result.data?.failed ?? 0)
+      const blocked = Number(result.data?.blocked ?? 0)
+      const officialSent = Number(result.data?.official_sent ?? 0)
 
       toast.success(
         `Processado: ${processed} | Enviados: ${sent} | Oficiais: ${officialSent} | Bloqueados (política): ${blocked} | Falhas: ${failed}`
       )
+      router.refresh()
     } catch (error) {
       console.error("Error processing followups:", error)
-      toast.error("Erro ao processar follow-ups.")
+      const message = error instanceof Error ? error.message : "Erro ao processar follow-ups."
+      setErrorMsg(message)
+      toast.error(message)
     } finally {
       setIsProcessing(false)
     }
@@ -109,7 +113,7 @@ export function FollowupSettingsForm({ organizationId, canManage, tableReady, in
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
               className="h-4 w-4"
-              disabled={!canManage || !tableReady}
+              disabled={!canManage || !tableReady || isBusy}
             />
             <span className="text-sm text-muted-foreground">Dispara sequência 5min / 24h / 3dias em novos leads.</span>
           </div>
@@ -124,27 +128,43 @@ export function FollowupSettingsForm({ organizationId, canManage, tableReady, in
 
       <div className="space-y-2">
         <label className="text-sm font-medium">Template 5 minutos</label>
-        <Textarea value={step5m} onChange={(e) => setStep5m(e.target.value)} className="min-h-[90px]" disabled={!canManage || !tableReady} />
+        <Textarea
+          value={step5m}
+          onChange={(e) => setStep5m(e.target.value)}
+          className="min-h-[90px]"
+          disabled={!canManage || !tableReady || isBusy}
+        />
       </div>
 
       <div className="space-y-2">
         <label className="text-sm font-medium">Template 24 horas</label>
-        <Textarea value={step24h} onChange={(e) => setStep24h(e.target.value)} className="min-h-[90px]" disabled={!canManage || !tableReady} />
+        <Textarea
+          value={step24h}
+          onChange={(e) => setStep24h(e.target.value)}
+          className="min-h-[90px]"
+          disabled={!canManage || !tableReady || isBusy}
+        />
       </div>
 
       <div className="space-y-2">
         <label className="text-sm font-medium">Template 3 dias</label>
-        <Textarea value={step3d} onChange={(e) => setStep3d(e.target.value)} className="min-h-[90px]" disabled={!canManage || !tableReady} />
+        <Textarea
+          value={step3d}
+          onChange={(e) => setStep3d(e.target.value)}
+          className="min-h-[90px]"
+          disabled={!canManage || !tableReady || isBusy}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button onClick={save} disabled={!canManage || !tableReady || isSaving}>
-          {isSaving ? "Salvando..." : "Salvar configurações"}
+        <Button onClick={save} disabled={!canManage || !tableReady || isPending}>
+          {isPending ? "Salvando..." : "Salvar configurações"}
         </Button>
-        <Button variant="outline" onClick={processNow} disabled={!tableReady || isProcessing}>
+        <Button variant="outline" onClick={processNow} disabled={!tableReady || isProcessing || isPending}>
           {isProcessing ? "Processando..." : "Processar follow-ups agora"}
         </Button>
       </div>
+      {errorMsg ? <p className="text-sm text-red-600">{errorMsg}</p> : null}
     </div>
   )
 }

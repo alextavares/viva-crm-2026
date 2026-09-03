@@ -1,8 +1,7 @@
 'use client'
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
 import { Loader2, Upload, AlertTriangle, CheckCircle2 } from "lucide-react"
 import Papa from "papaparse"
+import type { PropertyImportBatchSummary } from "@/lib/types"
 
 type ImportSummary = {
     total: number
@@ -39,14 +39,14 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export function PropertyImportCsv() {
-    const { user, role, organizationId } = useAuth()
-    const supabase = useMemo(() => createClient(), [])
+    const { role } = useAuth()
 
     const [csvFile, setCsvFile] = useState<File | null>(null)
     const [isParsing, setIsParsing] = useState(false)
     const [isImporting, setIsImporting] = useState(false)
     const [progress, setProgress] = useState({ current: 0, total: 0 })
     const [summary, setSummary] = useState<ImportSummary | null>(null)
+    const [importError, setImportError] = useState<string | null>(null)
 
     const [data, setData] = useState<MappedProperty[] | null>(null)
     const [preview, setPreview] = useState<{
@@ -55,6 +55,7 @@ export function PropertyImportCsv() {
     } | null>(null)
 
     const isAdmin = role === "owner" || role === "manager"
+
     const canPreview = !!csvFile && !isParsing && !isImporting
     const canImport = !!preview && !!data && !isParsing && !isImporting
 
@@ -63,6 +64,7 @@ export function PropertyImportCsv() {
         setSummary(null)
         setProgress({ current: 0, total: 0 })
         setData(null)
+        setImportError(null)
     }
 
     const handlePreview = () => {
@@ -71,7 +73,7 @@ export function PropertyImportCsv() {
         setIsParsing(true)
         resetOutputs()
 
-        Papa.parse(csvFile, {
+        Papa.parse<Record<string, string>>(csvFile, {
             header: true,
             skipEmptyLines: true,
             complete: (results) => {
@@ -82,7 +84,7 @@ export function PropertyImportCsv() {
                     return
                 }
 
-                const rows = results.data as Record<string, string>[]
+                const rows = results.data
                 // Transform and validate rows here in preview
                 const mapped = rows.map((r, idx) => {
                     return {
@@ -134,106 +136,87 @@ export function PropertyImportCsv() {
         })
     }
 
-    const getExistingPublishedMap = async (orgId: string): Promise<Map<string, boolean>> => {
-        const published = new Map<string, boolean>()
-        let offset = 0
-        const pageSize = 1000
+    const persistBatch = async (items: MappedProperty[]): Promise<PropertyImportBatchSummary> => {
+        const response = await fetch("/api/properties/import-batch", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ items }),
+        })
 
-        while (true) {
-            const { data, error } = await supabase
-                .from("properties")
-                .select("external_id, hide_from_site")
-                .eq("organization_id", orgId)
-                .not("external_id", "is", null)
-                .range(offset, offset + pageSize - 1)
+        const payload = (await response.json()) as
+            | { ok: true; summary: PropertyImportBatchSummary }
+            | { ok: false; message?: string; summary?: PropertyImportBatchSummary }
 
-            if (error) throw error
-            if (!data || data.length === 0) break
-
-            for (const row of data as Array<{ external_id: string | null; hide_from_site: boolean | null }>) {
-                if (!row.external_id) continue
-                published.set(row.external_id, row.hide_from_site === false)
-            }
-
-            if (data.length < pageSize) break
-            offset += pageSize
+        if (!response.ok || !payload.ok) {
+            const message = "message" in payload ? payload.message : undefined
+            throw new Error(message || "Não foi possível persistir o lote de importação.")
         }
 
-        return published
+        return payload.summary
     }
 
     const handleImport = async () => {
-        if (!data || !organizationId || !user) return
+        if (!data) return
         if (!isAdmin) {
-            toast.error("Apenas owner/manager podem importar.")
+            toast.error("Apenas gestores podem importar.")
             return
         }
 
         setIsImporting(true)
         setSummary(null)
+        setImportError(null)
 
         try {
-            const orgId = organizationId
-            const publishedMap = await getExistingPublishedMap(orgId)
-
-            const payloads = data.map((mapped) => {
-                const alreadyPublished = publishedMap.get(mapped.external_id) === true
-                return {
-                    ...mapped,
-                    organization_id: orgId,
-                    hide_from_site: alreadyPublished ? false : true,
-                }
-            })
-
-            setProgress({ current: 0, total: payloads.length })
-            const batches = chunk(payloads, 20)
+            setProgress({ current: 0, total: data.length })
+            const batches = chunk(data, 20)
 
             let created = 0
             let updated = 0
             let errors = 0
+            let firstBatchError: string | null = null
 
             for (let i = 0; i < batches.length; i++) {
                 const batch = batches[i]
 
-                for (const row of batch) {
-                    if (row.external_id && publishedMap.has(row.external_id)) updated++
-                    else created++
-                }
-
-                const controller = new AbortController()
-                const t = setTimeout(() => controller.abort(), 90_000)
-
-                const { error } = await supabase
-                    .from("properties")
-                    .upsert(batch, { onConflict: "organization_id,external_id" })
-                    .abortSignal(controller.signal)
-
-                clearTimeout(t)
-
-                if (error) {
+                try {
+                    const batchSummary = await persistBatch(batch)
+                    created += batchSummary.createdCount
+                    updated += batchSummary.updatedCount
+                    errors += batchSummary.errorCount
+                } catch (error) {
                     errors += batch.length
+                    const message = error instanceof Error ? error.message : "Não foi possível importar um lote."
                     console.error("Import batch error:", error)
+                    if (!firstBatchError) firstBatchError = message
                 }
 
-                const done = Math.min((i + 1) * 20, payloads.length)
-                setProgress({ current: done, total: payloads.length })
+                const done = Math.min((i + 1) * 20, data.length)
+                setProgress({ current: done, total: data.length })
                 await new Promise((r) => setTimeout(r, 0))
             }
 
             setSummary({
-                total: payloads.length,
+                total: data.length,
                 created,
                 updated,
                 errors,
             })
 
+            if (firstBatchError) {
+                setImportError(firstBatchError)
+            }
+
             toast.success("Importação concluída.")
             if (errors > 0) {
-                toast.error("Alguns lotes falharam.")
+                toast.error(firstBatchError || "Alguns lotes falharam.")
             }
         } catch (err) {
             console.error("Import error:", err)
-            toast.error(err instanceof Error ? err.message : "Erro ao importar.")
+            const message = err instanceof Error ? err.message : "Erro ao importar."
+            setImportError(message)
+            toast.error(message)
         } finally {
             setIsImporting(false)
         }
@@ -246,7 +229,7 @@ export function PropertyImportCsv() {
                     <div className="flex items-start gap-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4" />
                         <div>
-                            Apenas <span className="font-medium">owner/manager</span> podem importar imóveis.
+                            Apenas gestores podem importar imóveis.
                         </div>
                     </div>
                 </div>
@@ -275,7 +258,7 @@ export function PropertyImportCsv() {
                     {isParsing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                     Gerar preview
                 </Button>
-                <Button variant="default" onClick={handleImport} disabled={!canImport || !isAdmin || !organizationId}>
+                <Button variant="default" onClick={handleImport} disabled={!canImport || !isAdmin}>
                     {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Importar agora
                 </Button>
@@ -314,6 +297,12 @@ export function PropertyImportCsv() {
                         </div>
                     </CardContent>
                 </Card>
+            ) : null}
+
+            {importError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {importError}
+                </div>
             ) : null}
 
             {isImporting ? (

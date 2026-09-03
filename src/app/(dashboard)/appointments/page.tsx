@@ -15,6 +15,16 @@ export default async function AppointmentsPage({
     searchParams: Promise<{ [key: string]: string | string[] | undefined }> // Updated type
 }) {
     const supabase = await createClient()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    const { data: profile } = user
+        ? await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", user.id)
+              .single()
+        : { data: null }
     const resolvedSearchParams = await searchParams
     const view = resolvedSearchParams?.view as string || 'list'
     const q = typeof resolvedSearchParams?.q === 'string' ? resolvedSearchParams.q.trim() : ''
@@ -23,20 +33,25 @@ export default async function AppointmentsPage({
     const tab: AppointmentsTabValue =
         rawTab === 'scheduled' || rawTab === 'history' || rawTab === 'all' ? rawTab : 'scheduled'
     const nowIso = new Date().toISOString()
+    const isBroker = profile?.role === "broker"
+
+    const scheduledCountQuery = supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'scheduled')
+        .gte('date', nowIso)
+    const historyCountQuery = supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .or(`status.in.(completed,cancelled,no_show),date.lt.${nowIso}`)
+    const allCountQuery = supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
 
     const [scheduledCountResult, historyCountResult, allCountResult] = await Promise.all([
-        supabase
-            .from('appointments')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'scheduled')
-            .gte('date', nowIso),
-        supabase
-            .from('appointments')
-            .select('id', { count: 'exact', head: true })
-            .or(`status.in.(completed,cancelled,no_show),date.lt.${nowIso}`),
-        supabase
-            .from('appointments')
-            .select('id', { count: 'exact', head: true }),
+        isBroker && user?.id ? scheduledCountQuery.eq('assigned_to', user.id) : scheduledCountQuery,
+        isBroker && user?.id ? historyCountQuery.eq('assigned_to', user.id) : historyCountQuery,
+        isBroker && user?.id ? allCountQuery.eq('assigned_to', user.id) : allCountQuery,
     ])
 
     let query = supabase
@@ -48,6 +63,10 @@ export default async function AppointmentsPage({
             profiles (full_name)
         `)
         .order('date', { ascending: true })
+
+    if (isBroker && user?.id) {
+        query = query.eq('assigned_to', user.id)
+    }
 
     if (statusFilter === 'all') {
         if (tab === 'scheduled') {
@@ -84,6 +103,20 @@ export default async function AppointmentsPage({
 
         return haystack.includes(qLower)
     })
+    const now = new Date()
+    const endOfToday = new Date(now)
+    endOfToday.setHours(23, 59, 59, 999)
+    const next48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+
+    const visitsTodayCount = filteredAppointments.filter((appointment) => {
+        const date = new Date(appointment.date)
+        return appointment.status === 'scheduled' && date >= now && date <= endOfToday
+    }).length
+
+    const visits48hCount = filteredAppointments.filter((appointment) => {
+        const date = new Date(appointment.date)
+        return appointment.status === 'scheduled' && date > endOfToday && date <= next48h
+    }).length
 
     const buildAppointmentsHref = (nextView: 'list' | 'calendar') => {
         const params = new URLSearchParams()
@@ -187,6 +220,38 @@ export default async function AppointmentsPage({
                 }}
             />
 
+            <div className="grid gap-3 sm:grid-cols-3">
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Visitas de hoje</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                        <div className="text-2xl font-semibold">{visitsTodayCount}</div>
+                        <p className="text-xs text-muted-foreground">Compromissos que pedem confirmação ou execução hoje.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Próximas 48h</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                        <div className="text-2xl font-semibold">{visits48hCount}</div>
+                        <p className="text-xs text-muted-foreground">Visitas que já pedem preparação nas próximas 48 horas.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">{isBroker ? "Minha agenda" : "Agenda ativa"}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                        <div className="text-2xl font-semibold">{filteredAppointments.length}</div>
+                        <p className="text-xs text-muted-foreground">
+                            {isBroker ? "Visão operacional do corretor neste recorte." : "Compromissos dentro do recorte atual."}
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
+
             {view === 'calendar' ? (
                 <AppointmentsCalendar appointments={filteredAppointments} />
             ) : (
@@ -233,6 +298,20 @@ export default async function AppointmentsPage({
                                                 <span>{appointment.contacts.name}</span>
                                             </div>
                                         )}
+
+                                        <div className="flex flex-wrap gap-2">
+                                            {(() => {
+                                                const appointmentDate = new Date(appointment.date)
+                                                const isToday = appointment.status === 'scheduled' && appointmentDate >= now && appointmentDate <= endOfToday
+                                                const isNext48 = appointment.status === 'scheduled' && appointmentDate > endOfToday && appointmentDate <= next48h
+                                                if (!isToday && !isNext48) return null
+                                                return (
+                                                    <Badge variant={isToday ? 'default' : 'secondary'}>
+                                                        {isToday ? 'Hoje' : 'Próximas 48h'}
+                                                    </Badge>
+                                                )
+                                            })()}
+                                        </div>
 
                                         {appointment.notes && (
                                             <div className="mt-2 pt-2 border-t text-xs text-muted-foreground italic">

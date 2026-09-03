@@ -55,7 +55,7 @@ function ChartSlot({
     const ready = size.width > 0 && size.height > 0
 
     return (
-        <div ref={ref} className="h-[300px] w-full min-w-0">
+        <div ref={ref} className={`w-full min-w-0 ${hasData ? "h-[240px] sm:h-[300px]" : "h-[140px] sm:h-[180px]"}`}>
             {!hasData ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     {emptyText}
@@ -73,11 +73,14 @@ export function DashboardCharts({ propertiesByStatus, leadsByType }: DashboardCh
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Card className="col-span-1 min-w-0">
-                <CardHeader>
-                    <CardTitle>Imóveis por Status</CardTitle>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Imóveis por Status</CardTitle>
                 </CardHeader>
                 <CardContent className="pl-2">
-                    <ChartSlot hasData={propertiesByStatus.length > 0}>
+                    <ChartSlot
+                        hasData={propertiesByStatus.length > 0}
+                        emptyText="Ainda não há imóveis suficientes para montar este gráfico."
+                    >
                         {({ width, height }) => (
                             <BarChart width={width} height={height} data={propertiesByStatus}>
                                 <CartesianGrid strokeDasharray="3 3" />
@@ -93,11 +96,14 @@ export function DashboardCharts({ propertiesByStatus, leadsByType }: DashboardCh
             </Card>
 
             <Card className="col-span-1 min-w-0">
-                <CardHeader>
-                    <CardTitle>Leads por Tipo</CardTitle>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Leads por Tipo</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ChartSlot hasData={leadsByType.length > 0}>
+                    <ChartSlot
+                        hasData={leadsByType.length > 0}
+                        emptyText="Assim que entrarem leads ou clientes, a distribuição aparece aqui."
+                    >
                         {({ width, height }) => (
                             <PieChart width={width} height={height}>
                                 <Pie

@@ -18,16 +18,26 @@ const STAGE_CONFIG: Array<{ stage: DealStage; color: string; barColor: string }>
     { stage: 'negotiation', color: 'text-violet-700 dark:text-violet-300', barColor: 'bg-violet-300 dark:bg-violet-800' },
     { stage: 'closing', color: 'text-amber-700 dark:text-amber-300', barColor: 'bg-amber-300 dark:bg-amber-800' },
     { stage: 'won', color: 'text-emerald-800 dark:text-emerald-300', barColor: 'bg-emerald-400 dark:bg-emerald-700' },
+    { stage: 'lost', color: 'text-rose-700 dark:text-rose-300', barColor: 'bg-rose-300 dark:bg-rose-800' },
 ]
 
 export function SalesFunnel({ stages }: SalesFunnelProps) {
     // Garantir que as contagens fiquem ordenadas do topo da array
     const stageMap = Object.fromEntries(stages.map(s => [s.stage, s.count]))
+    const hasAnyStageCount = stages.some((stage) => stage.count > 0)
 
     // Smooth the funnel so it always looks somewhat like a funnel even with weird data
     // We force a minimum width that decreases down the funnel
     const counts = STAGE_CONFIG.map(({ stage }) => stageMap[stage] ?? 0)
     const maxRealCount = Math.max(1, ...counts)
+
+    if (!hasAnyStageCount) {
+        return (
+            <div className="rounded-lg border border-dashed px-4 py-5 text-sm text-muted-foreground">
+                Ainda sem oportunidades em andamento. Assim que os contatos avançarem, o funil comercial aparece aqui.
+            </div>
+        )
+    }
 
     return (
         <div className="flex flex-col items-center w-full gap-[2px] pt-2">

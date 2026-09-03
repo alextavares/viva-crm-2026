@@ -1,8 +1,4 @@
-'use client'
-
-import { useCallback, useEffect, useRef, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useDebounce } from "@/hooks/use-debounce"
+import { PROPERTY_TYPE_OPTIONS } from "@/lib/types"
 
 type PublicSearchFiltersInstantProps = {
   actionPath: string
@@ -22,75 +18,14 @@ export function PublicSearchFiltersInstant({
   resultCount,
   initialValues,
 }: PublicSearchFiltersInstantProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const isFirstEffect = useRef(true)
-
-  const [q, setQ] = useState(initialValues.q)
-  const [city, setCity] = useState(initialValues.city)
-  const [neighborhood, setNeighborhood] = useState(initialValues.neighborhood)
-  const [type, setType] = useState(initialValues.type)
-  const [minPrice, setMinPrice] = useState(initialValues.min_price)
-  const [maxPrice, setMaxPrice] = useState(initialValues.max_price)
-
-  const debouncedQ = useDebounce(q, 500)
-  const debouncedCity = useDebounce(city, 500)
-  const debouncedNeighborhood = useDebounce(neighborhood, 500)
-  const debouncedMinPrice = useDebounce(minPrice, 500)
-  const debouncedMaxPrice = useDebounce(maxPrice, 500)
-
-  const buildQueryString = useCallback(
-    (values: Record<string, string>) => {
-      const params = new URLSearchParams(searchParams.toString())
-      for (const [key, value] of Object.entries(values)) {
-        const trimmedValue = value.trim()
-        if (!trimmedValue) {
-          params.delete(key)
-          continue
-        }
-        params.set(key, trimmedValue)
-      }
-
-      // Any filter change must restart at page 1.
-      params.delete("page")
-      return params.toString()
-    },
-    [searchParams]
+  const hasActiveFilters = Boolean(
+    initialValues.q ||
+      initialValues.city ||
+      initialValues.neighborhood ||
+      initialValues.type ||
+      initialValues.min_price ||
+      initialValues.max_price
   )
-
-  useEffect(() => {
-    if (isFirstEffect.current) {
-      isFirstEffect.current = false
-      return
-    }
-
-    const nextQuery = buildQueryString({
-      q: debouncedQ,
-      city: debouncedCity,
-      neighborhood: debouncedNeighborhood,
-      type,
-      min_price: debouncedMinPrice,
-      max_price: debouncedMaxPrice,
-    })
-
-    const currentQuery = searchParams.toString()
-    if (nextQuery === currentQuery) return
-
-    const href = nextQuery ? `${pathname}?${nextQuery}` : pathname
-    router.replace(href, { scroll: false })
-  }, [
-    buildQueryString,
-    debouncedCity,
-    debouncedMaxPrice,
-    debouncedMinPrice,
-    debouncedNeighborhood,
-    debouncedQ,
-    pathname,
-    router,
-    searchParams,
-    type,
-  ])
 
   return (
     <form className="mt-4 grid gap-3 sm:grid-cols-2" action={actionPath} method="get">
@@ -98,18 +33,16 @@ export function PublicSearchFiltersInstant({
         <label className="text-xs text-muted-foreground">Palavra-chave</label>
         <input
           name="q"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          defaultValue={initialValues.q}
           className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
-          placeholder="Ex: V-1200, varanda, suíte, 77848263, UUID"
+          placeholder="Ex: V-1200, varanda, suíte, 3 quartos, Maresias"
         />
       </div>
       <div>
         <label className="text-xs text-muted-foreground">Cidade</label>
         <input
           name="city"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
+          defaultValue={initialValues.city}
           className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
           placeholder="Ex: São Paulo"
         />
@@ -118,8 +51,7 @@ export function PublicSearchFiltersInstant({
         <label className="text-xs text-muted-foreground">Bairro</label>
         <input
           name="neighborhood"
-          value={neighborhood}
-          onChange={(e) => setNeighborhood(e.target.value)}
+          defaultValue={initialValues.neighborhood}
           className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
           placeholder="Ex: Moema"
         />
@@ -128,15 +60,15 @@ export function PublicSearchFiltersInstant({
         <label className="text-xs text-muted-foreground">Tipo</label>
         <select
           name="type"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
+          defaultValue={initialValues.type}
           className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
         >
           <option value="">Qualquer</option>
-          <option value="apartment">Apartamento</option>
-          <option value="house">Casa</option>
-          <option value="land">Terreno</option>
-          <option value="commercial">Comercial</option>
+          {PROPERTY_TYPE_OPTIONS.map((propertyType) => (
+            <option key={propertyType.value} value={propertyType.value}>
+              {propertyType.label}
+            </option>
+          ))}
         </select>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -145,8 +77,7 @@ export function PublicSearchFiltersInstant({
           <input
             name="min_price"
             inputMode="numeric"
-            value={minPrice}
-            onChange={(e) => setMinPrice(e.target.value)}
+            defaultValue={initialValues.min_price}
             className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
             placeholder="0"
           />
@@ -156,24 +87,30 @@ export function PublicSearchFiltersInstant({
           <input
             name="max_price"
             inputMode="numeric"
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
+            defaultValue={initialValues.max_price}
             className="mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm"
             placeholder="0"
           />
         </div>
       </div>
-      <div className="sm:col-span-2 flex items-center justify-between gap-3">
+      <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
           Mostrando {resultCount} resultados nesta página
         </div>
-        <button
-          type="submit"
-          className="rounded-2xl px-4 py-2 text-sm font-medium text-white"
-          style={{ backgroundColor: "var(--site-secondary)" }}
-        >
-          Aplicar filtros
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {hasActiveFilters ? (
+            <a href={actionPath} className="rounded-2xl border px-4 py-2 text-sm font-medium">
+              Limpar filtros
+            </a>
+          ) : null}
+          <button
+            type="submit"
+            className="rounded-2xl px-4 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: "var(--site-secondary)" }}
+          >
+            Aplicar filtros
+          </button>
+        </div>
       </div>
     </form>
   )
