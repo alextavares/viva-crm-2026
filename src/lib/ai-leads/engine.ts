@@ -1,5 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { Database } from "@/lib/supabase/database.types"
+import { waMeNumberFromPhone } from "@/lib/whatsapp"
+import {
+  applyQualificationStep,
+  buildAiSummary,
+  computeAiStageScore,
+  hasStrongCommercialTrigger,
+  isCommerciallyQualified,
+  nextAiQuestion,
+  normalizeAiText,
+} from "@/lib/ai-leads/qualification"
+import { resolveAiHandoffBroker } from "@/lib/ai-leads/handoff"
 
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"]
 
@@ -27,8 +39,6 @@ type QualificationRow = Database["public"]["Tables"]["ai_lead_qualifications"]["
 type SendAiMessageResult =
   | { success: true; mode: "sandbox" | "live"; messageId: string; providerMessageId: string | null }
   | { success: false; error: string }
-
-const metaFetch = fetchWithTimeout(15000)
 
 function nowIso() {
   return new Date().toISOString()

@@ -11,6 +11,11 @@ import {
   type PortalKey,
 } from "@/lib/integrations"
 import { getImovelwebReadinessIssues } from "@/lib/integrations/imovelweb-readiness"
+import {
+  rotatePortalCredentials,
+  stripSecretConfigKeys,
+  toCanonicalPortalStatus,
+} from "@/lib/integrations/portal-credentials"
 import { isAdmin, type ActionResult } from "@/lib/types"
 
 const portalKeySchema = z.enum(PORTALS)
@@ -47,7 +52,6 @@ const savePortalIntegrationConfigSchema = z.object({
   exportEnabled: z.boolean(),
   sendOnlyAvailable: z.boolean(),
   sendOnlyWithPhotos: z.boolean(),
-  existingFeedToken: z.string().trim().optional().default(""),
   leadAssignment: portalLeadAssignmentSchema.default("by_property"),
   leadAssignmentFallback: portalLeadAssignmentFallbackSchema.default("owner_manager"),
   slaMinutes: z.coerce.number().int().min(5).max(1440),
@@ -234,7 +238,7 @@ async function getIntegrationAuthContext(): Promise<IntegrationAuthContext> {
 
 export async function savePortalIntegrationConfig(
   input: z.infer<typeof savePortalIntegrationConfigSchema>
-): Promise<ActionResult<{ portal: PortalKey; status: "active" | "inactive" }>> {
+): Promise<ActionResult<{ portal: PortalKey; status: "enabled" | "disabled"; feedSecretOnce: string | null; webhookSecretOnce: string | null }>> {
   try {
     const parsed = savePortalIntegrationConfigSchema.safeParse(input)
     if (!parsed.success) {
@@ -251,16 +255,39 @@ export async function savePortalIntegrationConfig(
 
     const normalizedMostrarMapaRaw = parsed.data.mostrarMapa.toUpperCase()
     const normalizedMostrarMapa = normalizedMostrarMapaRaw === "EXATO" ? "EXACTO" : normalizedMostrarMapaRaw
-    const feedToken =
-      parsed.data.enabled && parsed.data.exportEnabled
-        ? parsed.data.existingFeedToken || crypto.randomUUID()
-        : parsed.data.existingFeedToken || ""
+    const nextStatus = toCanonicalPortalStatus(parsed.data.enabled)
 
-    const nextConfig = {
+    // Canonical credential boundary: enabling (fresh or transition) rotates
+    // distinct feed/webhook secrets via private.integration_credentials.
+    // Secrets are returned once and NEVER persisted in config (forbidden);
+    // only last4 fingerprints are stored.
+    let feedSecretOnce: string | null = null
+    let webhookSecretOnce: string | null = null
+    let feedLast4 = ""
+    let webhookLast4 = ""
+    if (parsed.data.enabled) {
+      const { data: existing } = await auth.supabase
+        .from("portal_integrations")
+        .select("status")
+        .eq("organization_id", auth.profile.organization_id)
+        .eq("portal", parsed.data.portal)
+        .maybeSingle()
+      if ((existing?.status as string | undefined) !== "enabled") {
+        const rotated = await rotatePortalCredentials(auth.supabase, parsed.data.portal)
+        if (!rotated.ok) {
+          return { success: false, error: rotated.error }
+        }
+        feedSecretOnce = rotated.rotation.feedSecretOnce
+        webhookSecretOnce = rotated.rotation.webhookSecretOnce
+        feedLast4 = rotated.rotation.feedLast4
+        webhookLast4 = rotated.rotation.webhookLast4
+      }
+    }
+
+    const nextConfig = stripSecretConfigKeys({
       export_enabled: parsed.data.exportEnabled,
       send_only_available: parsed.data.sendOnlyAvailable,
       send_only_with_photos: parsed.data.sendOnlyWithPhotos,
-      feed_token: feedToken,
       lead_assignment: parsed.data.leadAssignment,
       lead_assignment_fallback: parsed.data.leadAssignmentFallback,
       sla_minutes: parsed.data.slaMinutes,
@@ -275,13 +302,15 @@ export async function savePortalIntegrationConfig(
           ? normalizedMostrarMapa
           : "NO",
       localidade_mappings_raw: parsed.data.localidadeMappingsRaw,
-    }
+      ...(feedLast4 ? { feed_credential_last4: feedLast4 } : {}),
+      ...(webhookLast4 ? { webhook_credential_last4: webhookLast4 } : {}),
+    })
 
     const { error } = await auth.supabase.from("portal_integrations").upsert(
       {
         organization_id: auth.profile.organization_id,
         portal: parsed.data.portal,
-        status: parsed.data.enabled ? "active" : "inactive",
+        status: nextStatus,
         config: nextConfig,
         updated_at: new Date().toISOString(),
       },
@@ -300,7 +329,9 @@ export async function savePortalIntegrationConfig(
       success: true,
       data: {
         portal: parsed.data.portal,
-        status: parsed.data.enabled ? "active" : "inactive",
+        status: nextStatus,
+        feedSecretOnce,
+        webhookSecretOnce,
       },
     }
   } catch (error) {

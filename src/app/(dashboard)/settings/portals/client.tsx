@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Copy, Play, Pause, ExternalLink } from "lucide-react"
 import { togglePortalIntegration } from "@/app/actions/settings"
+import { isPortalIntegrationActive } from "@/lib/integrations/portal-credentials"
 
 // Available Portals defined here
 const AVAILABLE_PORTALS = [
@@ -36,12 +37,12 @@ export default function PortalIntegrationsClient({
     const [integrations, setIntegrations] = useState(initialIntegrations)
     const [loadingId, setLoadingId] = useState<string | null>(null)
     const [portalErrors, setPortalErrors] = useState<Record<string, string | null>>({})
+    const [lastSecrets, setLastSecrets] = useState<Record<string, { feed: string; webhook: string }>>({})
 
     const handleToggleStatus = async (portalId: string, currentIntegration?: Record<string, unknown>) => {
         setLoadingId(portalId)
         setPortalErrors((prev) => ({ ...prev, [portalId]: null }))
-        const isCurrentlyActive = currentIntegration?.status === "active"
-        const newStatus = isCurrentlyActive ? "inactive" : "active"
+        const isCurrentlyActive = isPortalIntegrationActive(currentIntegration?.status)
 
         const result = await togglePortalIntegration({
             portal: portalId as "zap_vivareal" | "imovelweb",
@@ -55,6 +56,16 @@ export default function PortalIntegrationsClient({
             return
         }
 
+        if (result.data?.feedSecretOnce || result.data?.webhookSecretOnce) {
+            setLastSecrets((prev) => ({
+                ...prev,
+                [portalId]: {
+                    feed: result.data?.feedSecretOnce ?? "",
+                    webhook: result.data?.webhookSecretOnce ?? "",
+                },
+            }))
+        }
+
         setIntegrations((prev) => {
             const existing = prev.find(i => i.portal === portalId)
             const updatedIntegration = result.data?.integration ?? {}
@@ -65,7 +76,7 @@ export default function PortalIntegrationsClient({
         })
 
         router.refresh()
-        toast.success(`Integração com ${AVAILABLE_PORTALS.find(p => p.id === portalId)?.name} ${newStatus === 'active' ? 'ativada' : 'pausada'}.`)
+        toast.success(`Integração com ${AVAILABLE_PORTALS.find(p => p.id === portalId)?.name} ${!isCurrentlyActive ? 'ativada' : 'pausada'}.`)
     }
 
     const copyToClipboard = useCallback((text: string) => {
@@ -77,19 +88,19 @@ export default function PortalIntegrationsClient({
         <div className="grid gap-6 md:grid-cols-2">
             {AVAILABLE_PORTALS.map((portal) => {
                 const integration = integrations.find((i) => i.portal === portal.id)
-                const isActive = integration?.status === "active"
-                const config = integration?.config as Record<string, unknown> | undefined
-                const token = config?.feed_token as string | undefined
+                const isActive = isPortalIntegrationActive(integration?.status)
                 const isLoading = loadingId === portal.id
+                const rotated = lastSecrets[portal.id]
 
                 let feedUrl = ""
                 let webhookUrl = ""
-                if (token && orgSlug) {
-                    // We infer the public URL based on current window location
+                if (orgSlug) {
+                    // Canonical boundary: secrets live in private credentials
+                    // (shown once on rotation below), so URLs carry no token.
                     const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://app.vivacrm.com.br'
-                    feedUrl = `${baseUrl}/api/public/s/${orgSlug}/${portal.endpoint}?token=${token}`
+                    feedUrl = `${baseUrl}/api/public/s/${orgSlug}/${portal.endpoint}`
                     const webhookPortalType = portal.id === "zap_vivareal" ? "zap" : portal.id
-                    webhookUrl = `${baseUrl}/api/public/webhooks/${orgSlug}/${webhookPortalType}?token=${token}`
+                    webhookUrl = `${baseUrl}/api/public/webhooks/${orgSlug}/${webhookPortalType}`
                 }
 
                 return (
@@ -156,6 +167,13 @@ export default function PortalIntegrationsClient({
                                             <Copy className="h-4 w-4" />
                                         </Button>
                                     </div>
+                                    {rotated ? (
+                                        <div className="mt-3 space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs">
+                                            <p className="font-medium">Novas credenciais — copie agora, não serão exibidas novamente.</p>
+                                            <p>Feed: <code className="break-all">{rotated.feed}</code></p>
+                                            <p>Webhook: <code className="break-all">{rotated.webhook}</code></p>
+                                        </div>
+                                    ) : null}
                                 </div>
                             ) : (
                                 <div className="flex items-center justify-center h-24 bg-muted/30 rounded-md border border-dashed">

@@ -101,7 +101,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       if (msg.includes("invalid bounded webhook payload")) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
       }
-      // eslint-disable-next-line no-console
       console.error("[Webhook Imovelweb] ingest failed")
       return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
@@ -112,7 +111,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       { status: 200 }
     )
   } catch {
-    // eslint-disable-next-line no-console
     console.error("[Webhook Imovelweb] unhandled error")
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }

@@ -37,21 +37,6 @@ const DEFAULTS: Omit<WhatsAppAddonPricingRow, "organization_id"> = {
   billing_timezone: "America/Sao_Paulo",
 }
 
-const AI_REENGAGEMENT_DEFAULTS: Omit<AiReengagementSettingsRow, "organization_id"> = {
-  enabled: false,
-  first_delay_minutes: 15,
-  second_delay_minutes: 120,
-  third_delay_minutes: 1440,
-  inactive_message_template:
-    "Olá {{first_name}}, seguimos por aqui para te ajudar com sua busca. Se quiser, posso retomar seu atendimento agora.",
-  handoff_message_template:
-    "Olá {{first_name}}, seu atendimento segue em andamento por aqui. Se quiser continuar agora, me responda nesta conversa.",
-  sla_minutes: 30,
-  final_escalation_delay_minutes: 30,
-  notify_broker: true,
-  notify_manager: true,
-}
-
 export default async function WhatsAppAddonSettingsPage() {
   const supabase = await createClient()
   const {

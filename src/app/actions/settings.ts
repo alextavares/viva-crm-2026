@@ -4,6 +4,12 @@ import { resolveCname } from "node:dns/promises"
 import { z } from "zod"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import {
+  isPortalIntegrationActive,
+  rotatePortalCredentials,
+  stripSecretConfigKeys,
+  toCanonicalPortalStatus,
+} from "@/lib/integrations/portal-credentials"
 import { isAdmin, messageTemplateSchema, type ActionResult, type MessageTemplate } from "@/lib/types"
 
 const leadDistributionSchema = z.object({
@@ -931,7 +937,7 @@ export async function deleteSiteBanner(input: { id: string }): Promise<ActionRes
 
 export async function togglePortalIntegration(input: {
     portal: "zap_vivareal" | "imovelweb"
-}): Promise<ActionResult<{ integration: Record<string, unknown> }>> {
+}): Promise<ActionResult<{ integration: Record<string, unknown>; feedSecretOnce: string | null; webhookSecretOnce: string | null }>> {
     try {
         const parsed = portalToggleSchema.safeParse(input)
         if (!parsed.success) {
@@ -951,11 +957,25 @@ export async function togglePortalIntegration(input: {
             .eq("portal", parsed.data.portal)
             .maybeSingle()
 
-        const isCurrentlyActive = existing?.status === "active"
-        const nextStatus = isCurrentlyActive ? "inactive" : "active"
-        const config = ((existing?.config as Record<string, unknown> | null) ?? {}) as Record<string, unknown>
-        if (nextStatus === "active" && !config.feed_token) {
-            config.feed_token = crypto.randomUUID().replace(/-/g, "")
+        const isCurrentlyActive = isPortalIntegrationActive(existing?.status)
+        const nextStatus = toCanonicalPortalStatus(!isCurrentlyActive)
+        // Canonical credential boundary: enabling rotates distinct
+        // feed/webhook secrets (returned once, never stored). Carried-over
+        // config is stripped of any legacy secret keys.
+        let feedSecretOnce: string | null = null
+        let webhookSecretOnce: string | null = null
+        const config = stripSecretConfigKeys(
+          ((existing?.config as Record<string, unknown> | null) ?? {}) as Record<string, unknown>
+        )
+        if (nextStatus === "enabled" && existing?.status !== "enabled") {
+            const rotated = await rotatePortalCredentials(auth.supabase, parsed.data.portal)
+            if (!rotated.ok) {
+                return { success: false, error: rotated.error }
+            }
+            feedSecretOnce = rotated.rotation.feedSecretOnce
+            webhookSecretOnce = rotated.rotation.webhookSecretOnce
+            config.feed_credential_last4 = rotated.rotation.feedLast4
+            config.webhook_credential_last4 = rotated.rotation.webhookLast4
         }
 
         const { data, error } = await auth.supabase
@@ -975,7 +995,7 @@ export async function togglePortalIntegration(input: {
         }
 
         revalidatePortalPaths(parsed.data.portal)
-        return { success: true, data: { integration: (data ?? {}) as Record<string, unknown> } }
+        return { success: true, data: { integration: (data ?? {}) as Record<string, unknown>, feedSecretOnce, webhookSecretOnce } }
     } catch (error) {
         console.error("Error toggling portal integration:", error)
         return {

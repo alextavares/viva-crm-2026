@@ -14,20 +14,18 @@ async function getOrigin() {
     return `${proto}://${host}`
 }
 
-function buildFeedUrl(origin: string, portal: PortalKey, organizationSlug: string | null, feedToken: string) {
-    if (!feedToken) return ""
+function buildFeedUrl(origin: string, portal: PortalKey, organizationSlug: string | null) {
+    if (!organizationSlug) return ""
 
-    if (organizationSlug) {
-        if (portal === "imovelweb") {
-            return `${origin}/api/public/s/${organizationSlug}/imovelweb-xml?token=${feedToken}`
-        }
-
-        if (portal === "zap_vivareal") {
-            return `${origin}/api/public/s/${organizationSlug}/zap-xml?token=${feedToken}`
-        }
+    if (portal === "imovelweb") {
+        return `${origin}/api/public/s/${organizationSlug}/imovelweb-xml?token=<segredo-do-feed>`
     }
 
-    return `${origin}/api/feeds/${portal}/${feedToken}`
+    if (portal === "zap_vivareal") {
+        return `${origin}/api/public/s/${organizationSlug}/zap-xml?token=<segredo-do-feed>`
+    }
+
+    return `${origin}/api/feeds/${portal}`
 }
 
 export default async function IntegrationPortalPage({
@@ -76,9 +74,11 @@ export default async function IntegrationPortalPage({
 
     const config = (integration?.config ?? {}) as Record<string, unknown>
     const exportEnabled = Boolean(config["export_enabled"])
-    const feedToken = typeof config["feed_token"] === "string" ? (config["feed_token"] as string) : ""
+    // Canonical boundary: feed/webhook secrets live in
+    // private.integration_credentials (shown once on rotation) and are never
+    // stored in config. URLs carry a placeholder for the rotated secret.
     const origin = await getOrigin()
-    const feedUrl = buildFeedUrl(origin, portal as PortalKey, organizationSlug, feedToken)
+    const feedUrl = buildFeedUrl(origin, portal as PortalKey, organizationSlug)
 
     const assignment = (config["lead_assignment"] as string | undefined) ?? "by_property"
     const assignmentFallback = (config["lead_assignment_fallback"] as string | undefined) ?? "owner_manager"
@@ -135,7 +135,6 @@ export default async function IntegrationPortalPage({
                             canManage={canManage}
                             integrationStatus={integration?.status ?? null}
                             exportEnabled={exportEnabled}
-                            feedToken={feedToken}
                             feedUrl={feedUrl}
                             assignment={assignment}
                             assignmentFallback={assignmentFallback}

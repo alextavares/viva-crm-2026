@@ -195,6 +195,22 @@ function mapPropertyRow(row: PropertyQueryRow): PropertyListRow {
         // `image_paths` below.
         purpose: row.transaction_type ?? null,
         status: row.status ?? null,
+        owner_contact: linkedOwnerName
+            ? {
+                id: row.owner_contact?.id ?? row.owner_contact_id ?? null,
+                name: linkedOwnerName,
+            }
+            : legacyOwnerName
+                ? {
+                    id: null,
+                    name: legacyOwnerName,
+                }
+                : null,
+        broker: row.broker_profile?.full_name
+            ? {
+                full_name: row.broker_profile.full_name,
+            }
+            : null,
         hide_from_site: !(row.publish_to_site ?? false),
         financing_allowed: row.financing_allowed ?? null,
         publish_to_portals: row.publish_to_portals ?? null,
