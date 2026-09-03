@@ -19,6 +19,7 @@ import {
 import {
   loadAiLeadReengagementSettings,
   processAiLeadReengagementsForOrganization,
+  saveAiLeadReengagementSettings,
   type AiLeadReengagementSummary,
 } from "@/lib/ai-leads/reengagement"
 
@@ -57,7 +58,6 @@ type ContactContext =
         type: string | null
         status: string | null
         assigned_to: string | null
-        handoff_to_profile_id: string | null
         city: string | null
         interest_type: string | null
         interest_neighborhoods: string[] | null
@@ -97,7 +97,7 @@ async function getAiLeadContext(contactId: string): Promise<ContactContext> {
   const { data: contact, error: contactError } = await authSupabase
     .from("contacts")
     .select(
-      "id, organization_id, name, phone, type, status, assigned_to, handoff_to_profile_id, city, interest_type, interest_neighborhoods, interest_price_max"
+      "id, organization_id, name, phone, type, status, assigned_to, city, interest_type, interest_neighborhoods, interest_price_max"
     )
     .eq("organization_id", profile.organization_id)
     .eq("id", contactId)
@@ -114,7 +114,7 @@ async function getAiLeadContext(contactId: string): Promise<ContactContext> {
   const canAdmin = isAdmin(profile.role)
   const canAssignedBroker =
     profile.role === "broker" &&
-    (contact.assigned_to === user.id || contact.handoff_to_profile_id === user.id)
+    (contact.assigned_to === user.id)
 
   if (!canAdmin && !canAssignedBroker) {
     return { error: "Sem permissão para operar este lead com IA." }
@@ -152,21 +152,17 @@ export async function startAiLeadSession(
     }
 
     const result = await createAiLeadSession(ctx.admin, ctx.organizationId, {
-      ...ctx.contact,
-      created_at: null,
-      updated_at: null,
-      email: null,
-      notes: null,
-      ai_status: null,
-      ai_score: null,
-      ai_last_summary: null,
-      qualified_by_ai_at: null,
-      handoff_at: null,
-      organization_id: ctx.contact.organization_id,
-      deal_stage: null,
-      interest_bedrooms: null,
-      handoff_to_profile_id: ctx.contact.handoff_to_profile_id,
       id: ctx.contact.id,
+      organization_id: ctx.contact.organization_id,
+      name: ctx.contact.name,
+      phone: ctx.contact.phone,
+      type: ctx.contact.type,
+      status: ctx.contact.status,
+      assigned_to: ctx.contact.assigned_to,
+      city: ctx.contact.city,
+      interest_type: ctx.contact.interest_type,
+      interest_neighborhoods: ctx.contact.interest_neighborhoods,
+      interest_price_max: ctx.contact.interest_price_max,
     })
 
     if (result.sendResult && !result.sendResult.success) {
@@ -277,7 +273,7 @@ export async function processAiInboundMessage(
 
 export async function requestAiLeadHandoffAction(
   rawSessionId: string
-): Promise<ActionResult<{ brokerId: string; mode: "existing_owner" | "round_robin" }>> {
+): Promise<ActionResult<{ brokerId: string; mode: "existing_owner" | "round_robin" | "default_assignee" }>> {
   const parsed = sessionIdSchema.safeParse(rawSessionId)
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Sessão inválida." }
@@ -375,21 +371,17 @@ export async function takeOverAiConversation(
     }
 
     await completeAiTakeover(ctx.admin, ctx.organizationId, session, {
-      ...ctx.contact,
-      created_at: null,
-      updated_at: null,
-      email: null,
-      notes: null,
-      ai_status: null,
-      ai_score: null,
-      ai_last_summary: null,
-      qualified_by_ai_at: null,
-      handoff_at: null,
-      organization_id: ctx.contact.organization_id,
-      deal_stage: null,
-      interest_bedrooms: null,
-      handoff_to_profile_id: ctx.contact.handoff_to_profile_id,
       id: ctx.contact.id,
+      organization_id: ctx.contact.organization_id,
+      name: ctx.contact.name,
+      phone: ctx.contact.phone,
+      type: ctx.contact.type,
+      status: ctx.contact.status,
+      assigned_to: ctx.contact.assigned_to,
+      city: ctx.contact.city,
+      interest_type: ctx.contact.interest_type,
+      interest_neighborhoods: ctx.contact.interest_neighborhoods,
+      interest_price_max: ctx.contact.interest_price_max,
     }, ctx.userId)
 
     revalidateAiLeadPaths(ctx.contact.id)
@@ -491,24 +483,23 @@ export async function saveAiReengagementSettings(
       return { success: false, error: "Migração pendente para cadência de retomada IA." }
     }
 
-    const { error } = await admin.from("ai_lead_reengagement_settings").upsert({
-      organization_id: profile.organization_id,
+    // Canonical save: delays/flags → `ai_lead_settings`, template copy →
+    // `message_templates` (see saveAiLeadReengagementSettings). The legacy
+    // `ai_lead_reengagement_settings` table no longer exists.
+    const saveResult = await saveAiLeadReengagementSettings(admin, profile.organization_id, {
       enabled: parsed.data.enabled,
-      first_delay_minutes: parsed.data.firstDelayMinutes,
-      second_delay_minutes: parsed.data.secondDelayMinutes,
-      third_delay_minutes: parsed.data.thirdDelayMinutes,
-      message_template: parsed.data.inactiveMessageTemplate.trim(),
-      inactive_message_template: parsed.data.inactiveMessageTemplate.trim(),
-      handoff_message_template: parsed.data.handoffMessageTemplate.trim(),
-      sla_minutes: parsed.data.slaMinutes,
-      final_escalation_delay_minutes: parsed.data.finalEscalationDelayMinutes,
-      notify_broker: parsed.data.notifyBroker,
-      notify_manager: parsed.data.notifyManager,
-      updated_at: new Date().toISOString(),
+      firstDelayMinutes: parsed.data.firstDelayMinutes,
+      secondDelayMinutes: parsed.data.secondDelayMinutes,
+      thirdDelayMinutes: parsed.data.thirdDelayMinutes,
+      inactiveMessageTemplate: parsed.data.inactiveMessageTemplate.trim(),
+      handoffMessageTemplate: parsed.data.handoffMessageTemplate.trim(),
+      slaMinutes: parsed.data.slaMinutes,
+      notifyBroker: parsed.data.notifyBroker,
+      notifyManager: parsed.data.notifyManager,
     })
 
-    if (error) {
-      return { success: false, error: error.message || "Erro ao salvar a cadência de retomada IA." }
+    if (!saveResult.success) {
+      return { success: false, error: saveResult.error || "Erro ao salvar a cadência de retomada IA." }
     }
 
     revalidatePath("/settings")

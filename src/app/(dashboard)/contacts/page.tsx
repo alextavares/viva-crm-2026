@@ -141,7 +141,7 @@ export default async function ContactsPage({
     let eventsQuery = supabase
       .from("contact_events")
       .select("contact_id,source,payload,created_at")
-      .eq("type", "lead_received")
+      .eq("event_type", "lead_received")
       .order("created_at", { ascending: false })
       .limit(5000)
 
@@ -210,8 +210,24 @@ export default async function ContactsPage({
       query = query.eq("status", statusFilter)
     }
 
+    // Canonical pipeline stage lives on opportunities (contacts have no
+    // deal_stage). Prefilter matching contact ids so server-side pagination
+    // keeps working; contacts without an opportunity only surface unfiltered.
     if (dealStageFilter !== "all") {
-      query = query.eq("deal_stage", dealStageFilter)
+      const canonicalStage =
+        dealStageFilter === "lead" ? "new"
+        : dealStageFilter === "interest" ? "qualified"
+        : dealStageFilter === "closing" ? "proposal"
+        : dealStageFilter
+      const { data: stageOpps } = await supabase
+        .from("opportunities")
+        .select("contact_id")
+        .eq("stage", canonicalStage)
+        .limit(5000)
+      const stageIds = [...new Set(((stageOpps ?? []) as Array<{ contact_id: string | null }>).map((o) => o.contact_id).filter((id): id is string => Boolean(id)))]
+      query = stageIds.length > 0
+        ? query.in("id", stageIds)
+        : query.eq("id", "00000000-0000-0000-0000-000000000000")
     }
 
     if (withPhoneFilter === "yes") {
@@ -236,12 +252,13 @@ export default async function ContactsPage({
     error = queryResult.error as { message?: string; details?: string; hint?: string; code?: string } | null
   }
 
+  const opportunityStageByContactId = new Map<string, string>()
   if (contacts && contacts.length > 0) {
     const contactIds = contacts.map((c) => c.id)
     const { data: latestLeadEvents, error: latestLeadEventsError } = await supabase
       .from("contact_events")
       .select("contact_id,source,payload,created_at")
-      .eq("type", "lead_received")
+      .eq("event_type", "lead_received")
       .in("contact_id", contactIds)
       .order("created_at", { ascending: false })
       .limit(Math.max(contactIds.length * 4, 50))
@@ -276,6 +293,17 @@ export default async function ContactsPage({
           rememberLeadPropertyReference(evt.contact_id, evt.payload)
         }
       }
+    }
+
+    const { data: contactOpps } = await supabase
+      .from("opportunities")
+      .select("contact_id,stage,updated_at")
+      .in("contact_id", contactIds)
+      .order("updated_at", { ascending: false })
+      .limit(Math.max(contactIds.length * 2, 50))
+    for (const opp of ((contactOpps ?? []) as Array<{ contact_id: string | null; stage: string | null }>)) {
+      if (!opp?.contact_id || opportunityStageByContactId.has(opp.contact_id)) continue
+      opportunityStageByContactId.set(opp.contact_id, opp.stage ?? "new")
     }
   }
 
@@ -328,6 +356,7 @@ export default async function ContactsPage({
 
     return {
       ...contact,
+      deal_stage: opportunityStageByContactId.get(contact.id) ?? contact.deal_stage ?? null,
       siteMeta: siteMetaByContactId.get(contact.id) ?? null,
       latestLeadAt:
         latestLeadEventByContactId.get(contact.id) ??

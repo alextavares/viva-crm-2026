@@ -58,7 +58,7 @@ type InteractionRow = {
 type AppointmentRow = {
   id: string
   contact_id: string | null
-  date: string
+  starts_at: string
   status: string
 }
 
@@ -115,7 +115,7 @@ export default async function AttendancesPage({
 
   let contactsQuery = supabase
     .from("contacts")
-    .select("id,name,email,phone,status,type,deal_stage,assigned_to,organization_id,city,created_at,updated_at")
+    .select("id,name,email,phone,status,type,assigned_to,organization_id,city,created_at,updated_at")
     .eq("type", "lead")
     .in("status", ["new", "contacted", "qualified"])
     .order("created_at", { ascending: false })
@@ -136,9 +136,10 @@ export default async function AttendancesPage({
     contactsQuery = contactsQuery.eq("status", statusFilter)
   }
 
-  if (dealStageFilter !== "all") {
-    contactsQuery = contactsQuery.eq("deal_stage", dealStageFilter)
-  }
+  // Canonical pipeline stage lives on opportunities (contacts have no
+  // deal_stage). Resolve the latest opportunity stage per contact once, then
+  // apply the deal-stage filter in memory over the bounded page.
+  const dealStageFilterActive = dealStageFilter !== "all"
 
   if (assigneeFilter !== "all" && !isBroker) {
     contactsQuery = contactsQuery.eq("assigned_to", assigneeFilter)
@@ -157,12 +158,13 @@ export default async function AttendancesPage({
   const latestInteractionByContactId = new Map<string, InteractionRow>()
   const nextAppointmentByContactId = new Map<string, AppointmentRow>()
 
+  const opportunityStageByContactId = new Map<string, string>()
   if (contactIds.length > 0) {
-    const [eventsResult, interactionsResult, appointmentsResult] = await Promise.all([
+    const [eventsResult, interactionsResult, appointmentsResult, opportunitiesResult] = await Promise.all([
       supabase
         .from("contact_events")
         .select("contact_id,source,payload,created_at")
-        .eq("type", "lead_received")
+        .eq("event_type", "lead_received")
         .in("contact_id", contactIds)
         .order("created_at", { ascending: false })
         .limit(Math.max(contactIds.length * 4, 50)),
@@ -174,13 +176,24 @@ export default async function AttendancesPage({
         .limit(Math.max(contactIds.length * 4, 50)),
       supabase
         .from("appointments")
-        .select("id,contact_id,date,status")
+        .select("id,contact_id,starts_at,status")
         .in("contact_id", contactIds)
         .eq("status", "scheduled")
-        .gte("date", new Date().toISOString())
-        .order("date", { ascending: true })
+        .gte("starts_at", new Date().toISOString())
+        .order("starts_at", { ascending: true })
+        .limit(Math.max(contactIds.length * 2, 50)),
+      supabase
+        .from("opportunities")
+        .select("contact_id,stage,updated_at")
+        .in("contact_id", contactIds)
+        .order("updated_at", { ascending: false })
         .limit(Math.max(contactIds.length * 2, 50)),
     ])
+
+    for (const opp of ((opportunitiesResult.data || []) as Array<{ contact_id: string | null; stage: string | null }>)) {
+      if (!opp?.contact_id || opportunityStageByContactId.has(opp.contact_id)) continue
+      opportunityStageByContactId.set(opp.contact_id, opp.stage ?? "new")
+    }
 
     for (const event of ((eventsResult.data || []) as EventRow[])) {
       if (!event.contact_id) continue
@@ -250,21 +263,22 @@ export default async function AttendancesPage({
       )
       const nextAction = getAttendanceNextAction({
         status: contact.status,
-        dealStage: contact.deal_stage ?? "lead",
+        dealStage: opportunityStageByContactId.get(contact.id) ?? "lead",
         latestLeadAt: siteMeta?.lastEventAt ?? contact.created_at,
         latestInteractionAt: interaction?.happened_at ?? null,
-        nextAppointmentAt: appointment?.date ?? null,
+        nextAppointmentAt: appointment?.starts_at ?? null,
         hasPhone: Boolean(contact.phone),
         slaMinutes: leadSettings.sla_minutes,
       })
 
       return {
         ...contact,
+        deal_stage: opportunityStageByContactId.get(contact.id) ?? null,
         siteMeta,
         latestLeadAt: siteMeta?.lastEventAt ?? contact.created_at,
         latestInteractionAt: interaction?.happened_at ?? null,
         latestInteractionSummary: interaction?.summary ?? null,
-        nextAppointmentAt: appointment?.date ?? null,
+        nextAppointmentAt: appointment?.starts_at ?? null,
         nextAppointmentId: appointment?.id ?? null,
         assignedProfileName: contact.assigned_to ? assignedProfileNameById.get(contact.assigned_to) ?? null : null,
         leadPropertyContext: leadPropertyContext ?? null,
@@ -272,6 +286,10 @@ export default async function AttendancesPage({
       }
     })
   )
+
+  if (dealStageFilterActive) {
+    rows = rows.filter((row) => (row.deal_stage ?? "lead") === dealStageFilter)
+  }
 
   if (priorityFilter !== "all") {
     rows = rows.filter((row) => row.nextAction.priority === priorityFilter)

@@ -26,7 +26,7 @@ export default async function NewAppointmentPage({
             .from("contact_events")
             .select("payload")
             .eq("contact_id", preselectedContactId)
-            .eq("type", "lead_received")
+            .eq("event_type", "lead_received")
             .order("created_at", { ascending: false })
             .limit(10)
 

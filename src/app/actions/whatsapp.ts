@@ -590,7 +590,7 @@ export async function sendOfficialWhatsAppMessage(
     await supabase.from("contact_events").insert({
       organization_id: organizationId,
       contact_id: contactId,
-      type: "whatsapp_policy_blocked",
+      event_type: "whatsapp_policy_blocked",
       source: "whatsapp_api",
       payload: {
         reason: policy.reason || "blocked",
@@ -683,7 +683,7 @@ export async function sendOfficialWhatsAppMessage(
   await supabase.from("contact_events").insert({
     organization_id: organizationId,
     contact_id: contactId,
-    type: "note_added",
+    event_type: "note_added",
     source: "whatsapp_api",
     payload: {
       message_id: insertedMessage.id,

@@ -56,12 +56,12 @@ export async function GET(
     abs(origin, sitePath(basePath, "/links")),
   ]
 
-  for (let offset = 0; urls.length < MAX_URLS; offset += PAGE_SIZE) {
-    const limit = Math.min(PAGE_SIZE, MAX_URLS - urls.length)
+  for (let page = 1; urls.length < MAX_URLS; page += 1) {
+    const pageSize = Math.min(PAGE_SIZE, MAX_URLS - urls.length)
     const { data, error } = await siteListProperties(supabase, {
-      siteSlug: slug,
-      limit,
-      offset,
+      slug,
+      page,
+      pageSize,
     })
 
     if (error) break
@@ -69,18 +69,18 @@ export async function GET(
 
     for (const p of data) {
       if (urls.length >= MAX_URLS) break
-      urls.push(abs(origin, sitePath(basePath, `/imovel/${encodeURIComponent(p.id)}`)))
+      urls.push(abs(origin, sitePath(basePath, `/imovel/${encodeURIComponent(p.public_code)}`)))
     }
 
-    if (data.length < limit) break
+    if (data.length < pageSize) break
   }
 
-  for (let offset = 0; urls.length < MAX_URLS; offset += PAGE_SIZE) {
-    const limit = Math.min(PAGE_SIZE, MAX_URLS - urls.length)
+  for (let page = 1; urls.length < MAX_URLS; page += 1) {
+    const pageSize = Math.min(PAGE_SIZE, MAX_URLS - urls.length)
     const { data, error } = await siteListNews(supabase, {
-      siteSlug: slug,
-      limit,
-      offset,
+      slug,
+      page,
+      pageSize,
     })
 
     if (error) break
@@ -91,7 +91,7 @@ export async function GET(
       urls.push(abs(origin, sitePath(basePath, `/noticias/${encodeURIComponent(item.slug)}`)))
     }
 
-    if (data.length < limit) break
+    if (data.length < pageSize) break
   }
 
   const body =

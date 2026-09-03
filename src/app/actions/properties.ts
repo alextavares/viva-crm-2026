@@ -261,7 +261,7 @@ export async function saveProperty(input: SavePropertyInput): Promise<ActionResu
       owner_contact_id: data.owner_contact_id || null,
       owner_name: ownerResolution.ownerName,
       status: data.status,
-      hide_from_site: Boolean(data.hide_from_site),
+      publish_to_site: !Boolean(data.hide_from_site),
       publish_to_portals: Boolean(data.publish_to_portals),
       publish_zap: Boolean(data.publish_zap),
       publish_imovelweb: Boolean(data.publish_imovelweb),
@@ -374,7 +374,7 @@ export async function updatePropertySiteVisibility(input: {
     const { data: updatedProperty, error: updateError } = await supabase
       .from("properties")
       .update({
-        hide_from_site: input.hideFromSite,
+        publish_to_site: !input.hideFromSite,
         updated_at: new Date().toISOString(),
       })
       .eq("id", input.propertyId)
@@ -432,7 +432,9 @@ export async function updateBulkPropertySiteVisibility(input: {
     const { data: updatedRows, error } = await supabase
       .from("properties")
       .update({
-        hide_from_site: input.hideFromSite,
+        // Canonical mapping: legacy `hide_from_site` inverts onto
+        // `publish_to_site`.
+        publish_to_site: !input.hideFromSite,
         updated_at: new Date().toISOString(),
       })
       .in("id", propertyIds)
@@ -658,7 +660,7 @@ export async function updateBulkPropertyCommercialEnrichment(input: {
     const { data: properties, error: fetchError } = await supabase
       .from("properties")
       .select(
-        "id, title, description, type, transaction_type, built_area, total_area, features, address, images, image_paths, price, status, hide_from_site"
+        "id, title, description, type, transaction_type, built_area, total_area, features, address, image_paths, price, status, publish_to_site"
       )
       .in("id", propertyIds)
       .eq("organization_id", organizationId)

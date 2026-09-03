@@ -150,12 +150,14 @@ export function PropertyBulkPublish() {
 
       let q = supabase
         .from("properties")
-        .select("id,public_code,title,description,price,type,status,hide_from_site,address,images,image_paths,external_id")
+        .select("id,public_code,title,description,price,type,status,publish_to_site,address,image_paths,external_id")
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false })
         .limit(2000)
 
-      if (onlyHidden) q = q.eq("hide_from_site", true)
+      // Canonical mapping: legacy `hide_from_site` inverts onto
+      // `publish_to_site`.
+      if (onlyHidden) q = q.eq("publish_to_site", false)
       if (status !== "all") q = q.eq("status", status)
       if (debouncedSearch.trim()) {
         const raw = debouncedSearch.trim()
@@ -182,7 +184,13 @@ export function PropertyBulkPublish() {
       const { data, error } = await q.abortSignal(controller.signal)
       clearTimeout(t)
       if (error) throw error
-      const loadedRows = (data as Row[]) ?? []
+      // Canonical boundary adapter: legacy `hide_from_site`/`images` fields
+      // derive from `publish_to_site`/`image_paths`.
+      const loadedRows = ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        ...r,
+        hide_from_site: !(r.publish_to_site ?? false),
+        images: [],
+      })) as unknown as Row[]
       setRows(onlyPendingIssues ? loadedRows.filter((row) => getPropertyPublishIssues(row).length > 0) : loadedRows)
       setSelected({})
     } catch (err) {

@@ -221,26 +221,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const [propertiesResult, , appointmentsResult, propertiesAll, contactsAll, contactsDealStages, siteSettings, publishedCount, , siteLeadsAllTime, customDomain, leadDistributionSettingsResult, goalsSnapshotResult, whatsappAddonSettings, whatsappChannelSettings, aiLeadMetricsResult, attributionMetrics, operationalFunnelMetrics, brokerSiteLeadEventsResult, brokerAppointmentsResult] = await Promise.all([
         supabase.from('properties').select('*', { count: 'exact', head: true }).eq('status', 'available'),
         supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('type', 'lead'),
-        supabase.from('appointments').select('*', { count: 'exact', head: true }).gte('date', new Date().toISOString()),
-        supabase.from('properties').select('id, public_code, external_id, title, type, transaction_type, price, description, assigned_to, status, hide_from_site, publish_to_portals, publish_zap, publish_imovelweb, publish_olx, images, image_paths, features, address'),
-        supabase.from('contacts').select('type'),
-        supabase.from('contacts').select('deal_stage, type'),
+        supabase.from('appointments').select('*', { count: 'exact', head: true }).gte('starts_at', new Date().toISOString()),
+        supabase.from('properties').select('id, public_code, external_id, title, type, transaction_type, price, description, assigned_to, status, publish_to_portals, publish_zap, publish_imovelweb, publish_olx, image_paths, features, address'),
+        supabase.from('contacts').select('id, type'),
+        supabase.from('opportunities').select('contact_id, stage, updated_at').order('updated_at', { ascending: false }).limit(5000),
         loadSiteSettings(),
         supabase
             .from("properties")
             .select("id", { count: "exact", head: true })
             .eq("status", "available")
-            .eq("hide_from_site", false),
+            .eq("publish_to_site", true),
         supabase
             .from("contact_events")
             .select("id", { count: "exact", head: true })
-            .eq("type", "lead_received")
+            .eq("event_type", "lead_received")
             .eq("source", "site")
             .gte("created_at", siteLeadsSince),
         supabase
             .from("contact_events")
             .select("id", { count: "exact", head: true })
-            .eq("type", "lead_received")
+            .eq("event_type", "lead_received")
             .eq("source", "site"),
         orgId
             ? supabase
@@ -278,7 +278,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   .from("contact_events")
                   .select("contact_id, created_at")
                   .eq("organization_id", orgId)
-                  .eq("type", "lead_received")
+                  .eq("event_type", "lead_received")
                   .eq("source", "site")
                   .order("created_at", { ascending: false })
                   .limit(5000)
@@ -286,12 +286,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         isBroker && orgId && user?.id
             ? supabase
                   .from("appointments")
-                  .select("id, date, status, properties(title), contacts(name)")
+                  .select("id, starts_at, status, properties(title), contacts(name)")
                   .eq("organization_id", orgId)
                   .eq("assigned_to", user.id)
                   .eq("status", "scheduled")
-                  .gte("date", new Date().toISOString())
-                  .order("date", { ascending: true })
+                  .gte("starts_at", new Date().toISOString())
+                  .order("starts_at", { ascending: true })
                   .limit(8)
             : Promise.resolve({ data: null, error: null }),
     ])
@@ -405,7 +405,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             .from("contact_events")
             .select("contact_id, created_at")
             .eq("organization_id", orgId)
-            .eq("type", "lead_received")
+            .eq("event_type", "lead_received")
             .eq("source", "site")
             .order("created_at", { ascending: false })
             .limit(5000)
@@ -540,7 +540,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         return {
             id: item.id,
-            date: item.date,
+            date: item.starts_at,
             status: item.status,
             propertyTitle: propertyRelation?.title ?? null,
             contactName: contactRelation?.name ?? null,
@@ -662,15 +662,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         return acc
     }, {} as Record<string, number>)
 
-    const salesFunnelCounts = (contactsDealStages.data || []).reduce((acc, curr) => {
-        if (curr.type !== 'lead' && curr.type !== 'client') return acc
-
-        const stage = DEAL_STAGES.includes((curr.deal_stage ?? 'lead') as DealStage)
-            ? (curr.deal_stage ?? 'lead') as DealStage
-            : 'lead'
+    // Canonical funnel: contact pipeline stage derives from the latest
+    // opportunity (canonical stages new/qualified/visit/negotiation/proposal/
+    // won/lost map onto the legacy funnel labels below).
+    const opportunityStageByContact = new Map<string, DealStage>()
+    for (const opp of (contactsDealStages.data || []) as Array<{ contact_id: string; stage: string }>) {
+        if (!opp?.contact_id || opportunityStageByContact.has(opp.contact_id)) continue
+        const mapped: DealStage =
+            opp.stage === "qualified" ? "interest"
+            : opp.stage === "proposal" ? "closing"
+            : opp.stage === "new" ? "lead"
+            : DEAL_STAGES.includes(opp.stage as DealStage) ? (opp.stage as DealStage) : "lead"
+        opportunityStageByContact.set(opp.contact_id, mapped)
+    }
+    const contactTypeById = new Map<string, string>(
+        ((contactsAll.data || []) as Array<{ id: string; type: string }>).map((c) => [c.id, c.type])
+    )
+    const salesFunnelCounts = [...opportunityStageByContact.entries()].reduce((acc, [contactId, stage]) => {
+        const type = contactTypeById.get(contactId)
+        if (type !== undefined && type !== 'lead' && type !== 'client') return acc
         acc[stage] = (acc[stage] || 0) + 1
         return acc
     }, {} as Partial<Record<DealStage, number>>)
+    for (const [contactId, type] of contactTypeById) {
+        if ((type === 'lead' || type === 'client') && !opportunityStageByContact.has(contactId)) {
+            salesFunnelCounts.lead = (salesFunnelCounts.lead || 0) + 1
+        }
+    }
 
     const salesFunnelStages = DEAL_STAGES.map((stage) => ({
         stage,

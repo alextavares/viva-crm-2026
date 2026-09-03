@@ -1,8 +1,9 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDir = join(root, 'supabase/migrations');
 const migrations = readdirSync(migrationsDir).filter((file) => file.endsWith('.sql')).sort();
 const expected = [

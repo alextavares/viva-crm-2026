@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
+import { loadAiLeadReengagementSettings } from "@/lib/ai-leads/reengagement"
 import { Button } from "@/components/ui/button"
 import { WhatsAppAddonPricingForm } from "@/components/whatsapp-addon/whatsapp-addon-pricing-form"
 import { AiReengagementSettingsForm } from "@/components/ai-leads/ai-reengagement-settings-form"
@@ -110,40 +111,23 @@ export default async function WhatsAppAddonSettingsPage() {
     billing_timezone: data?.billing_timezone ?? DEFAULTS.billing_timezone,
   }
 
-  const { data: aiReengagementData, error: aiReengagementError } = await supabase
-    .from("ai_lead_reengagement_settings")
-    .select(
-      "organization_id, enabled, first_delay_minutes, second_delay_minutes, third_delay_minutes, inactive_message_template, handoff_message_template, message_template, sla_minutes, final_escalation_delay_minutes, notify_broker, notify_manager"
-    )
-    .eq("organization_id", organizationId)
-    .maybeSingle()
-
-  const aiReengagementReady =
-    !aiReengagementError || !["42P01", "42703", "PGRST205"].includes(aiReengagementError.code ?? "")
+  // Canonical settings source: `ai_lead_settings` (delays/flags) plus
+  // `message_templates` (copy). See loadAiLeadReengagementSettings.
+  const { settings: aiReengagementSettings } = await loadAiLeadReengagementSettings(supabase, organizationId)
+  const aiReengagementReady = true
 
   const initialAiReengagement: AiReengagementSettingsRow = {
     organization_id: organizationId,
-    enabled: aiReengagementData?.enabled ?? AI_REENGAGEMENT_DEFAULTS.enabled,
-    first_delay_minutes:
-      aiReengagementData?.first_delay_minutes ?? AI_REENGAGEMENT_DEFAULTS.first_delay_minutes,
-    second_delay_minutes:
-      aiReengagementData?.second_delay_minutes ?? AI_REENGAGEMENT_DEFAULTS.second_delay_minutes,
-    third_delay_minutes:
-      aiReengagementData?.third_delay_minutes ?? AI_REENGAGEMENT_DEFAULTS.third_delay_minutes,
-    inactive_message_template:
-      aiReengagementData?.inactive_message_template ??
-      aiReengagementData?.message_template ??
-      AI_REENGAGEMENT_DEFAULTS.inactive_message_template,
-    handoff_message_template:
-      aiReengagementData?.handoff_message_template ??
-      aiReengagementData?.message_template ??
-      AI_REENGAGEMENT_DEFAULTS.handoff_message_template,
-    sla_minutes: aiReengagementData?.sla_minutes ?? AI_REENGAGEMENT_DEFAULTS.sla_minutes,
-    final_escalation_delay_minutes:
-      aiReengagementData?.final_escalation_delay_minutes ??
-      AI_REENGAGEMENT_DEFAULTS.final_escalation_delay_minutes,
-    notify_broker: aiReengagementData?.notify_broker ?? AI_REENGAGEMENT_DEFAULTS.notify_broker,
-    notify_manager: aiReengagementData?.notify_manager ?? AI_REENGAGEMENT_DEFAULTS.notify_manager,
+    enabled: aiReengagementSettings.enabled,
+    first_delay_minutes: aiReengagementSettings.firstDelayMinutes,
+    second_delay_minutes: aiReengagementSettings.secondDelayMinutes,
+    third_delay_minutes: aiReengagementSettings.thirdDelayMinutes,
+    inactive_message_template: aiReengagementSettings.inactiveMessageTemplate,
+    handoff_message_template: aiReengagementSettings.handoffMessageTemplate,
+    sla_minutes: aiReengagementSettings.slaMinutes,
+    final_escalation_delay_minutes: aiReengagementSettings.finalEscalationDelayMinutes,
+    notify_broker: aiReengagementSettings.notifyBroker,
+    notify_manager: aiReengagementSettings.notifyManager,
   }
 
   return (

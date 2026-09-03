@@ -166,7 +166,7 @@ export default async function SiteSettingsPage() {
       .from("contact_events")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", org.id)
-      .eq("type", "lead_received")
+      .eq("event_type", "lead_received")
       .eq("source", "site"),
     supabase
       .from("site_news")

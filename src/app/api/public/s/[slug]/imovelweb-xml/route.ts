@@ -1,117 +1,121 @@
-import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { generateImovelwebXml } from '@/lib/integrations/imovelweb-mapper';
-import { CRMProperty } from '@/lib/integrations/zap-mapper';
+import { NextRequest } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+import { generateImovelwebXml, type ImovelwebFeedConfig } from "@/lib/integrations/imovelweb-mapper"
+import { toFeedProperty, type ImovelwebFeedRow } from "@/lib/integrations/imovelweb-feed"
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic"
 
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ slug: string }> }
-) {
-    try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const FEED_MAX_ROWS = 5000
 
-        if (!supabaseUrl || !supabaseServiceKey) {
-            console.error('[imovelweb-xml] Missing env vars:', {
-                hasUrl: !!supabaseUrl,
-                hasKey: !!supabaseServiceKey,
-            });
-            return new Response('Server misconfiguration: missing environment variables.', { status: 500 });
-        }
+function nonSecretFeedConfig(config: unknown): {
+  integrationId: string | null
+  mapperConfig: ImovelwebFeedConfig
+} {
+  const raw = (config ?? {}) as Record<string, unknown>
+  const str = (v: unknown) => (typeof v === "string" ? v : "")
+  return {
+    integrationId: null,
+    mapperConfig: {
+      codigoImobiliaria: str(raw.codigo_imobiliaria),
+      emailUsuario: str(raw.email_usuario),
+      emailContato: str(raw.email_contato),
+      nomeContato: str(raw.nome_contato),
+      telefoneContato: str(raw.telefone_contato),
+      tipoPublicacao: str(raw.tipo_publicacao_default) || "SIMPLE",
+      mostrarMapa: typeof raw.mostrar_mapa === "string" || typeof raw.mostrar_mapa === "boolean" ? raw.mostrar_mapa : undefined,
+      defaultLocalidadeId: str(raw.default_localidade_id),
+      localidadeMappingsRaw: str(raw.localidade_mappings_raw),
+    },
+  }
+}
 
-        const { slug } = await params;
-        const searchParams = request.nextUrl.searchParams;
-        const token = searchParams.get('token');
+/**
+ * Canonical Imovelweb OpenNavent feed.
+ * URL: GET /api/public/s/[slug]/imovelweb-xml?token=<feed-secret>
+ *
+ * Boundary: listings come from `api.imovelweb_feed`, which verifies the
+ * presented feed secret server-side against `private.integration_credentials`
+ * (provider `imovelweb`, purpose `feed_auth`) and enforces the bounded
+ * projection plus `publish_imovelweb` / availability predicates. This route
+ * never compares secrets itself and never stores them in
+ * `portal_integrations.config` (forbidden by the canonical contract); only
+ * non-secret display config is read from there.
+ */
+export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-        if (!token) {
-            return new Response('Missing token parameter.', { status: 401 });
-        }
-
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-        // 1. Get Organization
-        const { data: org, error: orgError } = await supabase
-            .from('organizations')
-            .select('id, name, slug')
-            .eq('slug', slug)
-            .single();
-
-        if (orgError || !org) {
-            console.error('[imovelweb-xml] Org lookup error:', orgError?.message, 'slug:', slug);
-            return new Response('Organization not found.', { status: 404 });
-        }
-
-        // 2. Validate Token
-        const { data: configRows, error: configError } = await supabase
-            .from('portal_integrations')
-            .select('config')
-            .eq('organization_id', org.id)
-            .eq('portal', 'imovelweb')
-            .single();
-
-        if (configError || !configRows || !configRows.config) {
-            console.error('[imovelweb-xml] Config lookup error:', configError?.message, 'org:', org.id);
-            return new Response('Portal integration not configured.', { status: 403 });
-        }
-
-        const config = configRows.config as Record<string, unknown>;
-        if (config.feed_token !== token) {
-            return new Response('Invalid token.', { status: 403 });
-        }
-
-        // 3. Fetch Properties
-        const { data: properties, error: propertiesError } = await supabase
-            .from('properties')
-            .select('*')
-            .eq('organization_id', org.id)
-            .eq('status', 'available')
-            .eq('publish_to_portals', true)
-            .eq('publish_imovelweb', true)
-            .or('hide_from_site.is.null,hide_from_site.eq.false');
-
-        if (propertiesError) {
-            console.error('[imovelweb-xml] Properties fetch error:', propertiesError.message);
-            return new Response('Internal error fetching properties.', { status: 500 });
-        }
-
-        // 4. Update Sync Timestamp (Background - fire and forget)
-        supabase
-            .from('portal_integrations')
-            .update({ last_sync_at: new Date().toISOString() })
-            .eq('organization_id', org.id)
-            .eq('portal', 'imovelweb')
-            .then(({ error }) => {
-                if (error) console.error('[imovelweb-xml] Failed to update last_sync_at:', error.message);
-            });
-
-        // 5. Build XML
-        const xmlString = generateImovelwebXml(properties as CRMProperty[], {
-            codigoImobiliaria: typeof config.codigo_imobiliaria === 'string' ? config.codigo_imobiliaria : '',
-            emailUsuario: typeof config.email_usuario === 'string' ? config.email_usuario : '',
-            emailContato: typeof config.email_contato === 'string' ? config.email_contato : `contato@${org.slug}.com.br`,
-            nomeContato: typeof config.nome_contato === 'string' ? config.nome_contato : org.name || 'Anunciante',
-            telefoneContato: typeof config.telefone_contato === 'string' ? config.telefone_contato : '',
-            tipoPublicacao: typeof config.tipo_publicacao_default === 'string' ? config.tipo_publicacao_default : 'SIMPLE',
-            mostrarMapa:
-                typeof config.mostrar_mapa === 'string' || typeof config.mostrar_mapa === 'boolean'
-                    ? config.mostrar_mapa
-                    : undefined,
-            defaultLocalidadeId: typeof config.default_localidade_id === 'string' ? config.default_localidade_id : '',
-            localidadeMappingsRaw: typeof config.localidade_mappings_raw === 'string' ? config.localidade_mappings_raw : '',
-        });
-
-        return new Response(xmlString, {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/xml; charset=utf-8',
-                'Cache-Control': 'no-store',
-            },
-        });
-    } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[imovelweb-xml] Unhandled exception:', msg);
-        return new Response(`Internal server error: ${msg}`, { status: 500 });
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response("Server misconfiguration: missing environment variables.", { status: 500 })
     }
+
+    const { slug } = await params
+    const token = request.nextUrl.searchParams.get("token")
+
+    if (!slug || !token) {
+      return new Response("Missing token parameter.", { status: 401 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const { data, error } = await supabase.rpc("imovelweb_feed", {
+      p_slug: slug,
+      p_feed_secret: token,
+      p_max_rows: FEED_MAX_ROWS,
+    })
+
+    if (error) {
+      const msg = error.message ?? ""
+      // Wrong secret / unknown org / inactive credential all surface as empty-or-error;
+      // never distinguish them for unauthenticated callers.
+      if (msg.includes("invalid") || msg.includes("credential")) {
+        return new Response("Invalid token.", { status: 403 })
+      }
+      return new Response("Internal error fetching properties.", { status: 500 })
+    }
+
+    const rows = (Array.isArray(data) ? data : []) as ImovelwebFeedRow[]
+
+    const { data: org } = await supabase.from("organizations").select("id, name, slug").eq("slug", slug).single()
+    const { data: integration } = await supabase
+      .from("portal_integrations")
+      .select("config")
+      .eq("organization_id", org?.id ?? "")
+      .eq("portal", "imovelweb")
+      .maybeSingle()
+
+    const { mapperConfig } = nonSecretFeedConfig(integration?.config)
+    if (!mapperConfig.emailContato && org?.slug) {
+      mapperConfig.emailContato = `contato@${org.slug}.com.br`
+    }
+    if (!mapperConfig.nomeContato && org?.name) {
+      mapperConfig.nomeContato = org.name
+    }
+
+    if (org?.id) {
+      supabase
+        .from("portal_integrations")
+        .update({ last_sync_at: new Date().toISOString() })
+        .eq("organization_id", org.id)
+        .eq("portal", "imovelweb")
+        .then(({ error: syncError }) => {
+          if (syncError) console.error("[imovelweb-xml] Failed to update last_sync_at:", syncError.message)
+        })
+    }
+
+    const xmlString = generateImovelwebXml(rows.map((row, i) => toFeedProperty(row, i)), mapperConfig)
+
+    return new Response(xmlString, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("[imovelweb-xml] Unhandled exception:", msg)
+    return new Response(`Internal server error: ${msg}`, { status: 500 })
+  }
 }

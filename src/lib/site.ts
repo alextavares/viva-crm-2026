@@ -128,118 +128,177 @@ export type SiteCreateLeadResult = {
   deduped: boolean
 }
 
-export async function siteGetSettings(
-  supabase: SupabaseClient,
-  siteSlug: string
-) {
+/**
+ * Canonical row shapes returned by the `api.site_*` RPCs. These are bounded
+ * projections (no internal ids except where the contract exposes them, no
+ * unpublished rows, page-size capped server-side).
+ */
+export type CanonicalSiteSettingsRow = {
+  theme: string | null
+  brand_name: string | null
+  headline: string | null
+  description: string | null
+  primary_color: string | null
+  secondary_color: string | null
+  logo_path: string | null
+  public_phone: string | null
+  public_email: string | null
+  public_address: string | null
+  analytics_id: string | null
+  verification_id: string | null
+  onboarding_complete: boolean | null
+}
+
+export type CanonicalSitePropertyRow = {
+  public_code: string
+  external_id: string | null
+  title: string | null
+  description: string | null
+  type: string | null
+  transaction_type: string | null
+  price: number | null
+  built_area: number | null
+  total_area: number | null
+  address: { city: string | null; neighborhood: string | null } | null
+  features: string[] | null
+  image_paths: string[] | null
+}
+
+export type CanonicalSitePropertyDetail = Omit<CanonicalSitePropertyRow, "address"> & {
+  address: { city: string | null; neighborhood: string | null } | null
+}
+
+export type CanonicalSiteNewsRow = {
+  slug: string
+  title: string
+  excerpt: string | null
+  content: string | null
+  published_at: string | null
+}
+
+export type CanonicalSiteLinkRow = {
+  title: string
+  url: string
+  description: string | null
+  sort_order: number
+}
+
+/**
+ * Map a canonical feed row onto the UI card. The contract exposes no internal
+ * UUID on list rows, so the stable `public_code` is the card identity and the
+ * detail-page key.
+ */
+export function toSitePropertyCard(row: CanonicalSitePropertyRow): SitePropertyCard {
+  return {
+    id: row.public_code,
+    public_code: row.public_code,
+    title: row.title ?? "",
+    price: row.price,
+    type: row.type,
+    city: row.address?.city ?? null,
+    state: null,
+    neighborhood: row.address?.neighborhood ?? null,
+    thumbnail_url: null,
+    thumbnail_path: row.image_paths?.[0] ?? null,
+    bedrooms: null,
+    bathrooms: null,
+    area: row.built_area ?? row.total_area ?? null,
+  }
+}
+
+export async function siteGetSettings(supabase: SupabaseClient, slug: string) {
   const res = await supabase.rpc("site_get_settings", {
-    p_site_slug: siteSlug,
+    p_slug: slug,
   })
-  return res as PostgrestSingleResponse<SiteGetSettingsResponse>
+  return res as PostgrestSingleResponse<CanonicalSiteSettingsRow>
 }
 
 export type SiteListPropertiesArgs = {
-  siteSlug: string
-  q?: string | null
-  city?: string | null
-  neighborhood?: string | null
-  type?: string | null
-  minPrice?: number | null
-  maxPrice?: number | null
-  limit?: number | null
-  offset?: number | null
+  slug: string
+  page?: number | null
+  pageSize?: number | null
 }
 
-export async function siteListProperties(
-  supabase: SupabaseClient,
-  args: SiteListPropertiesArgs
-) {
+export async function siteListProperties(supabase: SupabaseClient, args: SiteListPropertiesArgs) {
   const res = await supabase.rpc("site_list_properties", {
-    p_site_slug: args.siteSlug,
-    p_q: args.q ?? null,
-    p_city: args.city ?? null,
-    p_neighborhood: args.neighborhood ?? null,
-    p_type: args.type ?? null,
-    p_min_price: args.minPrice ?? null,
-    p_max_price: args.maxPrice ?? null,
-    p_limit: args.limit ?? null,
-    p_offset: args.offset ?? null,
+    p_slug: args.slug,
+    p_page: args.page ?? 1,
+    p_page_size: args.pageSize ?? 100,
   })
-  return res as PostgrestResponse<SitePropertyCard>
+  return res as PostgrestResponse<CanonicalSitePropertyRow>
 }
 
-export async function siteGetProperty(
-  supabase: SupabaseClient,
-  siteSlug: string,
-  propertyId: string
-) {
+export async function siteGetProperty(supabase: SupabaseClient, slug: string, propertyId: string) {
   const res = await supabase.rpc("site_get_property", {
-    p_site_slug: siteSlug,
+    p_slug: slug,
     p_property_id: propertyId,
   })
-  return res as PostgrestSingleResponse<SitePublicProperty>
+  return res as PostgrestSingleResponse<CanonicalSitePropertyDetail>
 }
 
 export type SiteListNewsArgs = {
-  siteSlug: string
-  limit?: number | null
-  offset?: number | null
+  slug: string
+  page?: number | null
+  pageSize?: number | null
 }
 
-export async function siteListNews(
-  supabase: SupabaseClient,
-  args: SiteListNewsArgs
-) {
+export async function siteListNews(supabase: SupabaseClient, args: SiteListNewsArgs) {
   const res = await supabase.rpc("site_list_news", {
-    p_site_slug: args.siteSlug,
-    p_limit: args.limit ?? null,
-    p_offset: args.offset ?? null,
+    p_slug: args.slug,
+    p_page: args.page ?? 1,
+    p_page_size: args.pageSize ?? 100,
   })
-  return res as PostgrestResponse<SitePublicNewsCard>
+  return res as PostgrestResponse<CanonicalSiteNewsRow>
 }
 
-export async function siteGetNews(
-  supabase: SupabaseClient,
-  siteSlug: string,
-  newsSlug: string
-) {
+export async function siteGetNews(supabase: SupabaseClient, slug: string, newsSlug: string) {
   const res = await supabase.rpc("site_get_news", {
-    p_site_slug: siteSlug,
-    p_news_slug: newsSlug,
+    p_slug: slug,
+    p_slug_key: newsSlug,
   })
-  return res as PostgrestSingleResponse<SitePublicNews>
+  return res as PostgrestSingleResponse<CanonicalSiteNewsRow>
 }
 
-export async function siteListLinks(
-  supabase: SupabaseClient,
-  siteSlug: string
-) {
+export async function siteListLinks(supabase: SupabaseClient, slug: string) {
   const res = await supabase.rpc("site_list_links", {
-    p_site_slug: siteSlug,
+    p_slug: slug,
   })
-  return res as PostgrestResponse<SitePublicLink>
+  return res as PostgrestResponse<CanonicalSiteLinkRow>
+}
+
+export async function siteResolveSlugByDomain(supabase: SupabaseClient, domain: string) {
+  const res = await supabase.rpc("site_resolve_slug_by_domain", {
+    p_domain: domain,
+  })
+  return res as PostgrestSingleResponse<string>
 }
 
 export type SiteCreateLeadArgs = {
-  siteSlug: string
-  propertyId?: string | null
+  slug: string
   name: string
   phone: string
+  email?: string | null
+  propertyId?: string | null
   message?: string | null
   sourceDomain?: string | null
+  idempotencyKey?: string | null
 }
 
-export async function siteCreateLead(
-  supabase: SupabaseClient,
-  args: SiteCreateLeadArgs
-) {
+/**
+ * Server-only: `api.site_create_lead` is granted to `service_role` exclusively.
+ * Browser callers must POST to `/api/public/s/[slug]/lead` instead of calling
+ * this helper with an anon client.
+ */
+export async function siteCreateLead(supabase: SupabaseClient, args: SiteCreateLeadArgs) {
   const res = await supabase.rpc("site_create_lead", {
-    p_site_slug: args.siteSlug,
-    p_property_id: args.propertyId ?? null,
+    p_slug: args.slug,
     p_name: args.name,
     p_phone: args.phone,
+    p_email: args.email ?? null,
+    p_property_id: args.propertyId ?? null,
     p_message: args.message ?? null,
     p_source_domain: args.sourceDomain ?? null,
+    p_idempotency_key: args.idempotencyKey ?? null,
   })
-  return res as PostgrestSingleResponse<SiteCreateLeadResult>
+  return res as PostgrestSingleResponse<{ accepted: boolean; deduped: boolean; reference: string }>
 }

@@ -1,8 +1,6 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { createPublicClient } from "@/lib/supabase/public-client"
-import { siteCreateLead } from "@/lib/site"
 
 type Props = {
   siteSlug: string
@@ -65,19 +63,24 @@ export function SiteLeadForm({ siteSlug, propertyId, propertyTitle }: Props) {
         setErrorMsg(null)
 
         startTransition(async () => {
-          const supabase = createPublicClient()
           const msg = message.trim()
 
-          const { data, error } = await siteCreateLead(supabase, {
-            siteSlug,
-            propertyId,
-            name: name.trim(),
-            phone: phone.trim(),
-            message: msg.length ? msg : null,
-            sourceDomain: typeof window !== "undefined" ? window.location.host : null,
+          // Canonical boundary: `api.site_create_lead` is service_role-only,
+          // so the browser submits to the public lead route (deterministic
+          // idempotency is enforced server-side).
+          const res = await fetch(`/api/public/s/${encodeURIComponent(siteSlug)}/lead`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              name: name.trim(),
+              phone: phone.trim(),
+              propertyId,
+              message: msg.length ? msg : null,
+            }),
           })
+          const data = (await res.json().catch(() => null)) as { contact_id?: string } | null
 
-          if (error || !data?.contact_id) {
+          if (!res.ok || !data?.contact_id) {
             setStatus("error")
             setErrorMsg("Não foi possível enviar. Verifique os dados e tente novamente.")
             return

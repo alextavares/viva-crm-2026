@@ -240,7 +240,7 @@ export default async function ContactEditPage({ params }: PageProps) {
             .limit(50),
         supabase
             .from("contact_events")
-            .select("id, type, source, payload, created_at")
+            .select("id, event_type, source, payload, created_at")
             .eq("contact_id", id)
             .order("created_at", { ascending: false })
             .limit(50),
@@ -260,9 +260,9 @@ export default async function ContactEditPage({ params }: PageProps) {
             .eq("owner_contact_id", id),
         supabase
             .from("appointments")
-            .select("id, date, status, properties(title)")
+            .select("id, starts_at, status, properties(title)")
             .eq("contact_id", id)
-            .order("date", { ascending: false })
+            .order("starts_at", { ascending: false })
             .limit(5),
         supabase
             .from("deal_proposals")
@@ -282,7 +282,12 @@ export default async function ContactEditPage({ params }: PageProps) {
     }
 
     if (!eventsResult.error) {
-        recentEvents = (eventsResult.data as typeof recentEvents) || []
+        // Canonical boundary: `contact_events.event_type` adapts to the panel's
+        // legacy `type` field name.
+        recentEvents = (((eventsResult.data ?? []) as Array<Record<string, unknown>>).map((e) => ({
+            ...e,
+            type: e.event_type ?? null,
+        })) as typeof recentEvents) || []
     }
 
     if (!interactionsResult.error) {
@@ -301,13 +306,29 @@ export default async function ContactEditPage({ params }: PageProps) {
     }
 
     if (!appointmentsResult.error) {
+        // Canonical boundary: `appointments.starts_at` adapts to the panel's
+        // legacy `date` field name.
         appointments =
-            ((appointmentsResult.data as unknown as Array<Pick<Appointment, "id" | "date" | "status"> & { properties?: { title: string | null } | null }>) || [])
+            (((appointmentsResult.data ?? []) as Array<Record<string, unknown>>).map((a) => ({
+                ...a,
+                date: a.starts_at ?? null,
+            })) as unknown as Array<Pick<Appointment, "id" | "date" | "status"> & { properties?: { title: string | null } | null }>) || []
     }
 
     if (!proposalsResult.error) {
         proposals = (proposalsResult.data as unknown as DealProposal[]) || []
     }
+
+    // Canonical pipeline stage: latest opportunity stage for this contact
+    // (contacts carry no deal_stage). Display-only; stage edits remain a
+    // contract gap (opportunity lifecycle decision).
+    const { data: contactOpps } = await supabase
+        .from("opportunities")
+        .select("stage")
+        .eq("contact_id", id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+    const contactDealStage = ((contactOpps ?? []) as Array<{ stage: string | null }>)[0]?.stage ?? null
 
     if (proposals.length > 0) {
         const proposalIds = proposals.map((proposal) => proposal.id)
@@ -535,7 +556,7 @@ export default async function ContactEditPage({ params }: PageProps) {
                 name={contact.name || "Sem Nome"}
                 type={contact.type}
                 status={contact.status}
-                dealStage={contact.deal_stage}
+                dealStage={contactDealStage}
                 canEditDealStage={canEditDealStage}
                 email={contact.email}
                 phone={contact.phone}

@@ -44,10 +44,10 @@ function getAddressPart(address: Tables<'properties'>['address'], key: 'city' | 
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
-function getBedrooms(features: Tables<'properties'>['features']) {
-    if (!features || typeof features !== 'object') return null
-    const value = (features as Record<string, unknown>).bedrooms
-    return typeof value === 'number' && Number.isFinite(value) ? value : null
+function getBedrooms(): number | null {
+    // CANONICAL CONTRACT GAP: `properties.features` is a free-text array with
+    // no structured bedroom count, so bedroom matching is unavailable.
+    return null
 }
 
 function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 'score'> {
@@ -60,7 +60,7 @@ function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 's
         city: getAddressPart(property.address, 'city'),
         neighborhood: getAddressPart(property.address, 'neighborhood'),
         price: property.price,
-        bedrooms: getBedrooms(property.features),
+        bedrooms: getBedrooms(),
     }
 }
 

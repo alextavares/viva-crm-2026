@@ -8,7 +8,10 @@ type ContactEventRow = Database["public"]["Tables"]["contact_events"]["Row"]
 type AiLeadSessionRow = Database["public"]["Tables"]["ai_lead_sessions"]["Row"]
 type AiLeadMessageRow = Database["public"]["Tables"]["ai_lead_messages"]["Row"]
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"]
-type ProposalRow = Database["public"]["Tables"]["deal_proposals"]["Row"]
+// CANONICAL CONTRACT GAP: canonical `proposals`/`contracts` are keyed by
+// opportunity (no contact-level deal tables), so funnel attribution keeps a
+// structural alias until the opportunity-linkage decision lands.
+type ProposalRow = { contact_id: string | null }
 
 export type FunnelPeriod = "today" | "7d" | "30d"
 
@@ -93,7 +96,7 @@ function roundPercent(value: number) {
 }
 
 async function fetchLeadReceivedContactIds(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   organizationId: string,
   since: string
 ) {
@@ -106,7 +109,7 @@ async function fetchLeadReceivedContactIds(
       .from("contact_events")
       .select("contact_id, created_at")
       .eq("organization_id", organizationId)
-      .eq("type", "lead_received")
+      .eq("event_type", "lead_received")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .range(from, to)
@@ -135,7 +138,7 @@ async function fetchLeadReceivedContactIds(
 }
 
 export async function loadOperationalFunnelMetrics(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   organizationId: string | null | undefined,
   period: FunnelPeriod
 ): Promise<OperationalFunnelMetrics> {

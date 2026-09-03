@@ -1,19 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { Database, Json } from "@/lib/supabase/database.types"
-
-type HandoffResult =
-  | { success: true; brokerId: string; mode: "existing_owner" | "round_robin" }
+export type HandoffResult =
+  | { success: true; brokerId: string; mode: "existing_owner" | "round_robin" | "default_assignee" }
   | { success: false; error: string }
 
-type LeadAssignNextBrokerResult = Json & {
-  assigned?: boolean
-  assigned_to?: string
-  reason?: string
-}
-
+/**
+ * Canonical AI handoff assignment. The legacy `lead_assign_next_broker` RPC no
+ * longer exists; assignment honors `lead_distribution_settings` directly:
+ * - contact already owned → keep owner;
+ * - mode `default` with a configured broker → that broker (verified active);
+ * - mode `round_robin` → the active broker with the fewest open contacts
+ *   (load-aware; the legacy atomic cursor in `private.lead_distribution_state`
+ *   is not reachable over PostgREST, so strict rotation is a contract gap);
+ * - mode `manual`/disabled → refuse with an explicit error.
+ */
 export async function resolveAiHandoffBroker(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   organizationId: string,
   contactId: string,
   assignedTo: string | null
@@ -22,24 +24,66 @@ export async function resolveAiHandoffBroker(
     return { success: true, brokerId: assignedTo, mode: "existing_owner" }
   }
 
-  const { data, error } = await supabase.rpc("lead_assign_next_broker", {
-    p_org_id: organizationId,
-    p_contact_id: contactId,
-    p_reason: "ai_handoff",
-    p_force: false,
-  })
+  const { data: settings } = await supabase
+    .from("lead_distribution_settings")
+    .select("enabled, mode, default_assigned_to")
+    .eq("organization_id", organizationId)
+    .maybeSingle()
 
-  if (error) {
-    return { success: false, error: error.message }
+  if (!settings?.enabled || settings.mode === "manual") {
+    return { success: false, error: "Distribuição automática de leads desativada." }
   }
 
-  const result = (data ?? {}) as LeadAssignNextBrokerResult
-  if (!result.assigned || typeof result.assigned_to !== "string") {
-    return {
-      success: false,
-      error: "Nenhum corretor disponível para receber o handoff da IA.",
+  const { data: brokers } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("role", "broker")
+    .eq("is_active", true)
+
+  const brokerIds = (brokers ?? []).map((b) => b.id as string)
+  if (brokerIds.length === 0) {
+    return { success: false, error: "Nenhum corretor disponível para receber o handoff da IA." }
+  }
+
+  let picked: string | null = null
+  if (settings.mode === "default" && typeof settings.default_assigned_to === "string") {
+    if (brokerIds.includes(settings.default_assigned_to)) {
+      picked = settings.default_assigned_to
     }
   }
 
-  return { success: true, brokerId: result.assigned_to, mode: "round_robin" }
+  if (!picked) {
+    const { data: load } = await supabase
+      .from("contacts")
+      .select("assigned_to")
+      .eq("organization_id", organizationId)
+      .in("status", ["new", "contacted", "qualified"])
+      .in("assigned_to", brokerIds)
+    const counts = new Map<string, number>()
+    for (const row of (load ?? []) as Array<{ assigned_to: string | null }>) {
+      if (row.assigned_to) counts.set(row.assigned_to, (counts.get(row.assigned_to) ?? 0) + 1)
+    }
+    picked = [...brokerIds].sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0))[0] ?? null
+  }
+
+  if (!picked) {
+    return { success: false, error: "Nenhum corretor disponível para receber o handoff da IA." }
+  }
+
+  const { error: assignError } = await supabase
+    .from("contacts")
+    .update({ assigned_to: picked })
+    .eq("organization_id", organizationId)
+    .eq("id", contactId)
+
+  if (assignError) {
+    return { success: false, error: assignError.message }
+  }
+
+  return {
+    success: true,
+    brokerId: picked,
+    mode: settings.mode === "default" ? "default_assignee" : "round_robin",
+  }
 }

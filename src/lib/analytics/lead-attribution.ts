@@ -3,8 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Database, Json } from "@/lib/supabase/database.types"
 
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"]
-type ContractRow = Database["public"]["Tables"]["deal_contracts"]["Row"]
-type ProposalRow = Database["public"]["Tables"]["deal_proposals"]["Row"]
+// CANONICAL CONTRACT GAP: see operational-funnel.ts — contact-level deal
+// tables have no canonical equivalent (opportunity-keyed instead).
+type ContractRow = { contact_id: string; final_value: number | null; created_at: string; updated_at: string }
+type ProposalRow = { contact_id: string; proposed_value: number | null; created_at: string; updated_at: string }
 type ContactEventRow = Database["public"]["Tables"]["contact_events"]["Row"]
 
 export type AttributionPeriod = "today" | "7d" | "30d"
@@ -123,7 +125,7 @@ function chunkArray<T>(items: T[], size: number) {
 }
 
 async function fetchWonContacts(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   organizationId: string,
   since: string
 ) {
@@ -163,7 +165,7 @@ async function fetchWonContacts(
 }
 
 export async function loadLeadAttributionMetrics(
-  supabase: SupabaseClient<Database>,
+  supabase: SupabaseClient,
   organizationId: string | null | undefined,
   period: AttributionPeriod
 ): Promise<LeadAttributionMetrics> {
@@ -218,7 +220,7 @@ export async function loadLeadAttributionMetrics(
         .from("contact_events")
         .select("contact_id, source, payload, created_at")
         .eq("organization_id", organizationId)
-        .eq("type", "lead_received")
+        .eq("event_type", "lead_received")
         .in("contact_id", ids)
         .order("created_at", { ascending: false }),
     ])

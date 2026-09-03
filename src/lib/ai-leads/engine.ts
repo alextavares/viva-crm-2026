@@ -1,20 +1,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { fetchWithTimeout } from "@/lib/supabase/fetch-timeout"
-import type { Database } from "@/lib/supabase/database.types"
-import { waMeNumberFromPhone } from "@/lib/whatsapp"
-import {
-  applyQualificationStep,
-  buildAiSummary,
-  computeAiStageScore,
-  hasStrongCommercialTrigger,
-  isCommerciallyQualified,
-  nextAiQuestion,
-  normalizeAiText,
-} from "@/lib/ai-leads/qualification"
-import { resolveAiHandoffBroker } from "@/lib/ai-leads/handoff"
 
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"]
+
+/**
+ * Minimal contact shape the AI engine reads. All fields exist canonically;
+ * legacy columns (`handoff_to_profile_id`, `deal_stage`) are intentionally
+ * absent.
+ */
+export type EngineContact = {
+  id: string
+  organization_id: string
+  name: string
+  phone: string | null
+  type: string | null
+  status: string | null
+  assigned_to: string | null
+  city: string | null
+  interest_type: string | null
+  interest_neighborhoods: string[] | null
+  interest_price_max: number | null
+}
 type SessionRow = Database["public"]["Tables"]["ai_lead_sessions"]["Row"]
 type QualificationRow = Database["public"]["Tables"]["ai_lead_qualifications"]["Row"]
 
@@ -35,7 +41,11 @@ function defaultAiOpeningMessage(contactName: string | null | undefined) {
     : "Olá! Sou a assistente virtual da imobiliária. Para te ajudar melhor, você está buscando comprar ou alugar um imóvel?"
 }
 
-export function isAiEligibleContact(contact: Pick<ContactRow, "phone" | "status" | "type">) {
+export function isAiEligibleContact(contact: {
+  phone: string | null
+  status: string | null
+  type: string | null
+}) {
   if (contact.type !== "lead") return false
   if (!waMeNumberFromPhone(contact.phone || "")) return false
   if (contact.status === "lost" || contact.status === "won") return false
@@ -104,7 +114,7 @@ async function registerAiEvent(
   await supabase.from("contact_events").insert({
     organization_id: organizationId,
     contact_id: contactId,
-    type: "note_added",
+    event_type: "note_added",
     source: "ai_leads",
     payload: {
       action,
@@ -136,7 +146,7 @@ export async function sendAiWhatsAppMessage(
 
   const { data: channelData, error: channelError } = await supabase
     .from("whatsapp_channel_settings")
-    .select("operation_mode, phone_number_id, access_token, status")
+    .select("operation_mode, phone_number_id, status")
     .eq("organization_id", organizationId)
     .maybeSingle()
 
@@ -150,86 +160,49 @@ export async function sendAiWhatsAppMessage(
 
   const isSandbox = channelData.operation_mode === "sandbox"
   const phoneNumberId = normalizeAiText(channelData.phone_number_id, 120)
-  const accessToken = normalizeAiText(channelData.access_token, 4096)
+  // CANONICAL CONTRACT GAP: production send credentials live in
+  // private.integration_credentials (purpose whatsapp_access) with no
+  // PostgREST read path, so live sends cannot authenticate.
+  if (!isSandbox) {
+    return {
+      success: false,
+      error: "Envio oficial indisponível: credencial do WhatsApp sem caminho de leitura no contrato canônico.",
+    }
+  }
 
-  if (!isSandbox && (channelData.status !== "connected" || !phoneNumberId || !accessToken)) {
+  if (channelData.status !== "connected" || !phoneNumberId) {
     return { success: false, error: "Canal oficial indisponível para o disparo automático da IA." }
   }
 
-  const { data: policyData, error: policyError } = await supabase.rpc("whatsapp_send_policy_check", {
-    p_organization_id: organizationId,
-    p_units: 1,
-  })
+  // Canonical policy gate: `whatsapp_addon_settings` carries the kill switch.
+  // Per-message quota metering has no canonical read path (private usage
+  // tables are not PostgREST-exposed), so metering is a contract gap.
+  const { data: addonSettings } = await supabase
+    .from("whatsapp_addon_settings")
+    .select("enabled")
+    .eq("organization_id", organizationId)
+    .maybeSingle()
 
-  if (policyError) {
-    return { success: false, error: policyError.message }
-  }
-
-  const policy = (policyData ?? {}) as { allowed?: boolean; message?: string; reason?: string }
-  if (!policy.allowed) {
-    const blockedMessage =
-      normalizeAiText(policy.message, 500) || "Envio oficial bloqueado por política comercial."
+  if (addonSettings && !addonSettings.enabled) {
+    const blockedMessage = "Envio oficial bloqueado por política comercial."
 
     await supabase.from("contact_events").insert({
       organization_id: organizationId,
       contact_id: contact.id,
-      type: "whatsapp_policy_blocked",
+      event_type: "whatsapp_policy_blocked",
       source: "ai_leads",
       payload: {
-        reason: policy.reason || "blocked",
+        reason: "blocked",
         message: blockedMessage,
-        policy,
       },
     })
 
     return { success: false, error: blockedMessage }
   }
 
-  let providerMessageId: string | null = null
-  if (!isSandbox) {
-    const graphVersion = process.env.WHATSAPP_GRAPH_VERSION || "v20.0"
-    const graphUrl = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`
-
-    try {
-      const response = await metaFetch(graphUrl, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to,
-          type: "text",
-          text: {
-            preview_url: false,
-            body: content,
-          },
-        }),
-      })
-
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        return {
-          success: false,
-          error:
-            normalizeAiText((payload as { error?: { message?: string } })?.error?.message, 500) ||
-            `Falha no canal oficial (${response.status}).`,
-        }
-      }
-
-      providerMessageId =
-        (payload as { messages?: Array<{ id?: string }> })?.messages?.[0]?.id || null
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Falha no canal oficial da IA.",
-      }
-    }
-  } else {
-    providerMessageId = `sandbox-${Date.now()}`
-  }
+  // Sandbox path only: production sends are refused above (no canonical
+  // credential read path). The sandbox records the message locally.
+  const providerMessageId: string | null = `sandbox-${Date.now()}`
 
   const insertedAt = nowIso()
   const { data: insertedMessage, error: insertError } = await supabase
@@ -271,8 +244,8 @@ export async function sendAiWhatsAppMessage(
 
   await supabase.from("contact_events").insert({
     organization_id: organizationId,
-    contact_id: contact.id,
-    type: "note_added",
+      contact_id: contact.id,
+      event_type: "note_added",
     source: "ai_leads",
     payload: {
       action: "ai_message_sent",
@@ -295,7 +268,7 @@ export async function sendAiWhatsAppMessage(
 export async function createAiLeadSession(
   supabase: SupabaseClient<Database>,
   organizationId: string,
-  contact: ContactRow,
+  contact: EngineContact,
   source: Database["public"]["Tables"]["ai_lead_sessions"]["Insert"]["source"] = "manual"
 ) {
   const existing = await getActiveAiSession(supabase, organizationId, contact.id)
@@ -333,7 +306,7 @@ export async function createAiLeadSession(
     property_type: contact.interest_type,
     city: contact.city,
     budget_max: contact.interest_price_max,
-    neighborhoods: contact.interest_neighborhoods,
+    neighborhoods: contact.interest_neighborhoods ?? [],
     stage_score: computeAiStageScore({
       property_type: contact.interest_type,
       city: contact.city,
@@ -342,7 +315,7 @@ export async function createAiLeadSession(
     }),
     summary,
     updated_at: insertedAt,
-  })
+  }, { onConflict: "organization_id,session_id" })
 
   await syncContactAiSnapshot(supabase, contact.id, {
     ai_status: "active",
@@ -384,7 +357,7 @@ export async function processAiInboundReply(
   supabase: SupabaseClient<Database>,
   organizationId: string,
   session: SessionRow,
-  contact: ContactRow,
+  contact: EngineContact,
   message: string
 ) {
   const content = normalizeAiText(message, 4096)
@@ -443,14 +416,14 @@ export async function processAiInboundReply(
     transaction_type: applied.transaction_type ?? null,
     property_type: applied.property_type ?? null,
     city: applied.city ?? null,
-    neighborhoods: applied.neighborhoods ?? null,
+    neighborhoods: applied.neighborhoods ?? [],
     budget_min: applied.budget_min ?? null,
     budget_max: applied.budget_max ?? null,
     timeline: applied.timeline ?? null,
     stage_score: stageScore,
     summary,
     updated_at: insertedAt,
-  })
+  }, { onConflict: "organization_id,session_id" })
 
   await syncContactAiSnapshot(supabase, contact.id, {
     ai_status: triggerHandoff ? "qualified" : "active",
@@ -508,8 +481,8 @@ export async function requestAiHandoff(
   const summary = buildAiSummary(qualification ?? {}) ?? "Resumo de qualificação ainda em construção."
 
   await supabase.from("ai_lead_sessions").update({
-    status: "handoff_requested",
-    assigned_to_at_handoff: handoffTarget.brokerId,
+    status: "qualified",
+    assigned_to: handoffTarget.brokerId,
     handoff_requested_at: insertedAt,
     updated_at: insertedAt,
   }).eq("id", session.id)
@@ -519,7 +492,7 @@ export async function requestAiHandoff(
     ai_score: qualification?.stage_score ?? null,
     ai_last_summary: summary,
     qualified_by_ai_at: qualification ? insertedAt : null,
-    handoff_to_profile_id: handoffTarget.brokerId,
+    assigned_to: handoffTarget.brokerId,
     handoff_at: insertedAt,
   })
 
@@ -549,21 +522,21 @@ export async function completeAiTakeover(
   supabase: SupabaseClient<Database>,
   organizationId: string,
   session: SessionRow,
-  contact: ContactRow,
+  contact: EngineContact,
   actorProfileId: string
 ) {
   const insertedAt = nowIso()
 
   await supabase.from("ai_lead_sessions").update({
-    status: "handoff_completed",
-    assigned_to_at_handoff: session.assigned_to_at_handoff ?? actorProfileId,
+    status: "handed_off",
+    assigned_to: session.assigned_to ?? actorProfileId,
     handoff_completed_at: insertedAt,
     updated_at: insertedAt,
   }).eq("id", session.id)
 
   await syncContactAiSnapshot(supabase, contact.id, {
     ai_status: "handoff_completed",
-    handoff_to_profile_id: session.assigned_to_at_handoff ?? actorProfileId,
+    assigned_to: session.assigned_to ?? actorProfileId,
     handoff_at: insertedAt,
   })
 
@@ -575,7 +548,7 @@ export async function completeAiTakeover(
     "Corretor assumiu a conversa após a qualificação da IA.",
     {
       session_id: session.id,
-      broker_id: session.assigned_to_at_handoff ?? actorProfileId,
+      broker_id: session.assigned_to ?? actorProfileId,
     }
   )
 }

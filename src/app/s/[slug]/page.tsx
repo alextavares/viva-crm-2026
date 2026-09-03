@@ -1,8 +1,8 @@
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
-import { siteListProperties, type SitePropertyCard } from "@/lib/site"
+import { notFound } from "next/navigation"
+import type { SitePropertyCard } from "@/lib/site"
 import type { Metadata } from "next"
-import { getPublicLinks, getPublicNewsList, getPublicSite } from "@/lib/public-site/site-data"
+import { getPublicLinks, getPublicNewsList, getPublicPropertyList, getPublicSite } from "@/lib/public-site/site-data"
 import { truncate, withBase } from "@/lib/public-site/seo"
 import { getRequestHost, publicBasePath } from "@/lib/public-site/host"
 import { HeroBanner } from "@/components/public/site-banners"
@@ -70,17 +70,8 @@ export default async function PublicSiteHome({
   const { slug } = await params
   const sp = await searchParams
   const site = await getPublicSite(slug)
-  if (!site) {
-    return (
-      <main className="mx-auto max-w-6xl px-4 py-16">
-        <h1 className="text-2xl font-semibold">Site não encontrado</h1>
-      </main>
-    )
-  }
+  if (!site) notFound()
 
-  const supabase = await createClient()
-
-  // Treat empty strings as "unset" so query params like `type=` don't filter everything out.
   const q = asNonEmptyString(sp.q)
   const city = asNonEmptyString(sp.city)
   const neighborhood = asNonEmptyString(sp.neighborhood)
@@ -88,23 +79,11 @@ export default async function PublicSiteHome({
   const minPrice = normalizeMinPrice(asNumber(sp.min_price))
   const maxPrice = normalizeMaxPrice(asNumber(sp.max_price))
   const page = Math.max(1, Math.floor(asNumber(sp.page) ?? 1))
-
   const limit = 24
-  const offset = (page - 1) * limit
 
-  const { data: items } = await siteListProperties(supabase, {
-    siteSlug: site.slug,
-    q,
-    city,
-    neighborhood,
-    type,
-    minPrice,
-    maxPrice,
-    limit,
-    offset,
-  })
-
-  const list: SitePropertyCard[] = filterCuratedPublicProperties(items ?? [])
+  const list: SitePropertyCard[] = filterCuratedPublicProperties(
+    await getPublicPropertyList(site.slug, page, limit, { q, city, neighborhood, type, minPrice, maxPrice })
+  )
   const [news, links] = await Promise.all([
     getPublicNewsList(site.slug, 3, 0),
     getPublicLinks(site.slug),

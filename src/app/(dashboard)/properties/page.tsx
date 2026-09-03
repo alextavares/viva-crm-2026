@@ -29,7 +29,7 @@ type PropertyQueryRow = {
     transaction_type?: string | null
     purpose?: string | null
     status?: string | null
-    hide_from_site?: boolean | null
+    publish_to_site?: boolean | null
     assigned_to?: string | null
     built_area?: number | null
     total_area?: number | null
@@ -190,25 +190,12 @@ function mapPropertyRow(row: PropertyQueryRow): PropertyListRow {
         price: row.price ?? null,
         type: row.type ?? null,
         transaction_type: row.transaction_type ?? null,
-        purpose: row.purpose ?? null,
+        // Canonical boundary: legacy `purpose`/`hide_from_site` derive from
+        // `transaction_type`/`publish_to_site`; `images` derives from
+        // `image_paths` below.
+        purpose: row.transaction_type ?? null,
         status: row.status ?? null,
-        owner_contact: linkedOwnerName
-            ? {
-                id: row.owner_contact?.id ?? row.owner_contact_id ?? null,
-                name: linkedOwnerName,
-            }
-            : legacyOwnerName
-                ? {
-                    id: null,
-                    name: legacyOwnerName,
-                }
-                : null,
-        broker: row.broker_profile?.full_name
-            ? {
-                full_name: row.broker_profile.full_name,
-            }
-            : null,
-        hide_from_site: row.hide_from_site ?? null,
+        hide_from_site: !(row.publish_to_site ?? false),
         financing_allowed: row.financing_allowed ?? null,
         publish_to_portals: row.publish_to_portals ?? null,
         publish_zap: row.publish_zap ?? null,
@@ -216,7 +203,7 @@ function mapPropertyRow(row: PropertyQueryRow): PropertyListRow {
         publish_olx: row.publish_olx ?? null,
         built_area: row.built_area ?? null,
         total_area: row.total_area ?? null,
-        images: row.images ?? null,
+        images: row.image_paths ?? null,
         image_paths: row.image_paths ?? null,
         address: row.address ?? null,
         features: row.features ?? null,
@@ -292,17 +279,17 @@ export default async function PropertiesPage({
 
     const listColumns = [
         'id', 'public_code', 'external_id', 'title', 'description',
-        'price', 'type', 'transaction_type', 'purpose', 'status', 'hide_from_site', 'assigned_to',
+        'price', 'type', 'transaction_type', 'status', 'publish_to_site', 'assigned_to',
         'built_area', 'total_area', 'financing_allowed',
         'publish_to_portals', 'publish_zap', 'publish_imovelweb', 'publish_olx',
-        'owner_contact_id', 'owner_name', 'owner_contact:contacts!properties_owner_contact_id_fkey(id,name)', 'images', 'image_paths', 'address', 'features',
-        'broker_profile:profiles(full_name)',
+        'owner_contact_id', 'owner_name', 'owner_contact:contacts!properties_organization_id_owner_contact_id_fkey(id,name)', 'image_paths', 'address', 'features',
+        'broker_profile:profiles!properties_organization_id_assigned_to_fkey(full_name)',
     ].join(',')
     const operationalCountColumns = [
         'id', 'public_code', 'external_id', 'title', 'description',
-        'price', 'type', 'transaction_type', 'status', 'hide_from_site', 'assigned_to',
+        'price', 'type', 'transaction_type', 'status', 'publish_to_site', 'assigned_to',
         'publish_to_portals', 'publish_zap', 'publish_imovelweb', 'publish_olx',
-        'owner_contact_id', 'owner_name', 'owner_contact:contacts!properties_owner_contact_id_fkey(id,name)', 'images', 'image_paths', 'address', 'features',
+        'owner_contact_id', 'owner_name', 'owner_contact:contacts!properties_organization_id_owner_contact_id_fkey(id,name)', 'image_paths', 'address', 'features',
     ].join(',')
 
     let query = supabase
