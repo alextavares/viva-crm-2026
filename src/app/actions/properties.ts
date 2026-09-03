@@ -16,6 +16,7 @@ import {
 } from "@/lib/types"
 import { buildSuggestedPropertyDescription, buildSuggestedPropertyTitle } from "@/lib/property-marketing"
 import { decodePropertyFeatures, encodePropertyFeatures } from "@/lib/properties/features-codec"
+import { generatePropertyPublicCode } from "@/lib/properties/public-code"
 import { getPropertyOperationalSnapshot } from "@/lib/property-operational-readiness"
 
 async function getPropertyActionContext() {
@@ -273,7 +274,6 @@ export async function saveProperty(input: SavePropertyInput): Promise<ActionResu
         area: data.area,
       }),
       address: buildPropertyAddress(data),
-      images: data.images || [],
       image_paths: deriveStoragePathsForBucket(data.images, "properties"),
       updated_at: new Date().toISOString(),
     }
@@ -310,14 +310,22 @@ export async function saveProperty(input: SavePropertyInput): Promise<ActionResu
       }
     }
 
-    const { data: createdProperty, error: insertError } = await supabase
-      .from("properties")
-      .insert({
-        ...payload,
-        organization_id: organizationId,
-      })
-      .select("id")
-      .maybeSingle()
+    let createdProperty: { id: string } | null = null
+    let insertError: { code?: string, message?: string } | null = null
+    for (let attempt = 0; attempt < 2 && !createdProperty; attempt += 1) {
+      const { data, error } = await supabase
+        .from("properties")
+        .insert({
+          ...payload,
+          organization_id: organizationId,
+          public_code: generatePropertyPublicCode(),
+        })
+        .select("id")
+        .maybeSingle()
+      createdProperty = data ?? null
+      insertError = error ?? null
+      if (insertError && insertError.code !== "23505") break
+    }
 
     if (insertError) {
       return {
