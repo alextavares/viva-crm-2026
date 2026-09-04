@@ -24,7 +24,7 @@ begin
   select v_instance,v_owner,'authenticated','authenticated','owner@synthetic-a.invalid',extensions.crypt('SyntheticOnlyOwner',extensions.gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"full_name":"Synthetic Owner"}',now(),now()
   where not exists (select 1 from auth.users where id=v_owner);
   insert into auth.identities(id,user_id,identity_data,provider,provider_id,last_sign_in_at,created_at,updated_at)
-  select gen_random_uuid(),v_owner,jsonb_build_object('sub',v_owner::text,'email','owner@synthetic-a.invalid'),'email','owner@synthetic-a.invalid',now(),now(),now()
+  select gen_random_uuid(),v_owner,jsonb_build_object('sub',v_owner::text,'email','owner@synthetic-a.invalid','email_verified',false,'phone_verified',false),'email','owner@synthetic-a.invalid',now(),now(),now()
   where not exists (select 1 from auth.identities where user_id=v_owner and provider='email');
   select organization_id into v_org from public.profiles where id=v_owner;
   update public.organizations set name='Synthetic Tenant A',slug='synthetic-tenant-a' where id=v_org;
@@ -40,7 +40,7 @@ begin
     select v_instance,v_id,'authenticated','authenticated',v_email,extensions.crypt('SyntheticOnlyPassword',extensions.gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}',jsonb_build_object('full_name','Synthetic '||initcap(v_role),'invite_token',v_token),now(),now()
     where not exists (select 1 from auth.users where id=v_id);
     insert into auth.identities(id,user_id,identity_data,provider,provider_id,last_sign_in_at,created_at,updated_at)
-    select gen_random_uuid(),v_id,jsonb_build_object('sub',v_id::text,'email',v_email),'email',v_email,now(),now(),now()
+    select gen_random_uuid(),v_id,jsonb_build_object('sub',v_id::text,'email',v_email,'email_verified',false,'phone_verified',false),'email',v_email,now(),now(),now()
     where not exists (select 1 from auth.identities where user_id=v_id and provider='email');
   end loop;
 
@@ -48,7 +48,7 @@ begin
   select v_instance,v_tenant_b,'authenticated','authenticated','owner@synthetic-b.invalid',extensions.crypt('SyntheticOnlyOwnerB',extensions.gen_salt('bf')),now(),'{"provider":"email","providers":["email"]}','{"full_name":"Synthetic Owner B"}',now(),now()
   where not exists (select 1 from auth.users where id=v_tenant_b);
   insert into auth.identities(id,user_id,identity_data,provider,provider_id,last_sign_in_at,created_at,updated_at)
-  select gen_random_uuid(),v_tenant_b,jsonb_build_object('sub',v_tenant_b::text,'email','owner@synthetic-b.invalid'),'email','owner@synthetic-b.invalid',now(),now(),now()
+  select gen_random_uuid(),v_tenant_b,jsonb_build_object('sub',v_tenant_b::text,'email','owner@synthetic-b.invalid','email_verified',false,'phone_verified',false),'email','owner@synthetic-b.invalid',now(),now(),now()
   where not exists (select 1 from auth.identities where user_id=v_tenant_b and provider='email');
   select organization_id into v_id from public.profiles where id=v_tenant_b;
   update public.organizations set name='Synthetic Tenant B',slug='synthetic-tenant-b' where id=v_id;
