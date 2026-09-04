@@ -28,7 +28,9 @@ do $$ begin
   end if;
 end $$;
 alter role imob_api_owner bypassrls;
-
+grant imob_api_owner to postgres;
+grant usage, create on schema private to imob_api_owner;
+grant usage, create on schema api to imob_api_owner;
 create or replace function private.touch_updated_at()
 returns trigger
 language plpgsql
