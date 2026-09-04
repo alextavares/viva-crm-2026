@@ -13,7 +13,7 @@ alter table public.organizations enable row level security;
 create trigger organizations_updated_at before update on public.organizations for each row execute function private.touch_updated_at();
 
 create table public.profiles (
-  id uuid primary key references auth.users(id) on delete restrict,
+  id uuid primary key references auth.users(id) on delete restrict deferrable initially deferred,
   organization_id uuid not null references public.organizations(id) on delete restrict,
   full_name text not null check (private.nonblank(full_name, 160)),
   email text check (email is null or length(email) <= 254),
@@ -48,7 +48,7 @@ create table public.team_invites (
   updated_at timestamptz not null default now(),
   unique (organization_id,id),
   foreign key (organization_id, invited_by) references public.profiles(organization_id,id) on delete restrict,
-  foreign key (organization_id, accepted_profile_id) references public.profiles(organization_id,id) on delete restrict
+  foreign key (organization_id, accepted_profile_id) references public.profiles(organization_id,id) on delete restrict deferrable initially deferred
 );
 create unique index team_invites_pending_email_uq on public.team_invites (organization_id, lower(email)) where status = 'pending';
 create index team_invites_status_expiry_idx on public.team_invites (organization_id,status,expires_at);
