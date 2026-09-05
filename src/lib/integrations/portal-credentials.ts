@@ -76,14 +76,14 @@ export async function rotatePortalCredentials(
   }
   const provider = portalCredentialProvider(portal)
 
-  const { data: feed, error: feedError } = await supabase.rpc("rotate_integration_credential", {
+  const { data: feed, error: feedError } = await supabase.schema("api").rpc("rotate_integration_credential", {
     p_provider: provider,
     p_purpose: "feed_auth",
   })
   if (feedError) {
     return { ok: false, error: feedError.message || "Não foi possível gerar a credencial do feed." }
   }
-  const { data: webhook, error: webhookError } = await supabase.rpc("rotate_integration_credential", {
+  const { data: webhook, error: webhookError } = await supabase.schema("api").rpc("rotate_integration_credential", {
     p_provider: provider,
     p_purpose: "webhook_auth",
   })

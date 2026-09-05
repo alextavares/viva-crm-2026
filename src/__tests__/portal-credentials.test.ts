@@ -44,7 +44,10 @@ describe("canonical portal credential boundary", () => {
       .fn()
       .mockResolvedValueOnce({ data: [{ secret_once: "feed-secret", last4: "1111" }], error: null })
       .mockResolvedValueOnce({ data: [{ secret_once: "hook-secret", last4: "2222" }], error: null })
-    const result = await rotatePortalCredentials({ rpc } as never, "imovelweb")
+    const schema = jest.fn().mockReturnValue({ rpc })
+    const result = await rotatePortalCredentials({ schema } as never, "imovelweb")
+    expect(schema).toHaveBeenCalledTimes(2)
+    expect(schema).toHaveBeenCalledWith("api")
     expect(rpc).toHaveBeenNthCalledWith(1, "rotate_integration_credential", {
       p_provider: "imovelweb",
       p_purpose: "feed_auth",
@@ -66,7 +69,7 @@ describe("canonical portal credential boundary", () => {
 
   it("surfaces rotation failures without persisting anything", async () => {
     const rpc = jest.fn().mockResolvedValue({ data: null, error: { message: "denied" } })
-    const result = await rotatePortalCredentials({ rpc } as never, "imovelweb")
+    const result = await rotatePortalCredentials({ schema: jest.fn().mockReturnValue({ rpc }) } as never, "imovelweb")
     expect(result).toEqual({ ok: false, error: "denied" })
     expect(rpc).toHaveBeenCalledTimes(1)
   })
@@ -78,7 +81,7 @@ describe("canonical portal credential boundary", () => {
 
   it("refuses zap rotation before any RPC call", async () => {
     const rpc = jest.fn()
-    const result = await rotatePortalCredentials({ rpc } as never, "zap_vivareal")
+    const result = await rotatePortalCredentials({ schema: jest.fn().mockReturnValue({ rpc }) } as never, "zap_vivareal")
     expect(result.ok).toBe(false)
     expect(rpc).not.toHaveBeenCalled()
   })
