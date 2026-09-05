@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const { data, error } = await supabase.rpc("imovelweb_feed", {
+    const { data, error } = await supabase.schema("api").rpc("imovelweb_feed", {
       p_slug: slug,
       p_feed_secret: token,
       p_max_rows: FEED_MAX_ROWS,

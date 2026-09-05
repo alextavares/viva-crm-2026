@@ -207,7 +207,7 @@ export function toSitePropertyCard(row: CanonicalSitePropertyRow): SitePropertyC
 }
 
 export async function siteGetSettings(supabase: SupabaseClient, slug: string) {
-  const res = await supabase.rpc("site_get_settings", {
+  const res = await supabase.schema("api").rpc("site_get_settings", {
     p_slug: slug,
   })
   return res as PostgrestSingleResponse<CanonicalSiteSettingsRow>
@@ -220,7 +220,7 @@ export type SiteListPropertiesArgs = {
 }
 
 export async function siteListProperties(supabase: SupabaseClient, args: SiteListPropertiesArgs) {
-  const res = await supabase.rpc("site_list_properties", {
+  const res = await supabase.schema("api").rpc("site_list_properties", {
     p_slug: args.slug,
     p_page: args.page ?? 1,
     p_page_size: args.pageSize ?? 100,
@@ -229,7 +229,7 @@ export async function siteListProperties(supabase: SupabaseClient, args: SiteLis
 }
 
 export async function siteGetProperty(supabase: SupabaseClient, slug: string, propertyId: string) {
-  const res = await supabase.rpc("site_get_property", {
+  const res = await supabase.schema("api").rpc("site_get_property", {
     p_slug: slug,
     p_property_id: propertyId,
   })
@@ -243,7 +243,7 @@ export type SiteListNewsArgs = {
 }
 
 export async function siteListNews(supabase: SupabaseClient, args: SiteListNewsArgs) {
-  const res = await supabase.rpc("site_list_news", {
+  const res = await supabase.schema("api").rpc("site_list_news", {
     p_slug: args.slug,
     p_page: args.page ?? 1,
     p_page_size: args.pageSize ?? 100,
@@ -252,7 +252,7 @@ export async function siteListNews(supabase: SupabaseClient, args: SiteListNewsA
 }
 
 export async function siteGetNews(supabase: SupabaseClient, slug: string, newsSlug: string) {
-  const res = await supabase.rpc("site_get_news", {
+  const res = await supabase.schema("api").rpc("site_get_news", {
     p_slug: slug,
     p_slug_key: newsSlug,
   })
@@ -260,14 +260,14 @@ export async function siteGetNews(supabase: SupabaseClient, slug: string, newsSl
 }
 
 export async function siteListLinks(supabase: SupabaseClient, slug: string) {
-  const res = await supabase.rpc("site_list_links", {
+  const res = await supabase.schema("api").rpc("site_list_links", {
     p_slug: slug,
   })
   return res as PostgrestResponse<CanonicalSiteLinkRow>
 }
 
 export async function siteResolveSlugByDomain(supabase: SupabaseClient, domain: string) {
-  const res = await supabase.rpc("site_resolve_slug_by_domain", {
+  const res = await supabase.schema("api").rpc("site_resolve_slug_by_domain", {
     p_domain: domain,
   })
   return res as PostgrestSingleResponse<string>
@@ -290,7 +290,7 @@ export type SiteCreateLeadArgs = {
  * this helper with an anon client.
  */
 export async function siteCreateLead(supabase: SupabaseClient, args: SiteCreateLeadArgs) {
-  const res = await supabase.rpc("site_create_lead", {
+  const res = await supabase.schema("api").rpc("site_create_lead", {
     p_slug: args.slug,
     p_name: args.name,
     p_phone: args.phone,

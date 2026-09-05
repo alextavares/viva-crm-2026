@@ -81,7 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       message: message.slice(0, 200),
     })
 
-    const { data, error } = await supabase.rpc("imovelweb_ingest", {
+    const { data, error } = await supabase.schema("api").rpc("imovelweb_ingest", {
       p_slug: slug,
       p_webhook_secret: secret,
       p_event_id: eventId,

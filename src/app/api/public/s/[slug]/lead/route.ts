@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
         ? body.idempotencyKey.trim().slice(0, 200)
         : `form-${createHash("sha256").update(`${slug}|${name}|${phone}|${message ?? ""}`).digest("hex").slice(0, 48)}`
 
-    const { data, error } = await supabase.rpc("site_create_lead", {
+    const { data, error } = await supabase.schema("api").rpc("site_create_lead", {
       p_slug: slug,
       p_name: name,
       p_phone: phone,

@@ -19,7 +19,11 @@ jest.mock("@/lib/supabase/server", () => ({
 }))
 
 function fakeClient(rpcImpl: jest.Mock) {
-  return { rpc: rpcImpl } as never
+  return { schema: jest.fn().mockReturnValue({ rpc: rpcImpl }) } as never
+}
+
+function expectApiSchema(client: { schema: jest.Mock }) {
+  expect(client.schema).toHaveBeenCalledWith("api")
 }
 
 describe("canonical imovelweb boundary", () => {
@@ -67,7 +71,9 @@ describe("canonical imovelweb boundary", () => {
 describe("canonical site RPC signatures", () => {
   it("calls site_list_properties with p_slug/p_page/p_page_size", async () => {
     const rpc = jest.fn().mockResolvedValue({ data: [], error: null })
-    await siteListProperties(fakeClient(rpc), { slug: "acme", page: 2, pageSize: 24 })
+    const client = fakeClient(rpc)
+    await siteListProperties(client, { slug: "acme", page: 2, pageSize: 24 })
+    expectApiSchema(client)
     expect(rpc).toHaveBeenCalledWith("site_list_properties", {
       p_slug: "acme",
       p_page: 2,
@@ -77,7 +83,8 @@ describe("canonical site RPC signatures", () => {
 
   it("calls site_create_lead with the canonical eight-arg shape", async () => {
     const rpc = jest.fn().mockResolvedValue({ data: { accepted: true, deduped: false, reference: "c1" }, error: null })
-    await siteCreateLead(fakeClient(rpc), {
+    const client = fakeClient(rpc)
+    await siteCreateLead(client, {
       slug: "acme",
       name: "Lia",
       phone: "+5511999999999",
@@ -86,6 +93,7 @@ describe("canonical site RPC signatures", () => {
       sourceDomain: "acme.example",
       idempotencyKey: "k1",
     })
+    expectApiSchema(client)
     expect(rpc).toHaveBeenCalledWith("site_create_lead", {
       p_slug: "acme",
       p_name: "Lia",
