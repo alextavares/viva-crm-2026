@@ -39,6 +39,22 @@ type MatchedProperty = {
     score: number
 }
 
+export function normalizeCityText(text: string | null | undefined): string {
+    if (!text) return ''
+    return text
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+}
+
+export function isCityMatch(cityA: string | null | undefined, cityB: string | null | undefined): boolean {
+    const normA = normalizeCityText(cityA)
+    const normB = normalizeCityText(cityB)
+    return Boolean(normA && normB && normA === normB)
+}
+
 function getAddressPart(address: Tables<'properties'>['address'], key: 'city' | 'neighborhood') {
     if (!address || typeof address !== 'object') return null
     const value = (address as Record<string, unknown>)[key]
@@ -50,7 +66,7 @@ function getBedrooms(features: unknown): number | null {
     return decoded > 0 ? decoded : null
 }
 
-function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 'score'> {
+export function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 'score'> {
     return {
         id: property.id,
         title: property.title,
@@ -64,7 +80,7 @@ function normalizeMatchRow(property: PropertyMatchRow): Omit<MatchedProperty, 's
     }
 }
 
-function computeScore(property: Omit<MatchedProperty, 'score'>, profile: ContactProfile): number {
+export function computeScore(property: Omit<MatchedProperty, 'score'>, profile: ContactProfile): number {
     let score = 0
 
     if (profile.interest_type && property.type === profile.interest_type) score += 35
@@ -80,7 +96,7 @@ function computeScore(property: Omit<MatchedProperty, 'score'>, profile: Contact
         else if (property.price <= profile.interest_price_max * 1.1) score += 10
     }
 
-    if (profile.city && property.city?.toLowerCase() === profile.city.toLowerCase()) score += 15
+    if (profile.city && isCityMatch(property.city, profile.city)) score += 25
 
     return Math.min(score, 100)
 }
@@ -111,55 +127,108 @@ export function PropertyMatchSheet({ contactId, organizationId, contactProfile }
     const [open, setOpen] = useState(false)
     const [matches, setMatches] = useState<MatchedProperty[]>([])
     const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [reloadKey, setReloadKey] = useState(0)
+
+    const city = contactProfile.city ?? null
+    const interestType = contactProfile.interest_type ?? null
+    const interestBedrooms = contactProfile.interest_bedrooms ?? null
+    const interestPriceMax = contactProfile.interest_price_max ?? null
+
+    const hasProfile =
+        Boolean(interestType) ||
+        typeof interestBedrooms === 'number' ||
+        Boolean(interestPriceMax) ||
+        Boolean(city)
 
     function handleOpenChange(nextOpen: boolean) {
         setOpen(nextOpen)
         if (nextOpen) {
+            setError(null)
+            setMatches([])
             setLoading(true)
+        } else {
+            setLoading(false)
         }
     }
 
     useEffect(() => {
-        if (!open) return
+        if (!open) {
+            setLoading(false)
+            return
+        }
+
+        if (!hasProfile) {
+            setMatches([])
+            setError(null)
+            setLoading(false)
+            return
+        }
 
         let active = true
+        setLoading(true)
+        setError(null)
 
         const fetchMatches = async () => {
-            let query = supabase
-                .from('properties')
-                .select('id, title, public_code, type, transaction_type, price, address, features, status, organization_id')
-                .eq('organization_id', organizationId)
-                .eq('status', 'available')
-                .limit(200)
+            try {
+                let query = supabase
+                    .from('properties')
+                    .select('id, title, public_code, type, transaction_type, price, address, features, status, organization_id')
+                    .eq('organization_id', organizationId)
+                    .eq('status', 'available')
+                    .limit(200)
 
-            if (contactProfile.interest_type) {
-                query = query.eq('type', contactProfile.interest_type)
-            }
+                if (interestType) {
+                    query = query.eq('type', interestType)
+                }
 
-            const { data } = await query
+                const { data, error: queryError } = await query
 
-            if (!active) return
+                if (!active) return
 
-            if (!data) {
+                if (queryError) {
+                    console.error('Error fetching property matches:', queryError)
+                    setError('Não foi possível carregar os imóveis compatíveis.')
+                    setMatches([])
+                    return
+                }
+
+                if (!data || data.length === 0) {
+                    setMatches([])
+                    return
+                }
+
+                const normalized = (data as PropertyMatchRow[]).map((property) => normalizeMatchRow(property))
+
+                const filteredByCity = city
+                    ? normalized.filter((property) => isCityMatch(property.city, city))
+                    : normalized
+
+                const scored = filteredByCity
+                    .map((property) => ({
+                        ...property,
+                        score: computeScore(property, {
+                            city,
+                            interest_type: interestType,
+                            interest_bedrooms: interestBedrooms,
+                            interest_price_max: interestPriceMax,
+                        }),
+                    }))
+                    .filter((property) => property.score >= 20)
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 20)
+
+                setMatches(scored)
+            } catch (err) {
+                if (!active) return
+                console.error('Unexpected error in property matching:', err)
+                setError('Erro inesperado ao buscar imóveis compatíveis.')
                 setMatches([])
-                setLoading(false)
-                return
+            } finally {
+                if (active) {
+                    setLoading(false)
+                }
             }
-
-            const normalized = (data as PropertyMatchRow[]).map((property) => normalizeMatchRow(property))
-
-            const filteredByCity = contactProfile.city
-                ? normalized.filter((property) => property.city?.toLowerCase() === contactProfile.city?.toLowerCase())
-                : normalized
-
-            const scored = filteredByCity
-                .map((property) => ({ ...property, score: computeScore(property, contactProfile) }))
-                .filter((property) => property.score >= 20)
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 20)
-
-            setMatches(scored)
-            setLoading(false)
         }
 
         void fetchMatches()
@@ -167,13 +236,7 @@ export function PropertyMatchSheet({ contactId, organizationId, contactProfile }
         return () => {
             active = false
         }
-    }, [open, supabase, organizationId, contactProfile])
-
-    const hasProfile =
-        Boolean(contactProfile.interest_type) ||
-        typeof contactProfile.interest_bedrooms === 'number' ||
-        Boolean(contactProfile.interest_price_max) ||
-        Boolean(contactProfile.city)
+    }, [open, supabase, organizationId, city, interestType, interestBedrooms, interestPriceMax, hasProfile, reloadKey])
 
     return (
         <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -197,7 +260,19 @@ export function PropertyMatchSheet({ contactId, organizationId, contactProfile }
                     </div>
                 ) : null}
 
-                {loading ? (
+                {error ? (
+                    <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                        <p className="font-medium">{error}</p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-3 h-8 text-xs"
+                            onClick={() => setReloadKey((k) => k + 1)}
+                        >
+                            Tentar novamente
+                        </Button>
+                    </div>
+                ) : loading ? (
                     <div className="mt-8 flex items-center justify-center gap-2 text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Buscando imóveis compatíveis...
