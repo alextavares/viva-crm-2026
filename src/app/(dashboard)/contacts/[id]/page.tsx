@@ -248,7 +248,7 @@ export default async function ContactEditPage({ params }: PageProps) {
             .limit(50),
         supabase
             .from("contact_interactions")
-            .select("id, type, direction, summary, happened_at, profiles!contact_interactions_created_by_fkey(full_name)")
+            .select("id, type, direction, summary, happened_at, profiles!contact_interactions_organization_id_created_by_fkey(full_name)")
             .eq("contact_id", id)
             .order("happened_at", { ascending: false })
             .limit(50),

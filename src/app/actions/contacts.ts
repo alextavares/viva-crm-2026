@@ -119,12 +119,19 @@ export async function saveContactInteraction(input: {
         throw new Error("Contact not found or access denied")
     }
 
+    const dbDirection =
+        parsed.data.type === "note" || !parsed.data.direction
+            ? "internal"
+            : parsed.data.direction === "inbound"
+              ? "in"
+              : "out"
+
     const { error } = await supabase.from("contact_interactions").insert({
         contact_id: parsed.data.contactId,
         organization_id: profile.organization_id,
         created_by: user.id,
         type: parsed.data.type,
-        direction: parsed.data.direction,
+        direction: dbDirection,
         summary: parsed.data.summary,
         happened_at: parsed.data.happenedAt ?? new Date().toISOString(),
     })
@@ -171,7 +178,7 @@ export async function recordExternalWhatsAppAttempt(input: {
                 organization_id: profile.organization_id,
                 created_by: user.id,
                 type: "whatsapp",
-                direction: "outbound",
+                direction: "out",
                 summary: parsed.data.summary,
                 happened_at: new Date().toISOString(),
             })

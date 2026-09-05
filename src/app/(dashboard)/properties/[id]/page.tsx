@@ -18,7 +18,7 @@ export default async function EditPropertyPage({
         .from('properties')
         .select(`
             *,
-            owner_contact:contacts!properties_owner_contact_id_fkey(id, name),
+            owner_contact:contacts!properties_organization_id_owner_contact_id_fkey(id, name),
             broker:profiles(full_name)
         `)
         .eq('id', id)
