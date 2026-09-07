@@ -118,8 +118,8 @@ export function ManualFollowupPanel({ contactId, canManage, now, followups }: Ma
             </p>
 
             {canManage ? (
-                <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <div className="grid flex-1 gap-1.5">
+                <form onSubmit={handleCreate} className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                    <div className="grid min-w-[220px] flex-1 gap-1.5">
                         <label htmlFor="manual-followup-due" className="text-xs font-medium text-muted-foreground">
                             Data e hora do retorno
                         </label>
@@ -131,7 +131,7 @@ export function ManualFollowupPanel({ contactId, canManage, now, followups }: Ma
                             disabled={isPending}
                         />
                     </div>
-                    <div className="grid flex-[2] gap-1.5">
+                    <div className="grid min-w-0 flex-[2] gap-1.5">
                         <label htmlFor="manual-followup-description" className="text-xs font-medium text-muted-foreground">
                             O que fazer
                         </label>
